@@ -40,7 +40,7 @@ Item {
     readonly property bool searching: search.searchingText.length > 0
     property bool activationPending: false
     property var activationClients: []
-    readonly property bool restoringView: activationStart.running || activation.running
+    readonly property bool restoringView: settleTimer.running || activation.running || activationStart.running
     readonly property int visibleCount: Math.max(1, Math.min(8, Config.options.overview.scrollingWorkspaces))
     property var emptyWorkspaceIds: []
     readonly property var availableWorkspaceIds: Scrolling.availableWorkspaceIds(visibleCount,
@@ -123,6 +123,7 @@ Item {
     }
 
     function begin(resetQuery = true) {
+        settleTimer.stop();
         activationStart.stop();
         activationPending = false;
         activationClients = [];
@@ -224,48 +225,103 @@ Item {
         // Release the launcher's keyboard grab before handing focus to
         // the new app or special workspace.
         if (address) {
-            activationStart.stop();
+            settleTimer.stop();
             activationPending = true;
-            restoreView({ address });
+            restoreView({ address }, false);
         }
         GlobalStates.overviewOpen = false;
     }
+    property int settleInterval: 260
+    Timer {
+        id: settleTimer
+        interval: 260
+        repeat: false
+        onTriggered: {
+            if (root.activationPending) {
+                GlobalStates.overviewOpen = false;
+                root.activationPending = false;
+                root.activationClients = [];
+            }
+        }
+    }
+    // Safety watchdog: ensure activationPending never traps the user if IPC stalls
+    Timer {
+        id: activationWatchdog
+        interval: 1500
+        repeat: false
+        running: root.activationPending
+        onTriggered: {
+            if (root.activationPending) {
+                console.warn("Overview activation watchdog expired; resetting pending state");
+                root.activationPending = false;
+                root.activationClients = [];
+                GlobalStates.overviewOpen = false;
+            }
+        }
+    }
     function activateWorkspace(id, address = "") {
+        const currentWs = root.monitorData.activeWorkspace?.id ?? 1;
+        const wsChanged = (id > 0 && id !== currentWs);
         if (!address) {
-            GlobalStates.overviewOpen = false;
-            Hyprland.dispatch(`hl.dsp.focus({ workspace = ${id} })`);
+            if (wsChanged) {
+                settleTimer.stop();
+                activationStart.stop();
+                activationPending = true;
+                Hyprland.dispatch(`hl.dsp.focus({ workspace = ${id} })`);
+                settleInterval = 260;
+                settleTimer.interval = settleInterval;
+                settleTimer.restart();
+            } else {
+                GlobalStates.overviewOpen = false;
+            }
             return;
         }
         const card = cardForWorkspace(id);
         const view = card?.activationView(address, true);
         const floating = clients.some(w => w.address === address && w.floating);
         if (view?.revealed) panWorkspace(id, address);
+        const client = clients.find(w => w.address === address);
+        const delta = (view && Number.isFinite(view.x) && client && client.at)
+            ? Math.abs(Math.round(view.x) - client.at[0]) : 0;
+        const needsMovement = wsChanged || (delta > 1) || (view?.revealed ?? false);
+
         if (card?.layout === "scrolling" && view && !floating) {
-            commitView(view);
+            commitView(view, needsMovement);
             return;
         }
         // Monocle and floating windows still need keyboard handoff.
-        commitView({ address });
+        commitView({ address }, needsMovement);
     }
 
-    function close() {
-        if (activationPending) return;
+    function close(force = false) {
+        settleTimer.stop();
+        activationStart.stop();
+        if (activationPending) {
+            activationPending = false;
+            activationClients = [];
+        }
         GlobalStates.overviewOpen = false;
     }
-    function commitView(view) {
+    function commitView(view, needsMovement = false) {
+        settleTimer.stop();
+        activationStart.stop();
         activationClients = clients.slice();
         activationPending = true;
-        restoreView(view);
+        restoreView(view, needsMovement);
     }
-    function restoreView(view) {
+    function restoreView(view, needsMovement = false) {
+        settleTimer.stop();
+        activationStart.stop();
+        root.settleInterval = needsMovement ? 260 : 30;
         activation.command = ["hyprctl", "eval", Placement.activateScript(view.address, view.x)];
-        activationAttempts = 0;
-        activationStart.restart();
+        root.activationAttempts = 1;
+        activation.running = true;
     }
     property int activationAttempts: 0
     Timer {
         id: activationStart
         interval: 32
+        repeat: false
         onTriggered: {
             root.activationAttempts++;
             activation.running = true;
@@ -274,6 +330,8 @@ Item {
     Process {
         id: activation
         onExited: (code, status) => {
+            // Layer commits and IPC run independently. If the compositor has
+            // not transferred window focus yet, retry before committing layout move.
             if (activationOutput.text.includes("overview-placement-focus-pending") && root.activationAttempts < 4) {
                 activationStart.restart();
                 return;
@@ -281,11 +339,14 @@ Item {
             if (code !== 0 || activationOutput.text.includes("overview-placement-focus-pending"))
                 console.warn("Overview workspace activation failed:", activationErrors.text || activationOutput.text);
             if (root.activationPending) {
-                GlobalStates.overviewOpen = false;
-                root.activationPending = false;
-                root.activationClients = [];
+                if (GlobalStates.overviewOpen) {
+                    settleTimer.interval = root.settleInterval;
+                    settleTimer.restart();
+                } else {
+                    root.activationPending = false;
+                    root.activationClients = [];
+                }
             }
-            HyprlandData.refreshSoon();
         }
         stdout: StdioCollector { id: activationOutput }
         stderr: StdioCollector { id: activationErrors }

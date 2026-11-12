@@ -509,22 +509,21 @@ hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
 -- Window blur presets must not reach the bar or dock. They draw their own
 -- wallpaper blur, plain for a see-through Solid and styled for Frost or Glass.
 -- WallpaperPlacement disables this override when video needs compositor blur.
-hl.layer_rule({ name = "mainstream-panel-blur", match = { namespace = "quickshell:(bar|verticalBar|dynamicIsland|dock|dockTop|dockLeft|dockRight)" }, blur = false})
+hl.layer_rule({ name = "mainstream-panel-blur", match = { namespace = "quickshell:(bar|verticalBar|dynamicIsland|dock|dockTop|dockLeft|dockRight|overview)" }, blur = false})
 -- The catch-all above also blurs surfaces nothing is ever seen through: the
 -- wallpaper layer itself, the corner masks and the hot-corner ripple. The
 -- wallpaper covers the whole screen, and the blur pass runs over its full
 -- extent on every damaged frame although none of it reaches the screen.
 -- Measured on a 4K desktop, that was most of what blur cost, with the bar,
--- dock and sidebars a fraction of it. The overview's dim stays blurred: what
--- it frosts behind the overview is very much seen.
+-- dock and sidebars a fraction of it.
 hl.layer_rule({ match = { namespace = "quickshell:(background|screenCorners|hotCornerRipple)" }, blur = false})
 -- Sidebars keep blur below their stock alpha but above their shadows, so the room around
 -- them never turns into a frosted halo. Panels a custom rule blurs share this floor.
 hl.layer_rule({ match = { namespace = "quickshell:(bar|dynamicIsland|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
--- The launcher and its dim share one surface. Read the cached wallpaper blur
--- wherever the surface has alpha, including during the fade.
+-- When video wallpaper is active, mainstream-panel-blur is disabled; overview falls back
+-- to compositor blur with xray so video is frosted rather than window contents.
+hl.layer_rule({ match = { namespace = "quickshell:overview" }, xray = true, ignore_alpha = 0.35})
 hl.layer_rule({ match = { namespace = "quickshell:dock[A-Za-z]*" }, xray = false})
-hl.layer_rule({ match = { namespace = "quickshell:overview" }, xray = true, ignore_alpha = 0})
 -- The island's antialiased edge must blend with the surface beneath it.
 -- X-ray blur injects wallpaper color there even when the body is fully opaque.
 hl.layer_rule({ match = { namespace = "quickshell:dynamicIsland" }, xray = false})

@@ -197,12 +197,118 @@ Scope {
             GlobalStates.setLauncherDim(registeredScreen, false);
         }
 
-        // Draw the dim in the same buffer as the controls so the compositor
-        // cannot present a fullscreen wallpaper blur while the launcher loads.
+        // Sample the wallpaper directly and blur in-surface so the backdrop fades
+        // in exact lockstep with controls. This prevents the compositor blur flash on close.
+        Loader {
+            id: wallpaperSource
+            active: panelWindow.preloadSurface || panelWindow.requested || contentFade.opacity > 0
+            sourceComponent: ScreenWallpaperSource {}
+        }
+
+        Item {
+            id: overviewBackdrop
+            anchors.fill: parent
+            visible: opacity > 0 && (wallpaperSource.item?.available ?? false)
+            opacity: 0
+
+            readonly property bool shouldBeOpen: GlobalStates.overviewOpen && panelWindow.monitorIsFocused
+            onShouldBeOpenChanged: {
+                if (shouldBeOpen) {
+                    backdropFadeOut.stop();
+                    backdropFadeIn.from = overviewBackdrop.opacity;
+                    backdropFadeIn.start();
+                } else {
+                    backdropFadeIn.stop();
+                    backdropFadeOut.from = overviewBackdrop.opacity;
+                    backdropFadeOut.start();
+                }
+            }
+
+            NumberAnimation {
+                id: backdropFadeIn
+                target: overviewBackdrop
+                property: "opacity"
+                to: 1
+                duration: Appearance.animation.elementMoveFast.duration
+                easing.type: Easing.OutQuad
+            }
+
+            NumberAnimation {
+                id: backdropFadeOut
+                target: overviewBackdrop
+                property: "opacity"
+                to: 0
+                duration: 130 // Fades out early (130ms vs 200ms) so zero blur lingers into final frames
+                easing.type: Easing.OutQuad
+            }
+
+            onVisibleChanged: if (visible) wallpaperSample.scheduleUpdate()
+
+            readonly property var pic: wallpaperSource.item?.picture
+
+            ShaderEffectSource {
+                id: wallpaperSample
+                anchors.fill: parent
+                sourceItem: overviewBackdrop.pic
+                readonly property real picX: overviewBackdrop.pic?.x ?? 0
+                readonly property real picY: overviewBackdrop.pic?.y ?? 0
+                readonly property real picW: overviewBackdrop.pic?.width ?? panelWindow.width
+                readonly property real picH: overviewBackdrop.pic?.height ?? panelWindow.height
+                sourceRect: overviewBackdrop.pic
+                    ? Qt.rect(
+                        Math.max(0, -picX),
+                        Math.max(0, -picY),
+                        Math.min(panelWindow.width, Math.max(0, picW - Math.max(0, -picX))),
+                        Math.min(panelWindow.height, Math.max(0, picH - Math.max(0, -picY)))
+                    )
+                    : Qt.rect(0, 0, 0, 0)
+                hideSource: false
+                live: false
+                textureSize: Qt.size(
+                    Math.ceil(parent.width * (panelWindow.screen?.scale ?? 1) * 0.25),
+                    Math.ceil(parent.height * (panelWindow.screen?.scale ?? 1) * 0.25)
+                )
+            }
+
+            Connections {
+                target: overviewBackdrop.pic
+                enabled: overviewBackdrop.visible
+                ignoreUnknownSignals: true
+                function onStatusChanged() { wallpaperSample.scheduleUpdate(); }
+                function onSourceChanged() { wallpaperSample.scheduleUpdate(); }
+                function onXChanged() { wallpaperSample.scheduleUpdate(); }
+                function onYChanged() { wallpaperSample.scheduleUpdate(); }
+                function onWidthChanged() { wallpaperSample.scheduleUpdate(); }
+                function onHeightChanged() { wallpaperSample.scheduleUpdate(); }
+            }
+
+            Connections {
+                target: GlobalStates
+                function onOverviewOpenChanged() {
+                    if (GlobalStates.overviewOpen && panelWindow.monitorIsFocused)
+                        wallpaperSample.scheduleUpdate();
+                }
+            }
+
+            FastBlur {
+                id: wallpaperBlur
+                anchors.fill: parent
+                source: wallpaperSample
+                radius: 56
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: Appearance.launcherDimColor
+                opacity: Appearance.launcherDimOpacity
+            }
+        }
+
         Rectangle {
             anchors.fill: parent
+            visible: opacity > 0 && !(wallpaperSource.item?.available ?? false)
             color: Appearance.launcherDimColor
-            opacity: contentFade.opacity * Appearance.launcherDimOpacity
+            opacity: overviewBackdrop.opacity * Appearance.launcherDimOpacity
         }
 
         // Full-screen so the dim overlay covers app windows behind the overview.
@@ -361,7 +467,10 @@ Scope {
             onOpacityChanged: {
                 if (opacity !== 0) return;
                 panelWindow.framePresented = false;
-                if (!GlobalStates.overviewOpen) panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
+                if (!GlobalStates.overviewOpen) {
+                    panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
+                    HyprlandData.refreshSoon();
+                }
             }
             Behavior on opacity {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })

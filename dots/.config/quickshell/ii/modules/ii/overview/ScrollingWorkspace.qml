@@ -273,7 +273,7 @@ Item {
                     anchors.fill: parent
                     color: Appearance.colors.colLayer2
                     radius: RoundedCorners.on ? Appearance.rounding.verysmall * root.uiScale : 0
-                    layer.enabled: tile.visible && root.controller.opened
+                    layer.enabled: tile.visible && root.controller.rendering
                     layer.effect: MultiEffect { maskEnabled: true; maskSource: tileMask }
                     WorkspacePreviewMask {
                         id: tileMask
@@ -282,15 +282,15 @@ Item {
                         workspaceRect: Qt.vector4d(-tile.x, -tile.y, root.width, root.height)
                         workspaceRadii: root.radii
                         workspaceClipped: root.controller.dragItem === tile ? 0 : 1
-                        layer.enabled: tile.visible && root.controller.opened
+                        layer.enabled: tile.visible && root.controller.rendering
                         visible: false
                     }
                     HdrScreencopyView {
                         id: preview
                         anchors.fill: parent
-                        captureSource: root.controller.captureReady && !tile.captureSuppressed && root.controller.opened
+                        captureSource: root.controller.captureReady && !tile.captureSuppressed && root.controller.rendering
                             && (tile.visible || root.controller.dragItem === tile) ? tile.modelData : null
-                        live: !root.controller.searching && !root.controller.activationPending
+                        live: !root.controller.searching && !root.controller.activationPending && root.controller.opened
                         constraintSize: Qt.size(Math.ceil(tile.width * root.controller.monitorData.scale),
                             Math.ceil(tile.height * root.controller.monitorData.scale))
                     }
