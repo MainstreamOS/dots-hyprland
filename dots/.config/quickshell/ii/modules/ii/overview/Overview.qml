@@ -202,16 +202,14 @@ Scope {
         // alongside them but leaves sooner, so no blur is left for the last frames.
         // Always loaded, even when keepSurfaceAlive is off. It is only the half-size
         // wallpaper, so holding it costs little, and the decode stays out of the open.
-        Loader {
+        ScreenWallpaperSource {
             id: wallpaperSource
-            active: true
-            sourceComponent: ScreenWallpaperSource {}
         }
 
         Item {
             id: overviewBackdrop
             anchors.fill: parent
-            visible: opacity > 0 && (wallpaperSource.item?.available ?? false)
+            visible: opacity > 0 && wallpaperSource.available
             opacity: 0
 
             readonly property bool shouldBeOpen: GlobalStates.overviewOpen && panelWindow.monitorIsFocused
@@ -234,7 +232,7 @@ Scope {
 
             onVisibleChanged: if (visible) wallpaperSample.scheduleUpdate()
 
-            readonly property var pic: wallpaperSource.item?.picture
+            readonly property var pic: wallpaperSource.picture
 
             ShaderEffectSource {
                 id: wallpaperSample
@@ -255,8 +253,8 @@ Scope {
                 hideSource: false
                 live: false
                 textureSize: Qt.size(
-                    Math.ceil(parent.width * (panelWindow.screen?.scale ?? 1) * 0.25),
-                    Math.ceil(parent.height * (panelWindow.screen?.scale ?? 1) * 0.25)
+                    Math.ceil(parent.width * (panelWindow.monitorData?.scale ?? 1) * 0.25),
+                    Math.ceil(parent.height * (panelWindow.monitorData?.scale ?? 1) * 0.25)
                 )
             }
 
@@ -296,7 +294,7 @@ Scope {
 
         Rectangle {
             anchors.fill: parent
-            visible: opacity > 0 && !(wallpaperSource.item?.available ?? false)
+            visible: opacity > 0 && !wallpaperSource.available
             color: Appearance.launcherDimColor
             opacity: overviewBackdrop.opacity * Appearance.launcherDimOpacity
         }

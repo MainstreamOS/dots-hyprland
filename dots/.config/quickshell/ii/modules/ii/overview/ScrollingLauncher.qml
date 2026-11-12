@@ -226,6 +226,7 @@ Item {
         // the new app or special workspace.
         if (address) {
             settleTimer.stop();
+            activationClients = clients.slice();
             activationPending = true;
             restoreView({ address }, false);
         }
@@ -234,7 +235,7 @@ Item {
     property int settleInterval: 260
     Timer {
         id: settleTimer
-        interval: 260
+        interval: root.settleInterval
         repeat: false
         onTriggered: {
             if (root.activationPending) {
@@ -266,13 +267,15 @@ Item {
             if (wsChanged) {
                 settleTimer.stop();
                 activationStart.stop();
+                // The cards keep their windows while the workspace behind them changes.
+                activationClients = clients.slice();
                 activationPending = true;
                 Hyprland.dispatch(`hl.dsp.focus({ workspace = ${id} })`);
                 settleInterval = 260;
-                settleTimer.interval = settleInterval;
                 settleTimer.restart();
             } else {
                 GlobalStates.overviewOpen = false;
+                if (id !== currentWs) Hyprland.dispatch(`hl.dsp.focus({ workspace = ${id} })`);
             }
             return;
         }
@@ -293,7 +296,7 @@ Item {
         commitView({ address }, needsMovement);
     }
 
-    function close(force = false) {
+    function close() {
         settleTimer.stop();
         activationStart.stop();
         if (activationPending) {
@@ -340,7 +343,6 @@ Item {
                 console.warn("Overview workspace activation failed:", activationErrors.text || activationOutput.text);
             if (root.activationPending) {
                 if (GlobalStates.overviewOpen) {
-                    settleTimer.interval = root.settleInterval;
                     settleTimer.restart();
                 } else {
                     root.activationPending = false;
