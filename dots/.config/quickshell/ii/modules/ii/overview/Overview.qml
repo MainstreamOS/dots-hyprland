@@ -197,11 +197,14 @@ Scope {
             GlobalStates.setLauncherDim(registeredScreen, false);
         }
 
-        // Sample the wallpaper directly and blur in-surface so the backdrop fades
-        // in exact lockstep with controls. This prevents the compositor blur flash on close.
+        // Sample the wallpaper directly and blur in-surface, so the backdrop is drawn
+        // with the controls and no compositor blur can flash on close. It eases in
+        // alongside them but leaves sooner, so no blur is left for the last frames.
+        // Always loaded, even when keepSurfaceAlive is off. It is only the half-size
+        // wallpaper, so holding it costs little, and the decode stays out of the open.
         Loader {
             id: wallpaperSource
-            active: panelWindow.preloadSurface || panelWindow.requested || contentFade.opacity > 0
+            active: true
             sourceComponent: ScreenWallpaperSource {}
         }
 
@@ -212,33 +215,20 @@ Scope {
             opacity: 0
 
             readonly property bool shouldBeOpen: GlobalStates.overviewOpen && panelWindow.monitorIsFocused
+            readonly property int fadeOutMs: 40 // shorter than the controls' 200 ms, see above
+            // Direction, target and duration are set together here rather than bound, so
+            // the duration can never lag behind the target. It runs on from wherever the
+            // opacity is, so closing halfway through opening does not jump.
             onShouldBeOpenChanged: {
-                if (shouldBeOpen) {
-                    backdropFadeOut.stop();
-                    backdropFadeIn.from = overviewBackdrop.opacity;
-                    backdropFadeIn.start();
-                } else {
-                    backdropFadeIn.stop();
-                    backdropFadeOut.from = overviewBackdrop.opacity;
-                    backdropFadeOut.start();
-                }
+                backdropFade.to = shouldBeOpen ? 1 : 0;
+                backdropFade.duration = shouldBeOpen ? Appearance.animation.elementMoveFast.duration : fadeOutMs;
+                backdropFade.restart();
             }
 
             NumberAnimation {
-                id: backdropFadeIn
+                id: backdropFade
                 target: overviewBackdrop
                 property: "opacity"
-                to: 1
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Easing.OutQuad
-            }
-
-            NumberAnimation {
-                id: backdropFadeOut
-                target: overviewBackdrop
-                property: "opacity"
-                to: 0
-                duration: 130 // Fades out early (130ms vs 200ms) so zero blur lingers into final frames
                 easing.type: Easing.OutQuad
             }
 
