@@ -67,6 +67,12 @@ chk amd-carrizo AMD_DEC 39028; chk amd-carrizo IS_OLD_AMD false
 run amd-stoney "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Stoney [Radeon R2/R3/R4/R5 Graphics] [1002:98e4]"
 chk amd-stoney AMD_DEC 39140; chk amd-stoney IS_OLD_AMD false
 
+# A device id holding "3d" is no display device: an F-series CPU beside an
+# NVIDIA card stays a single-GPU desktop.
+run sata-3d-id "" "00:17.0 SATA controller [0106]: Intel Corporation Tiger Lake-H SATA AHCI Controller [8086:43d2] (rev 11)
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA106 [GeForce RTX 3060] [10de:2503] (rev a1)"
+chk sata-3d-id HAS_INTEL false; chk sata-3d-id IS_HYBRID false; chk sata-3d-id HAS_NVIDIA true; chk sata-3d-id INTEL_GEN none
+
 # 5-9. NVIDIA generation ladder
 run nv-turing "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 chk nv-turing HAS_NVIDIA true; chk nv-turing NVIDIA_PCI_DEC 7815; chk nv-turing NVIDIA_GEN turing

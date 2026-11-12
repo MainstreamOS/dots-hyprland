@@ -23,6 +23,9 @@
 _gpu_lspci()      { lspci 2>/dev/null || true; }
 _gpu_lspci_nn()   { lspci -nn 2>/dev/null || true; }
 _gpu_sys_vendor() { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
+# The lspci class names of a display device. Matched whole and in their own
+# case: a bare "3D" also matches hex ids such as [8086:43d2].
+_GPU_DISPLAY_CLASS='VGA compatible controller|3D controller|Display controller'
 _gpu_installed_nvidia_branch() {
     # Which frozen NVIDIA branch, if any, is installed on the system being
     # asked about. Empty on a fresh install and inside a not-yet-provisioned
@@ -77,7 +80,7 @@ gpu_detect() {
     local lspci_nn lspci_names gpu_lines
     lspci_nn="$(_gpu_lspci_nn)"
     lspci_names="$(_gpu_lspci)"
-    gpu_lines="$(grep -iE 'VGA|3D|Display' <<<"$lspci_nn" || true)"
+    gpu_lines="$(grep -E "$_GPU_DISPLAY_CLASS" <<<"$lspci_nn" || true)"
     [[ -n "$gpu_lines" ]] || return 1
 
     case "$(_gpu_sys_vendor)" in
@@ -118,13 +121,13 @@ gpu_detect() {
         amd_id="$(grep '1002:' <<<"$gpu_lines" | grep -oE '1002:[0-9a-fA-F]{4}' | head -1 | cut -d: -f2 || true)"
         AMD_DEC=$((16#${amd_id:-ffff}))
         if [[ $AMD_DEC -lt 26112 ]] && ! [[ $AMD_DEC -ge 4864 && $AMD_DEC -le 5887 ]]; then IS_OLD_AMD=true; fi
-        amd_name="$(grep -iE 'VGA|3D|Display' <<<"$lspci_names" | grep -iE 'AMD|ATI|Radeon' | head -1 || true)"
+        amd_name="$(grep -E "$_GPU_DISPLAY_CLASS" <<<"$lspci_names" | grep -iE 'AMD|ATI|Radeon' | head -1 || true)"
         if grep -iqE '\bHD [2-6][0-9]{3}\b|\bRS[0-9]+\b|\bRV[0-9]+\b|\bR[67][0-9]{2}\b' <<<"$amd_name"; then IS_OLD_AMD=true; fi
         # Modern integrated Radeon (Ryzen APUs) — some new IDs sit below the
         # APU-exemption window (e.g. Krackan 0x1114), so rescue them by name.
         # 'Radeon NxxxM' / bare 'Radeon Graphics' never appear on pre-GCN parts.
         local amd_display_names
-        amd_display_names="$(grep -iE 'VGA|3D|Display' <<<"$lspci_names" || true)"
+        amd_display_names="$(grep -E "$_GPU_DISPLAY_CLASS" <<<"$lspci_names" || true)"
         if grep -iqE '\bRadeon [678][0-9]0M\b|Radeon Graphics' <<<"$amd_display_names"; then IS_OLD_AMD=false; fi
         # Pre-GCN fusion APUs (radeon module, no RADV) — exact id windows win
         # over the name tests above; see the header for the GCN parts excluded.
@@ -138,7 +141,7 @@ gpu_detect() {
     if [[ $HAS_INTEL == true ]]; then
         local intel_id intel_name
         intel_id="$(grep -oE '8086:[0-9a-fA-F]{4}' <<<"$gpu_lines" | head -1 | cut -d: -f2 | tr 'A-F' 'a-f' || true)"
-        intel_name="$(grep -iE 'VGA|3D|Display' <<<"$lspci_names" | grep -i 'Intel' | head -1 || true)"
+        intel_name="$(grep -E "$_GPU_DISPLAY_CLASS" <<<"$lspci_names" | grep -i 'Intel' | head -1 || true)"
         # 46 Alder Lake, 4c Rocket Lake, 56 DG2/Alchemist, 64 Lunar Lake,
         # 7d Meteor/Arrow Lake, 9a Tiger Lake, a7 Raptor Lake, b0 Panther Lake,
         # e2 Battlemage, 4905-4909 DG1. Gen9 'Iris Plus'/'Iris Pro' deliberately
@@ -357,7 +360,7 @@ mkinitcpio_add_modules() {
 # uses, and it is what the initramfs named before any of this was asked.
 intel_kms_module() {
     local addr drv=""
-    addr="$(_gpu_lspci_d | grep -iE 'VGA compatible controller|3D controller|Display controller' \
+    addr="$(_gpu_lspci_d | grep -E "$_GPU_DISPLAY_CLASS" \
             | grep -i 'Intel' | head -1 | awk '{print $1}' || true)"
     [[ -n "$addr" ]] && drv="$(_gpu_bound_driver "$addr")" || true
     case "$drv" in
