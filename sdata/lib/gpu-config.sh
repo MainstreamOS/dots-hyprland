@@ -236,6 +236,7 @@ gpu_classify_nvidia_driver() {
 # ── Write seams (caller sets these before sourcing; defaults suit chroot/root) ─
 #   GPU_SUDO        '' (chroot/root/test) or 'sudo' (dots live) — prefixes /etc writes
 #   KERNEL_CMDLINE  default /etc/kernel/cmdline   (point at a temp file in tests)
+#   LIMINE_CONF     default: the first limine.conf found on the usual ESP mounts (read only)
 #   MKINITCPIO_CONF default /etc/mkinitcpio.conf
 #   MODPROBE_DIR    default /etc/modprobe.d
 #   FSTAB_FILE      default /etc/fstab            (read only, for the resume= swap)
@@ -270,27 +271,73 @@ gpu_base_cmdline_tokens() {
 }
 
 # ── cmdline_upsert <token>... ───────────────────────────────────────────────
-# The ONE cmdline writer: per-key dedup upsert into $KERNEL_CMDLINE (single
-# line). Seeds from the existing file, else /boot/limine.conf's cmdline:, else
+# The ONE cmdline writer: per-key dedup upsert into $KERNEL_CMDLINE, kept as a
+# single line under any comment lines the file already had. Seeds from the
+# existing file, else this system's own cmdline: in limine.conf, else
 # /proc/cmdline (stripping BOOT_IMAGE=/initrd=). limine regenerates limine.conf
 # from /etc/kernel/cmdline, so this never writes limine.conf directly.
 # _gpu_cmdline_current is that seed on its own, so a caller deciding whether a
 # key is already set reads the same line this writer would build on.
-_gpu_cmdline_current() {
-    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}"
-    if [[ -f "$kc" ]]; then
-        cat "$kc"
-    elif [[ -f /boot/limine.conf ]]; then
-        awk -F': *' 'tolower($1) ~ /(kernel_)?cmdline$/ {print $2; exit}' /boot/limine.conf 2>/dev/null || true
-    elif [[ -r /proc/cmdline ]]; then
-        sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g' /proc/cmdline
+_gpu_proc_cmdline() { cat /proc/cmdline 2>/dev/null || true; }
+# The limine.conf this system boots from: the caller's when it knows the ESP,
+# else the first of the places an install mounts one.
+_gpu_limine_conf() {
+    local f
+    if [[ -n "${LIMINE_CONF:-}" ]]; then
+        [[ ! -f "$LIMINE_CONF" ]] || printf '%s\n' "$LIMINE_CONF"
+        return 0
     fi
+    for f in /boot/limine.conf /boot/efi/limine.conf /efi/limine.conf; do
+        if [[ -f "$f" ]]; then printf '%s\n' "$f"; return 0; fi
+    done
+}
+# This system's command line out of limine.conf, or nothing. A shared ESP holds
+# other systems' entries too, so entries naming different roots are not trusted
+# and the running command line is used instead. Only the option prefix goes:
+# arguments like cryptdevice keep their colon-separated mapper name and options.
+_gpu_limine_cmdline() {
+    local conf
+    conf="$(_gpu_limine_conf)"
+    [[ -n "$conf" ]] || return 0
+    awk '
+        tolower($0) ~ /^[[:space:]]*(kernel_)?cmdline[[:space:]]*:/ {
+            sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, "")
+            root = ""
+            for (i = 1; i <= NF; i++) if ($i ~ /^root=/) root = $i
+            if (!seen) { seen = 1; first = $0; first_root = root }
+            else if (root != first_root) mixed = 1
+        }
+        END { if (seen && !mixed) print first }
+    ' "$conf" 2>/dev/null || true
+}
+_gpu_cmdline_current() {
+    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" seed
+    if [[ -f "$kc" ]]; then
+        # mkinitcpio skips this file's comment lines, so they are no arguments.
+        grep -v '^[[:space:]]*#' "$kc" || true
+        return 0
+    fi
+    seed="$(_gpu_limine_cmdline)"
+    if [[ -n "${seed//[[:space:]]/}" ]]; then
+        printf '%s\n' "$seed"
+    else
+        _gpu_proc_cmdline | sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g'
+    fi
+}
+# Writes the tokens back as one line, under the comment lines already there.
+_gpu_cmdline_write() {
+    local kc="$1"; shift
+    {
+        if [[ -f "$kc" ]]; then grep '^[[:space:]]*#' "$kc" || true; fi
+        printf '%s\n' "$*"
+    } | _gpu_write_file "$kc"
 }
 cmdline_upsert() {
     local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" current=""
     current="$(_gpu_cmdline_current)"
-    local -a toks=(); local t
-    for t in $current; do toks+=("$t"); done
+    # read splits on blanks alone, so a token holding * or [ is never globbed.
+    local -a toks=()
+    read -ra toks <<<"${current//$'\n'/ }" || true
     local new key i found
     for new in "$@"; do
         key="${new%%=*}"; found=false
@@ -299,7 +346,7 @@ cmdline_upsert() {
         done
         [[ $found == false ]] && toks+=("$new") || true
     done
-    printf '%s\n' "${toks[*]}" | _gpu_write_file "$kc"
+    _gpu_cmdline_write "$kc" "${toks[@]}"
 }
 
 # ── cmdline_remove <key>... ─────────────────────────────────────────────────
@@ -309,15 +356,16 @@ cmdline_upsert() {
 cmdline_remove() {
     local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" current="" t key keep
     current="$(_gpu_cmdline_current)"
-    local -a toks=()
-    for t in $current; do
+    local -a all=() toks=()
+    read -ra all <<<"${current//$'\n'/ }" || true
+    for t in "${all[@]}"; do
         keep=true
         for key in "$@"; do
             if [[ "${t%%=*}" == "$key" ]]; then keep=false; break; fi
         done
         [[ $keep == true ]] && toks+=("$t") || true
     done
-    printf '%s\n' "${toks[*]}" | _gpu_write_file "$kc"
+    _gpu_cmdline_write "$kc" "${toks[@]}"
 }
 
 # ── write_modprobe_conf <nvidia|amd> ────────────────────────────────────────

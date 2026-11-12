@@ -201,6 +201,30 @@ chk_str cmdline-amdgpu-added "$( [[ "$g" == *"amdgpu.modeset=1"* ]] && echo yes 
 cmdline_upsert rd.udev.log_level=0; CASES=$((CASES + 1)); g="$(cat "$KERNEL_CMDLINE")"
 chk_str cmdline-key-once "$(count 'rd\.udev\.log_level=' "$g")" "1"
 chk_str cmdline-new-value "$( [[ "$g" == *"rd.udev.log_level=0"* ]] && echo yes || echo no )" "yes"
+
+# The seed when there is no cmdline file yet: this system's own limine entry,
+# else the running command line.
+_gpu_proc_cmdline() { printf 'BOOT_IMAGE=/vmlinuz-linux root=UUID=running rw initrd=\\initramfs.img quiet\n'; }
+seeded() { rm -f "$CMDTMP/seeded"; KERNEL_CMDLINE="$CMDTMP/seeded" LIMINE_CONF="$CMDTMP/limine.conf" cmdline_upsert splash; cat "$CMDTMP/seeded"; }
+ENC_CMDLINE='cryptdevice=PARTUUID=abcd:root:allow-discards root=/dev/mapper/root console=ttyS0,115200n8'
+printf '  cmdline: %s\n' "$ENC_CMDLINE" > "$CMDTMP/limine.conf"
+chk_str cmdline-encrypted-limine-seed "$(seeded)" "$ENC_CMDLINE splash"
+printf 'timeout: 3\ndefault_entry: 2\n' > "$CMDTMP/limine.conf"
+chk_str cmdline-limine-header-only "$(seeded)" "root=UUID=running rw quiet splash"
+printf '/Other\n  cmdline: root=UUID=other cryptdevice=UUID=x:other\n/Mainstream\n  cmdline: root=UUID=mine rw\n' > "$CMDTMP/limine.conf"
+chk_str cmdline-limine-shared-esp "$(seeded)" "root=UUID=running rw quiet splash"
+printf '/Mainstream\n  cmdline: root=UUID=mine rw quiet\r\n//Snapshots\n  cmdline: root=UUID=mine rw rootflags=subvol=@/.snapshots/3/snapshot\r\n' > "$CMDTMP/limine.conf"
+chk_str cmdline-limine-own-entries "$(seeded)" "root=UUID=mine rw quiet splash"
+rm -f "$CMDTMP/limine.conf"
+chk_str cmdline-no-limine "$(seeded)" "root=UUID=running rw quiet splash"
+CASES=$((CASES + 5))
+
+# Comment lines stay comments, and a token is never matched against files.
+printf '# managed by me\nroot=UUID=abc rw ip=[12]\n' > "$CMDTMP/commented"
+( cd "$CMDTMP" && touch ip=1 && KERNEL_CMDLINE="$CMDTMP/commented" cmdline_upsert splash ); CASES=$((CASES + 1))
+chk_str cmdline-comment-kept "$(cat "$CMDTMP/commented")" $'# managed by me\nroot=UUID=abc rw ip=[12] splash'
+KERNEL_CMDLINE="$CMDTMP/commented" cmdline_remove splash; CASES=$((CASES + 1))
+chk_str cmdline-remove-keeps-comment "$(cat "$CMDTMP/commented")" $'# managed by me\nroot=UUID=abc rw ip=[12]'
 rm -rf "$CMDTMP"
 
 # ── modprobe / mkinitcpio MODULES + HOOKS / hypr env writers ────────────────
