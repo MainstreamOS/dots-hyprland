@@ -425,6 +425,14 @@ chk_str maxwell-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
 chk_str maxwell-sleep-opts "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
 chk_str maxwell-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo yes || echo no )" "yes"
 
+# An RTX card on the legacy edition runs 580xx, which suspends the legacy way.
+oreset; FIX_INSTALLED_BRANCH=580xx; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); FIX_INSTALLED_BRANCH=""
+chk_str turing-580xx-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* && "$ENABLED" == *nvidia-hibernate* && "$ENABLED" == *nvidia-resume* ]] && echo yes || echo no )" "yes"
+chk_str turing-580xx-no-powerd "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
+chk_str turing-580xx-sleep-opts "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
+chk_str turing-580xx-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
+
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G92 [GeForce 8800 GT] [10de:0611] (rev a2)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
 chk_str prefermi-no-nvidia "$( [[ "$ML" == *"nvidia"* ]] && echo present || echo absent )" "absent"

@@ -187,6 +187,22 @@ _gpu_frozen_family() {
             NVIDIA_LOCAL_PKGS=(nvidia-390xx-dkms nvidia-390xx-utils lib32-nvidia-390xx-utils) ;;
     esac
 }
+# The driver branch this system runs or is about to get: mainline, 580xx, 470xx,
+# 390xx or none. A frozen branch already installed wins over the card's own, as
+# it does in the classification below, so an RTX card on the legacy edition
+# reads as 580xx.
+_gpu_nvidia_branch() {
+    local installed
+    installed="$(_gpu_installed_nvidia_branch)"
+    if [[ -n "$installed" ]]; then printf '%s\n' "$installed"; return 0; fi
+    case "${NVIDIA_GEN:-none}" in
+        turing)  printf 'mainline\n' ;;
+        maxwell) printf '580xx\n' ;;
+        kepler)  printf '470xx\n' ;;
+        fermi)   printf '390xx\n' ;;
+        *)       printf 'none\n' ;;
+    esac
+}
 gpu_classify_nvidia_driver() {
     NVIDIA_DRIVER_FAMILY=none
     NVIDIA_REPO_PKGS=() NVIDIA_LOCAL_PKGS=()
@@ -316,8 +332,9 @@ write_modprobe_conf() {
             # fbdev=1 exists only since driver 545 (nvidia-open / 580xx); the
             # 470xx/390xx legacy branches reject the unknown param and fail to
             # load nvidia-drm, so emit it only for the modern branches.
-            local fbdev=""
-            case "${NVIDIA_GEN:-}" in turing|maxwell) fbdev=" fbdev=1" ;; esac
+            local fbdev="" branch
+            branch="$(_gpu_nvidia_branch)"
+            case "$branch" in mainline|580xx) fbdev=" fbdev=1" ;; esac
             # How a driver survives suspend is the driver's own business, and
             # since 595 mainline answers it differently from the legacy branches:
             # nvidia-utils ships nvidia-sleep.conf asking for kernel suspend
@@ -328,8 +345,8 @@ write_modprobe_conf() {
             # leaves both set at once. Say nothing to the branch that speaks for
             # itself.
             local sleep_opts=""
-            case "${NVIDIA_GEN:-}" in
-                turing) ;;
+            case "$branch" in
+                mainline) ;;
                 *) sleep_opts=$'options nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp\n' ;;
             esac
             printf 'options nvidia-drm modeset=1%s\n%s' "$fbdev" "$sleep_opts" \
@@ -870,7 +887,9 @@ gpu_apply_autoconfig() {
             write_modprobe_conf nvidia
             cmdline_args+=("nvidia_drm.modeset=1")
             local _pw=false _sleep=true
-            if [[ "$NVIDIA_GEN" == turing ]]; then _pw=true; _sleep=false; fi
+            # The driver decides this, not the card: an RTX card on a frozen
+            # branch still suspends the legacy way.
+            if [[ "$(_gpu_nvidia_branch)" == mainline ]]; then _pw=true; _sleep=false; fi
             nvidia_enable_services "$_pw" "$_sleep"
         else
             note_failure "nvidia: driver installed but no module for kernel ${_k:-unknown}, so the GPU configuration was skipped"
