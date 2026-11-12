@@ -149,6 +149,7 @@ reconcile_inhibitor() {
 }
 
 # Hyprland's Lua config has no `hyprctl keyword`, so monitors change through hl.monitor.
+# It changes only the fields it is given, so turning a panel back on has to say so.
 set_monitor() {
   hyprctl eval "hl.monitor({ $1 })" >/dev/null 2>&1 || true
 }
@@ -224,13 +225,13 @@ handle_open() {
     read -r mode pos scale transform < "$STATE_FILE" || true
     if [ -n "$mode" ] && [ -n "$pos" ] && [ -n "$scale" ]; then
       # A rotated panel, as some small laptops have, comes back the right way up.
-      set_monitor "output = \"$internal\", mode = \"$mode\", position = \"$pos\", scale = \"$scale\", transform = ${transform:-0}"
+      set_monitor "output = \"$internal\", disabled = false, mode = \"$mode\", position = \"$pos\", scale = \"$scale\", transform = ${transform:-0}"
     else
-      set_monitor "output = \"$internal\", mode = \"preferred\", position = \"auto\", scale = \"auto\""
+      set_monitor "output = \"$internal\", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\""
     fi
     rm -f "$STATE_FILE"
   elif ! is_monitor_enabled "$internal"; then
-    set_monitor "output = \"$internal\", mode = \"preferred\", position = \"auto\", scale = \"auto\""
+    set_monitor "output = \"$internal\", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\""
   fi
 }
 
