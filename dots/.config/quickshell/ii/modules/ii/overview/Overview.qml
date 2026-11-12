@@ -666,6 +666,15 @@ Scope {
             clip: true
             visible: !panelWindow.useScrollingLauncher
             enabled: !panelWindow.useScrollingLauncher
+            // Same slide as the scrolling launcher above: it starts raised, and
+            // drops into place once the first frame is up.
+            transform: Translate {
+                y: panelWindow.framePresented ? 0 : -40 * panelWindow.launcherUiScale
+                Behavior on y {
+                    enabled: panelWindow.requested
+                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
+                }
+            }
             // Disable scrolling when workspacesOnly mode is active —
             // there's nothing below the workspace previews in that view,
             // so allowing the flickable to scroll just lets the user
