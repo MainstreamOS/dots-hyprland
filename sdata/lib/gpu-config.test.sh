@@ -93,6 +93,21 @@ run nv-fermi-gf117 "" "01:00.0 3D controller [0302]: NVIDIA Corporation GF117M [
 chk nv-fermi-gf117 NVIDIA_GEN fermi
 run nv-fermi-gf116 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF116 [GeForce GTX 550 Ti] [10de:1244] (rev a1)"
 chk nv-fermi-gf116 NVIDIA_GEN fermi
+run nv-fermi-gf114 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF114 [GeForce GTX 560 Ti] [10de:1200] (rev a1)"
+chk nv-fermi-gf114 NVIDIA_GEN fermi
+run nv-fermi-gf108 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF108 [GeForce GT 630] [10de:0f00] (rev a1)"
+chk nv-fermi-gf108 NVIDIA_GEN fermi
+# Tesla parts whose ids sit above the first Fermi one.
+run nv-tesla-gt216 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GT216 [GeForce GT 220] [10de:0a20] (rev a2)"
+chk nv-tesla-gt216 NVIDIA_GEN prefermi
+run nv-tesla-g98 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G98 [GeForce 8400 GS Rev. 2] [10de:06e4] (rev a1)"
+chk nv-tesla-g98 NVIDIA_GEN prefermi
+run nv-tesla-mcp79 "" "03:00.0 VGA compatible controller [0300]: NVIDIA Corporation C79 [GeForce 9400M] [10de:0863] (rev b1)"
+chk nv-tesla-mcp79 NVIDIA_GEN prefermi
+run nv-tesla-gt215 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GT215 [GeForce GT 240] [10de:0ca3] (rev a2)"
+chk nv-tesla-gt215 NVIDIA_GEN prefermi
+run nv-tesla-gt218 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GT218 [GeForce 405] [10de:10c5] (rev a2)"
+chk nv-tesla-gt218 NVIDIA_GEN prefermi
 run nv-kepler-gk107 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK107 [GeForce GT 640] [10de:0fc1] (rev a1)"
 chk nv-kepler-gk107 NVIDIA_GEN kepler
 run nv-kepler-gk110 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK110 [GeForce GTX 780] [10de:1004] (rev a1)"

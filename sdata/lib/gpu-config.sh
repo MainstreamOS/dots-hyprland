@@ -46,7 +46,8 @@ _gpu_installed_nvidia_branch() {
 #   INTEL_GEN (xe|modern|legacy|none)
 # Generation ladder (PCI device-id decimal): 7682 Turing+ (0x1E02 TITAN RTX /
 # 0x1E03 RTX 2080 Ti 12GB are the lowest Turing IDs), 4928 Maxwell-Volta,
-# 4032 Kepler, 1728 Fermi, below Fermi -> prefermi (nouveau).
+# 4032 Kepler, 1728 Fermi, below Fermi -> prefermi (nouveau). Fermi, Kepler and
+# the last Tesla parts interleave above 1728, so id windows settle those.
 # AMD "old" = pre-GCN: dec < 26112 AND NOT an APU (4864-5887 exemption), OR a
 # pre-GCN name (HD 2xxx-6xxx / RV / RS / R[67]xx), OR one of the pre-GCN fusion
 # APU id windows (Llano/Sumo 0x9640-0x964f, Wrestler 0x9802-0x980a, Trinity/
@@ -104,12 +105,17 @@ gpu_detect() {
         NVIDIA_PCI_DEC=$((16#${pci_id:-0}))
         if   [[ $NVIDIA_PCI_DEC -ge 7682 ]]; then NVIDIA_GEN=turing
         elif [[ $NVIDIA_PCI_DEC -ge 4928 ]]; then NVIDIA_GEN=maxwell
-        # Fermi and Kepler interleave: GF119 0x1040, GF110 0x1080, GF117 0x1140
-        # and GF116 0x1240 all sit above GK107 at 0x0FC0, while Kepler owns
-        # 0x0FC0-0x103F, 0x1180-0x123F and 0x1280 up. A 390xx card handed
-        # 470xx here has no driver at all.
+        # Tesla parts above the first Fermi id: G98, the MCP7x and MCP89
+        # chipsets and GT215/216/218 fill 0x06E0-0x0DBF, and GT218 returns at
+        # 0x10C0-0x10DF. 390xx does not drive them and blacklists nouveau.
+        elif (( (NVIDIA_PCI_DEC >= 16#06e0 && NVIDIA_PCI_DEC <= 16#0dbf) \
+             || (NVIDIA_PCI_DEC >= 16#10c0 && NVIDIA_PCI_DEC <= 16#10df) )); then NVIDIA_GEN=prefermi
+        # Fermi and Kepler interleave: GF119 0x1040, GF110 0x1080, GF117 0x1140,
+        # GF114 0x1200 and GF116 0x1240 all sit above GK107 at 0x0FC0, while
+        # Kepler owns 0x0FC0-0x103F, 0x1180-0x11FF and 0x1280 up. A 390xx card
+        # handed 470xx here has no driver at all.
         elif (( (NVIDIA_PCI_DEC >= 16#1040 && NVIDIA_PCI_DEC <= 16#117f) \
-             || (NVIDIA_PCI_DEC >= 16#1240 && NVIDIA_PCI_DEC <= 16#127f) )); then NVIDIA_GEN=fermi
+             || (NVIDIA_PCI_DEC >= 16#1200 && NVIDIA_PCI_DEC <= 16#127f) )); then NVIDIA_GEN=fermi
         elif [[ $NVIDIA_PCI_DEC -ge 4032 ]]; then NVIDIA_GEN=kepler
         elif [[ $NVIDIA_PCI_DEC -ge 1728 ]]; then NVIDIA_GEN=fermi
         else                                       NVIDIA_GEN=prefermi
@@ -847,7 +853,7 @@ gpu_apply_autoconfig() {
             [[ $IS_RDNA4 == true ]] && cmdline_args+=("amdgpu.sg_display=0") || true
         fi
     fi
-    if [[ $HAS_NVIDIA == true && $NVIDIA_PCI_DEC -ge 1728 ]] && _gpu_nvidia_has_driver; then
+    if [[ $HAS_NVIDIA == true && $NVIDIA_GEN != prefermi ]] && _gpu_nvidia_has_driver; then
         # The userspace packages being present says nothing about whether a
         # module exists for the kernel about to boot. Dressing a driverless
         # kernel in modeset flags and suspend services hides the failure behind
@@ -913,7 +919,7 @@ gpu_apply_hypr_tweaks() {
     # Resolve driver presence once (a pacman query) and reuse for both branches.
     local has_nv_drv=false
     if [[ $HAS_NVIDIA == true ]] && _gpu_nvidia_has_driver && nvidia_module_present; then has_nv_drv=true; fi
-    if [[ $has_nv_drv == true && $NVIDIA_PCI_DEC -ge 1728 ]]; then
+    if [[ $has_nv_drv == true && $NVIDIA_GEN != prefermi ]]; then
         nvidia_write_env "$uh"
         hypridle_fix_nvidia "$uh"
     fi
