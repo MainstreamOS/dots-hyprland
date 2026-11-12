@@ -421,6 +421,13 @@ gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1))
 chk_str maxwell-gen "$NVIDIA_GEN" "maxwell"
 chk_str maxwell-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
 chk_str maxwell-gsp-hook "$( [[ -f "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp" && "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *"strip-nvidia-gsp"* ]] && echo yes || echo no )" "yes"
+# The hook empties both firmware layouts and leaves the rest of the tree alone.
+GSPROOT="$(mktemp -d)"; GSPFW="$GSPROOT/usr/lib/firmware/nvidia"
+mkdir -p "$GSPFW/580.142" "$GSPFW/tu102/gsp" "$GSPFW/gm200/acr"
+touch "$GSPFW/580.142/gsp_tu10x.bin" "$GSPFW/tu102/gsp/gsp-570.144.bin.zst" "$GSPFW/gm200/acr/bl.bin.zst"
+( BUILDROOT="$GSPROOT"; source "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp"; build ); CASES=$((CASES + 1))
+chk_str gsp-hook-strips-both "$(cd "$GSPFW" && find . -type f | sort | tr '\n' ' ')" "./gm200/acr/bl.bin.zst "
+rm -rf "$GSPROOT"
 chk_str maxwell-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
 chk_str maxwell-sleep-opts "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
 chk_str maxwell-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo yes || echo no )" "yes"

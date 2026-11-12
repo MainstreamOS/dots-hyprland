@@ -435,7 +435,9 @@ nvidia_strip_gsp_firmware() {
     ${GPU_SUDO:-} tee "$dir/strip-nvidia-gsp" >/dev/null <<'HOOKEOF'
 #!/bin/bash
 build() {
+    # The proprietary driver's layout, then nouveau's.
     rm -f "$BUILDROOT"/usr/lib/firmware/nvidia/*/gsp_*.bin*
+    rm -f "$BUILDROOT"/usr/lib/firmware/nvidia/*/gsp/gsp-*.bin*
 }
 help() {
     echo "Drops the unused NVIDIA GSP firmware (Turing+ only) from the initramfs."
@@ -486,12 +488,15 @@ _gpu_bound_driver() {
     [[ -e "$link" ]] || return 0
     basename "$(readlink -f "$link")" 2>/dev/null || true
 }
+# The mounted ESP's size in MiB, wherever the install put it, or 0.
 _gpu_esp_mib() {
-    if mountpoint -q /boot/efi 2>/dev/null; then
-        echo $(( $(findmnt -bno SIZE /boot/efi 2>/dev/null || echo 0) / 1048576 ))
-    else
-        echo 0
-    fi
+    local mp
+    for mp in /boot/efi /efi /boot; do
+        [[ "$(findmnt -no FSTYPE --mountpoint "$mp" 2>/dev/null)" == vfat ]] || continue
+        echo $(( $(findmnt -bno SIZE --mountpoint "$mp" 2>/dev/null || echo 0) / 1048576 ))
+        return 0
+    done
+    echo 0
 }
 # Whether a proprietary NVIDIA driver is actually installed. When a legacy card
 # falls back to nouveau (its frozen branch was unavailable), forcing the
