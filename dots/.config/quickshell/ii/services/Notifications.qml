@@ -204,7 +204,6 @@ Singleton {
         if (!entry) return "";
         return NotificationLinks.linkFor(entry, LinkPreviewService.extractUrls(NotificationLinks.linkText(entry)));
     }
-    function linkHost(link): string { return NotificationLinks.host(link); }
 
     function imageSource(source) {
         const value = String(source || "");

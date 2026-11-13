@@ -3,21 +3,31 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = path.resolve(__dirname, '../../../services/NotificationLinks.js');
-const links = vm.createContext({});
-vm.runInContext(fs.readFileSync(source, 'utf8').replace(/^\.(?:pragma|import).*$/gm, ''), links);
+const services = path.resolve(__dirname, '../../../services');
+const read = name => fs.readFileSync(path.join(services, name), 'utf8');
+const islandText = vm.createContext({});
+vm.runInContext(read('IslandText.js').replace(/^\.pragma.*$/m, ''), islandText);
+const links = vm.createContext({IslandText: islandText});
+vm.runInContext(read('NotificationLinks.js').replace(/^\.(?:pragma|import).*$/gm, ''), links);
+const preview = read('LinkPreviewService.qml');
+const root = {};
+for (const name of ['urlEnd', 'extractUrls']) {
+    const match = preview.match(new RegExp(`    function ${name}\\((\\w+): string\\): (?:int|var) \\{([\\s\\S]*?)\\n    \\}`));
+    assert.ok(match, `Missing production function ${name}`);
+    root[name] = vm.runInNewContext(`(function(${match[1]}) {${match[2]}\n})`, {root});
+}
 const phone = (sourceApp, summary, body) => ({sourceApp, summary, body, phoneOrigin: true});
+const resolve = entry => links.linkFor(entry, root.extractUrls(links.linkText(entry)));
 
 test('a web address in the text is the link, ahead of the app site', () => {
-    const entry = phone('Discord', 'Sender', 'Reacted to "⁨https://youtu.be/abc?a=1&amp;b=2⁩"');
+    const entry = phone('Gmail', 'Sender', 'Reacted to "⁨https://youtu.be/abc?a=1&amp;b=2⁩"');
     const text = links.linkText(entry);
     assert.ok(text.includes('https://youtu.be/abc?a=1&b=2 '));
-    assert.equal(links.linkFor(entry, ['https://youtu.be/abc?a=1&b=2']), 'https://youtu.be/abc?a=1&b=2');
+    assert.equal(resolve(entry), 'https://youtu.be/abc?a=1&b=2');
 });
 
 test('known phone apps open the page that lists their notifications', () => {
     assert.equal(links.linkFor(phone('Gmail', 'Sender', 'Subject\nText'), []), 'https://mail.google.com/');
-    assert.equal(links.linkFor(phone(' X ', 'Someone', 'A post'), []), 'https://x.com/notifications');
     assert.equal(links.linkFor(phone('Unknown App', 'Title', 'Text'), []), '');
     assert.equal(links.linkFor(phone('constructor', 'Title', 'Text'), []), '');
 });
@@ -36,8 +46,31 @@ test('desktop notifications only have the links their text holds', () => {
     assert.equal(links.linkFor(entry, ['ftp://example.com/file', 'https://example.com/a']), 'https://example.com/a');
 });
 
-test('the button names the site that really opens', () => {
-    assert.equal(links.host('https://www.Reddit.com/r/elgato/'), 'reddit.com');
-    assert.equal(links.host('https://mail.google.com@evil.example:8443/path?x=1'), 'evil.example');
-    assert.equal(links.host('https://x.com'), 'x.com');
+test('X notices keep their full destination when supplied', () => {
+    for (const [body, expected] of [
+        ['Read x.com/i/status/12345?s=20&amp;t=example.', 'https://x.com/i/status/12345?s=20&t=example'],
+        ['See “x.com/person/status/12345”.', 'https://x.com/person/status/12345'],
+        ['&quot;https://x.com/person/status/12345?s=20&quot;', 'https://x.com/person/status/12345?s=20'],
+        ['(&lt;t.co/Example&gt;)', 'https://t.co/Example'],
+        ['<a class="post" href="https://twitter.com/person/status/12345?x=1&amp;y=2">View post</a>',
+            'https://twitter.com/person/status/12345?x=1&y=2'],
+    ]) {
+        assert.equal(resolve(phone(' X ', 'Someone', body)), expected);
+    }
+    assert.equal(resolve(phone('X', 'https://x.com/', 'See x.com/i/status/12345')), 'https://x.com/i/status/12345');
+});
+
+test('X notices without a URL search for the post excerpt', () => {
+    assert.equal(resolve(phone('X', 'Someone', 'A post &amp; a reply…\n\nX')),
+        'https://x.com/search?q=A%20post%20%26%20a%20reply');
+    assert.equal(resolve(phone('Twitter', 'Someone', 'person@x.com/status/12345')),
+        'https://x.com/search?q=person%40x.com%2Fstatus%2F12345');
+    assert.equal(resolve(phone('X', 'https://x.com/', 'A post excerpt')), 'https://x.com/search?q=A%20post%20excerpt');
+    assert.equal(resolve(phone('X.com', 'Someone', '')), 'https://x.com/notifications');
+});
+
+test('Discord uses its own actions for both mirrored and desktop notifications', () => {
+    assert.equal(resolve(phone('Discord', 'Sender', 'New message')), '');
+    assert.equal(resolve(phone('Discord', 'Sender', 'See https://example.com/shared')), '');
+    assert.equal(resolve({appName: 'Discord Canary', body: 'https://example.com/shared'}), '');
 });

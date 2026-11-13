@@ -276,49 +276,61 @@ ColumnLayout {
 
         IslandButton { symbol: "chevron_right"; enabled: root.currentIndex + 1 < root.entries.length; onClicked: { root.cancelReply(); root.currentIndex++; } }
         Item { Layout.fillWidth: true }
-        RowLayout {
-            spacing: 6 * Appearance.sizes.islandScale
-            Repeater {
-                model: (root.entry?.actions ?? []).filter(a => a && (a.text || a.identifier))
-                delegate: IslandButton {
-                    required property var modelData
-                    required property int index
+        Flickable {
+            id: notificationActions
+            visible: actionButtons.implicitWidth > 0
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.preferredWidth: actionButtons.implicitWidth
+            Layout.maximumWidth: actionButtons.implicitWidth
+            Layout.preferredHeight: actionButtons.implicitHeight
+            contentWidth: actionButtons.width
+            flickableDirection: Flickable.HorizontalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
 
-                    readonly property string actionText: modelData.text || modelData.identifier || ""
-                    readonly property string actionId: modelData.identifier || modelData.text || ""
+            Connections {
+                target: root
+                function onEntryChanged() { notificationActions.contentX = 0; }
+            }
 
-                    symbol: root.actionSymbol(actionText, actionId)
-                    text: root.buttonCount <= 2 ? actionText : (root.buttonCount === 3 && actionText.length <= 7) ? actionText : ""
+            RowLayout {
+                id: actionButtons
+                spacing: 6 * Appearance.sizes.islandScale
+                Repeater {
+                    model: (root.entry?.actions ?? []).filter(a => a && (a.text || a.identifier))
+                    delegate: IslandButton {
+                        required property var modelData
 
-                    ToolTip.visible: hovered && text === "" && actionText.length > 0
-                    ToolTip.text: actionText
-                    ToolTip.delay: 300
+                        readonly property string actionText: modelData.text || modelData.identifier || ""
+                        readonly property string actionId: modelData.identifier || modelData.text || ""
 
-                    onClicked: Notifications.attemptInvokeAction(root.entry.notificationId, actionId, actionText)
+                        symbol: root.actionSymbol(actionText, actionId)
+                        text: root.buttonCount <= 2 ? actionText : (root.buttonCount === 3 && actionText.length <= 7) ? actionText : ""
+
+                        ToolTip.visible: hovered && text === "" && actionText.length > 0
+                        ToolTip.text: actionText
+                        ToolTip.delay: 300
+
+                        onClicked: Notifications.attemptInvokeAction(root.entry.notificationId, actionId, actionText)
+                    }
                 }
             }
-            IslandButton {
-                readonly property string site: Notifications.linkHost(root.entryLink)
-
-                visible: root.entryLink.length > 0
-                symbol: "open_in_browser"
-                text: root.buttonCount <= 2 ? site : ""
-
-                ToolTip.visible: hovered && text === ""
-                ToolTip.text: site
-                ToolTip.delay: 300
-
-                onClicked: Qt.openUrlExternally(root.entryLink)
+        }
+        IslandButton {
+            visible: root.entryCanReply
+            symbol: "reply"
+            text: Translation.tr("Reply")
+            onClicked: {
+                root.replying = true;
+                Qt.callLater(() => replyInput.forceActiveFocus());
             }
-            IslandButton {
-                visible: root.entryCanReply
-                symbol: "reply"
-                text: Translation.tr("Reply")
-                onClicked: {
-                    root.replying = true;
-                    Qt.callLater(() => replyInput.forceActiveFocus());
-                }
-            }
+        }
+        IslandButton {
+            visible: root.entryLink.length > 0
+            symbol: "open_in_browser"
+            text: Translation.tr("Open link")
+            onClicked: Qt.openUrlExternally(root.entryLink)
         }
     }
 

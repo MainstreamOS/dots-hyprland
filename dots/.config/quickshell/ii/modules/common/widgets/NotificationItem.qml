@@ -288,21 +288,6 @@ Item { // Notification item area
                                 }
                             }
 
-                            NotificationActionButton {
-                                visible: root.link.length > 0
-                                Layout.fillWidth: true
-                                buttonText: Translation.tr("Open in browser")
-                                urgency: notificationObject.urgency
-                                onClicked: {
-                                    Qt.openUrlExternally(root.link)
-                                    GlobalStates.sidebarRightOpen = false
-                                }
-
-                                StyledToolTip {
-                                    text: Notifications.linkHost(root.link)
-                                }
-                            }
-
                             // Copying the text is what a notification offers when it
                             // offers nothing else. Once it carries buttons of its
                             // own they are what the row is for, and a third button
@@ -337,7 +322,17 @@ Item { // Notification item area
                                     text: "content_copy"
                                 }
                             }
-                            
+
+                            NotificationActionButton {
+                                visible: root.link.length > 0
+                                Layout.fillWidth: true
+                                buttonText: Translation.tr("Open link")
+                                urgency: notificationObject.urgency
+                                onClicked: {
+                                    Qt.openUrlExternally(root.link)
+                                    GlobalStates.sidebarRightOpen = false
+                                }
+                            }
                         }
                     }
                 }
