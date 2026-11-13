@@ -467,6 +467,64 @@ Singleton {
         }
     }
 
+    // A sent file is shown from where it was sent. The bridge says which of those have
+    // since gone or been given to another file, and the phone's own copy shows instead.
+    property var checkedLinks: ({})
+    function checkLinks(): void {
+        if (!root.deviceId) return;
+        const links = [];
+        const saved = root.savedLocalSent._deviceAttachments?.[root.deviceId] ?? {};
+        for (const uid in saved) {
+            // Both kinds of id carry the time they were made, in milliseconds.
+            const made = /^(?:local-|PART_)(\d{12,14})/.exec(uid);
+            links.push({ uid, path: saved[uid], since: made ? Number(made[1]) : 0 });
+        }
+        for (const sent of root.savedLocalSent._outgoingAttachments ?? []) {
+            if (sent.device !== root.deviceId) continue;
+            for (const a of sent.attachments ?? []) {
+                const path = a.path || a.thumb;
+                if (a.uid && path) links.push({ uid: String(a.uid), path, since: Number(sent.date) || 0 });
+            }
+        }
+        if (links.length === 0) return;
+        root.checkedLinks = ObjectUtils.fromEntries(links.map(link => [link.uid, link.path]));
+        root.command({ cmd: "links", device: root.deviceId, links });
+    }
+
+    function dropLinks(uids): void {
+        const gone = ObjectUtils.fromEntries((uids ?? []).map(uid => [String(uid), root.checkedLinks[uid] ?? ""]));
+        if (Object.keys(gone).length === 0) return;
+        const live = ([uid]) => gone[uid] === undefined;
+        root.attachmentFiles = ObjectUtils.fromEntries(Object.entries(root.attachmentFiles).filter(live));
+        const saved = root.savedLocalSent._deviceAttachments?.[root.deviceId] ?? {};
+        root.savedLocalSent = Object.assign({}, root.savedLocalSent, {
+            _deviceAttachments: Object.assign({}, root.savedLocalSent._deviceAttachments, {
+                [root.deviceId]: ObjectUtils.fromEntries(Object.entries(saved).filter(live))
+            }),
+            _outgoingAttachments: (root.savedLocalSent._outgoingAttachments ?? []).map(sent => sent.device !== root.deviceId
+                ? sent : Object.assign({}, sent, { attachments: (sent.attachments ?? []).map(a =>
+                    gone[String(a.uid)] === undefined ? a : Object.assign({}, a, { path: "", thumb: "" })) }))
+        });
+        saveSentTimer.restart();
+        // Messages already loaded let go of the file too.
+        const release = messages => {
+            let changed = false;
+            for (const message of messages ?? []) for (const a of message.attachments ?? []) {
+                const path = gone[String(a.uid)];
+                if (!path) continue;
+                if (a.path === path) { delete a.path; changed = true; }
+                if (a.thumb === path) { a.thumb = ""; changed = true; }
+            }
+            return changed;
+        };
+        if (release(root.threadMessages)) root.threadMessages = root.threadMessages.slice();
+        let cacheChanged = false;
+        for (const messages of Object.values(root.threadCache)) cacheChanged = release(messages) || cacheChanged;
+        if (cacheChanged) root.threadCache = Object.assign({}, root.threadCache);
+        if (release(root.conversations)) root.conversations = root.conversations.slice();
+        for (const message of root.threadMessages) root.prefetchMedia(message.attachments);
+    }
+
     function command(fields): string {
         if (!bridge.running || (!root.backendAvailable && fields.cmd !== "devices" && fields.cmd !== "start")) return "";
         const request = root.requestPrefix + "-" + (++root.requestSequence);
@@ -548,6 +606,7 @@ Singleton {
         if (root.threadLoading) threadTimeout.restart();
         else threadTimeout.stop();
         root.command({ "cmd": "thread", "device": root.deviceId, "thread": thread, "count": 100 });
+        root.checkLinks();
         root.conversationOpened(thread);
     }
 
@@ -1323,6 +1382,9 @@ Singleton {
             if (aThumb.length > 0) root.attachmentThumbs = Object.assign({}, root.attachmentThumbs, { [aUid]: aThumb });
             break;
         }
+        case "links":
+            if (event.device === root.deviceId) root.dropLinks(event.stale);
+            break;
         case "duration": {
             if (event.device && event.device !== root.deviceId) break;
             const dUid = event.uid ?? "";

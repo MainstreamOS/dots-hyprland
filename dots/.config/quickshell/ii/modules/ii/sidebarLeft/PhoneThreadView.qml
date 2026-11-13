@@ -385,6 +385,7 @@ Item {
         mediaPlayer.videoOutput = null;
         mediaPlayer.isVideo = isVideo;
         mediaPlayer.uid = attachment.uid;
+        mediaPlayer.attachment = attachment;
         Phone.useAttachment(attachment, "play");
     }
 
@@ -458,6 +459,7 @@ Item {
         mediaPlayer.source = "";
         mediaPlayer.uid = "";
         mediaPlayer.isVideo = false;
+        mediaPlayer.attachment = null;
     }
 
     PhoneVoiceRecorder {
@@ -638,10 +640,22 @@ Item {
         id: mediaPlayer
         property string uid: ""
         property bool isVideo: false
+        property var attachment: null
+        property string refetched: ""
         audioOutput: AudioOutput {}
         loops: (mediaPlayer.isVideo || mediaPlayer.uid.startsWith("link:")) ? MediaPlayer.Infinite : 1
         onErrorOccurred: (error, errorString) => {
             const isLink = mediaPlayer.uid.startsWith("link:");
+            const attachment = mediaPlayer.attachment;
+            // A copy on this computer that has gone is fetched from the phone once before giving up.
+            if (!isLink && attachment && mediaPlayer.refetched !== mediaPlayer.uid) {
+                mediaPlayer.refetched = mediaPlayer.uid;
+                mediaPlayer.stop();
+                mediaPlayer.source = "";
+                Phone.forgetAttachment(String(attachment.uid), Phone.deviceId);
+                Phone.useAttachment(attachment, "play");
+                return;
+            }
             root.notice((isLink ? Translation.tr("Could not play this video: %1") : Translation.tr("Could not play this attachment: %1")).arg(errorString));
             root.stopMedia();
         }
@@ -1470,6 +1484,8 @@ Item {
                                         scale: thumbMouse.pressed ? 0.94 : 1
                                         onStatusChanged: {
                                             if (status === Image.Error && !attachmentItem.fullFailed && (attachmentItem.modelData.thumb ?? "").length > 0) {
+                                                // The next open asks the phone for the file again.
+                                                Phone.forgetAttachment(String(attachmentItem.modelData.uid ?? ""), Phone.deviceId);
                                                 attachmentItem.fullFailed = true;
                                             }
                                         }
@@ -1495,6 +1511,8 @@ Item {
                                         scale: thumbMouse.pressed ? 0.94 : 1
                                         onStatusChanged: {
                                             if (status === Image.Error && !attachmentItem.fullFailed && (attachmentItem.modelData.thumb ?? "").length > 0) {
+                                                // The next open asks the phone for the file again.
+                                                Phone.forgetAttachment(String(attachmentItem.modelData.uid ?? ""), Phone.deviceId);
                                                 attachmentItem.fullFailed = true;
                                             }
                                         }

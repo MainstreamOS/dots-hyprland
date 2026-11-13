@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import threading
 import subprocess
 import sys
@@ -542,6 +543,27 @@ def attachment_metadata(device, uid, path):
             emit("attachment", device=device, uid=str(uid), **result)
     if not media_queue.submit(("attachment", key), work, done):
         fail("attachment", "Media queue is busy; try again", device=device, uid=str(uid))
+
+
+LINK_SLACK = 120
+
+
+def stale_links(links):
+    """The ids whose local file has gone or was rewritten after the link to it was made. A sent file is
+    shown from where it was sent, and a name like "Pasted image.png" is soon given to another picture."""
+    stale = []
+    for link in links if isinstance(links, list) else []:
+        if not isinstance(link, dict) or not link.get("uid"):
+            continue
+        try:
+            since = float(link.get("since") or 0) / 1000
+            info = os.stat(str(link["path"]))
+            current = stat.S_ISREG(info.st_mode) and not (since > 0 and info.st_mtime > since + LINK_SLACK)
+        except (OSError, KeyError, TypeError, ValueError):
+            current = False
+        if not current:
+            stale.append(str(link["uid"]))
+    return stale
 
 
 def on_attachment_received(device, arg1, arg2):
@@ -1281,6 +1303,8 @@ def handle_command(cmd):
                          or cmd.get("_generation") != backend_generation) if kind == "preview" else None
             local = copy_phone_file(device, cmd["path"], cmd["mount"], cancelled=cancelled)
             emit("filePreview" if kind == "preview" else "file", path=local)
+        elif kind == "links":
+            emit("links", device=device, stale=stale_links(cmd.get("links")))
         elif kind == "probe":
             path, uid = cmd.get("path", ""), cmd.get("uid", "")
             emit("duration", uid=uid, path=path, duration=probe_duration(path), thumb=video_thumbnail(path))
