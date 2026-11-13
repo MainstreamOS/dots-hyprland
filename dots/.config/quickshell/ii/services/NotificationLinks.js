@@ -27,8 +27,14 @@ const sites = {
 const xApp = /^(x(?:\.com)?|twitter(?:\.com)?)$/;
 
 function postExcerpt(text) {
-    return IslandText.body(text, true).split("\n")[0].slice(0, 120)
-        .replace(/(?:\.{3}|…)\s*$/, "").trim();
+    let excerpt = IslandText.body(text, true).split("\n")[0];
+    if (excerpt.length > 120) {
+        // Half an emoji cannot go in an address, and a search finds whole words only.
+        excerpt = excerpt.slice(0, 120).replace(/[\ud800-\udbff]$/, "");
+        const space = excerpt.lastIndexOf(" ");
+        if (space > 60) excerpt = excerpt.slice(0, space);
+    }
+    return excerpt.replace(/(?:\.{3}|…)\s*$/, "").trim();
 }
 
 function redditPost(title, text) {

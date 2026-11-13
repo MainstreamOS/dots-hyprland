@@ -85,6 +85,14 @@ test('X notices without a URL search for the post excerpt', () => {
     assert.equal(resolve(phone('X.com', 'Someone', '')), 'https://x.com/notifications');
 });
 
+test('a long post excerpt ends on a whole word and never inside an emoji', () => {
+    const words = 'word '.repeat(23) + 'unfinished and more';
+    assert.equal(resolve(phone('X', 'Someone', words)),
+        'https://x.com/search?q=' + encodeURIComponent('word '.repeat(23).trim()));
+    const unbroken = 'a'.repeat(119) + '\u{1F600}\u{1F600}';
+    assert.equal(resolve(phone('X', 'Someone', unbroken)), 'https://x.com/search?q=' + 'a'.repeat(119));
+});
+
 test('Discord uses its own actions for both mirrored and desktop notifications', () => {
     assert.equal(resolve(phone('Discord', 'Sender', 'New message')), '');
     assert.equal(resolve(phone('Discord', 'Sender', 'See https://example.com/shared')), '');
