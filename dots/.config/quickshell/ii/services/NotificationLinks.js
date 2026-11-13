@@ -70,7 +70,7 @@ function linkText(entry) {
             return /^https?:\/\//i.test(href) ? ` ${href} ` : " ";
         });
     return ((entry.summary || "") + "\n" + IslandText.body(body, true))
-        .replace(/[‎‏‪-‮⁦-⁩]/g, " ")
+        .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, " ")
         .replace(/[“”]/g, '"')
         // A notification can include a post or short link without its scheme.
         .replace(/(^|[\s<("'“‘])((?:www\.|mobile\.)?(?:x\.com|twitter\.com|t\.co|reddit\.com|redd\.it)\/(?=[\w%-]))/gi,

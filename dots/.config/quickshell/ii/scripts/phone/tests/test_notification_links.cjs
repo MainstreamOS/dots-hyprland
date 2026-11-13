@@ -20,7 +20,7 @@ const phone = (sourceApp, summary, body) => ({sourceApp, summary, body, phoneOri
 const resolve = entry => links.linkFor(entry, root.extractUrls(links.linkText(entry)));
 
 test('a web address in the text is the link, ahead of the app site', () => {
-    const entry = phone('Gmail', 'Sender', 'Reacted to "⁨https://youtu.be/abc?a=1&amp;b=2⁩"');
+    const entry = phone('Gmail', 'Sender', 'Reacted to "\u2068https://youtu.be/abc?a=1&amp;b=2\u2069"');
     const text = links.linkText(entry);
     assert.ok(text.includes('https://youtu.be/abc?a=1&b=2 '));
     assert.equal(resolve(entry), 'https://youtu.be/abc?a=1&b=2');
