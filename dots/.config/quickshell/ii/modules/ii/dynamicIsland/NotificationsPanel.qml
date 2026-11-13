@@ -181,6 +181,9 @@ ColumnLayout {
         ? (Notifications.list.find(n => n.notificationId === root.entry.notificationId) ?? null)
         : null
     readonly property bool entryCanReply: Boolean(liveNotif?.canReply)
+    // A hidden message keeps its link hidden too: the address is part of the text.
+    readonly property string entryLink: root.privateBody ? "" : Notifications.linkFor(root.entry)
+    readonly property int buttonCount: (root.entry?.actions?.length ?? 0) + (root.entryCanReply ? 1 : 0) + (root.entryLink ? 1 : 0)
     readonly property string entryReplyPlaceholder: liveNotif?.inlineReplyPlaceholder || ""
 
     Connections {
@@ -283,10 +286,9 @@ ColumnLayout {
 
                     readonly property string actionText: modelData.text || modelData.identifier || ""
                     readonly property string actionId: modelData.identifier || modelData.text || ""
-                    readonly property int totalButtons: (root.entry?.actions?.length ?? 0) + (root.entryCanReply ? 1 : 0)
 
                     symbol: root.actionSymbol(actionText, actionId)
-                    text: totalButtons <= 2 ? actionText : (totalButtons === 3 && actionText.length <= 7) ? actionText : ""
+                    text: root.buttonCount <= 2 ? actionText : (root.buttonCount === 3 && actionText.length <= 7) ? actionText : ""
 
                     ToolTip.visible: hovered && text === "" && actionText.length > 0
                     ToolTip.text: actionText
@@ -294,6 +296,19 @@ ColumnLayout {
 
                     onClicked: Notifications.attemptInvokeAction(root.entry.notificationId, actionId, actionText)
                 }
+            }
+            IslandButton {
+                readonly property string site: Notifications.linkHost(root.entryLink)
+
+                visible: root.entryLink.length > 0
+                symbol: "open_in_browser"
+                text: root.buttonCount <= 2 ? site : ""
+
+                ToolTip.visible: hovered && text === ""
+                ToolTip.text: site
+                ToolTip.delay: 300
+
+                onClicked: Qt.openUrlExternally(root.entryLink)
             }
             IslandButton {
                 visible: root.entryCanReply

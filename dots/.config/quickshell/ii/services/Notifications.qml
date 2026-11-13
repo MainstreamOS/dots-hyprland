@@ -10,6 +10,7 @@ import Quickshell.Services.Notifications
 import "IslandNotificationPolicy.js" as IslandNotificationPolicy
 import "IslandText.js" as IslandText
 import "NotificationIcons.js" as NotificationIcons
+import "NotificationLinks.js" as NotificationLinks
 
 /**
  * Provides extra features not in Quickshell.Services.Notifications:
@@ -198,6 +199,13 @@ Singleton {
         }
         return "";
     }
+    // Where a notification leads: a web address in its text, or the site of the phone app that sent it.
+    function linkFor(entry): string {
+        if (!entry) return "";
+        return NotificationLinks.linkFor(entry, LinkPreviewService.extractUrls(NotificationLinks.linkText(entry)));
+    }
+    function linkHost(link): string { return NotificationLinks.host(link); }
+
     function imageSource(source) {
         const value = String(source || "");
         return value.startsWith("image://icon//") ? "file://" + value.slice("image://icon".length) : value;
