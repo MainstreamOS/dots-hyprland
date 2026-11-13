@@ -585,8 +585,12 @@ Singleton {
             const ab = mb.attachments ? mb.attachments.length : 0;
             if (aa !== ab) return false;
             for (let j = 0; j < aa; j++) {
-                if ((ma.attachments[j]?.path ?? "") !== (mb.attachments[j]?.path ?? "")
-                    || (ma.attachments[j]?.thumb ?? "") !== (mb.attachments[j]?.thumb ?? "")) {
+                const left = ma.attachments[j];
+                const right = mb.attachments[j];
+                if (left?.uid !== right?.uid || left?.part !== right?.part || left?.mime !== right?.mime
+                    || (left?.duration ?? 0) !== (right?.duration ?? 0)
+                    || (left?.path ?? "") !== (right?.path ?? "")
+                    || (left?.thumb ?? "") !== (right?.thumb ?? "")) {
                     return false;
                 }
             }

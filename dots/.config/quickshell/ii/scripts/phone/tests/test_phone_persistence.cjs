@@ -10,6 +10,19 @@ const source = fs.readFileSync(path.resolve(__dirname, '../../../services/Phone.
 const functions = ['retrySentRead', 'sentStateLoaded', 'sentStateLoadFailed', 'writeSent', 'writeDone'];
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('a refreshed message keeps changed attachment metadata even when no local file exists', () => {
+    const match = source.match(/    function sameThreadMessages\(([^)]*)\): bool \{([\s\S]*?)\n    \}/);
+    assert.ok(match, 'Missing production function sameThreadMessages');
+    const same = vm.runInNewContext(`(function(${match[1]}) {${match[2]}\n})`);
+    const attachment = {uid: 'local-file', part: -1, mime: '', thumb: ''};
+    const message = {uid: '42', date: 123, type: 2, body: '', attachments: [attachment]};
+    assert.equal(same([message], [{...message, attachments: [{...attachment}]}]), true);
+    for (const change of [{uid: 'phone-file'}, {part: 42}, {mime: 'audio/aac'}, {duration: 1000}]) {
+        const refreshed = {...message, attachments: [{...attachment, ...change}]};
+        assert.equal(same([message], [refreshed]), false);
+    }
+});
+
 function fixture(initial = '{}') {
     const root = {
         savedLocalSent: {}, _sentReady: false, _readingSent: true,
