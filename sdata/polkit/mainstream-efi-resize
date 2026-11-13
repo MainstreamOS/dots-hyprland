@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mainstream-efi-resize: grows the EFI system partition for Settings > Storage, run through pkexec.
-# Grows it in place when free space follows it; otherwise builds a new one in free space, or in
-# space taken from the end of a single-device Btrfs, and moves the mount over once it checks out.
+# Builds a replacement in free space or at the end of a single-device Btrfs volume.
+# The original boot partition stays bootable until the replacement is verified.
 #
 # Usage: mainstream-efi-resize probe [target_mb] | plan | resize <target_mb> | recover | cancel,
 # printing JSON progress lines.
@@ -266,9 +266,7 @@ analyze_layout() {
     local part_count
     part_count="$(wc -l <<<"$parts_tsv" | tr -d ' ')"
 
-    # 1. Check contiguous free space immediately after ESP (inplace_grow)
-    local esp_start=0 esp_size=0 next_after_esp=$(( LAST_LBA + 1 ))
-    local prev_Was_esp=0 p_start p_size p_node
+    local p_start p_size p_node
     local best_gap_start=0 best_gap_sec=0 cursor="$FIRST_LBA"
 
     while IFS=$'\t' read -r p_start p_size p_node; do
@@ -280,15 +278,6 @@ analyze_layout() {
                 best_gap_sec="$gap_s"
                 best_gap_start="$aligned_cursor"
             fi
-        fi
-        if (( prev_Was_esp == 1 )); then
-            next_after_esp="$p_start"
-            prev_Was_esp=0
-        fi
-        if [[ "$p_node" == "$ESP_DEV" ]]; then
-            esp_start="$p_start"
-            esp_size="$p_size"
-            prev_Was_esp=1
         fi
         cursor=$(( p_start + p_size ))
         TAIL_START_SEC="$p_start"
@@ -306,24 +295,7 @@ analyze_layout() {
         fi
     fi
 
-    if (( esp_start > 0 )); then
-        local max_inplace_sec=$(( next_after_esp - esp_start ))
-        local max_inplace_bytes=$(( max_inplace_sec * SECTOR_SIZE ))
-        if (( max_inplace_bytes >= req_bytes && max_inplace_bytes > ESP_TOTAL_BYTES + 32 * 1024 * 1024 )); then
-            STRATEGY="inplace_grow"
-            CAN_RESIZE="true"
-            MAX_TARGET_BYTES="$max_inplace_bytes"
-            GAP_START_SEC="$esp_start"
-            GAP_SIZE_SEC="$max_inplace_sec"
-            REASON="Contiguous unallocated space follows $ESP_DEV; partition can expand directly in place."
-            return 0
-        fi
-        if (( max_inplace_bytes > MAX_TARGET_BYTES )); then
-            MAX_TARGET_BYTES="$max_inplace_bytes"
-        fi
-    fi
-
-    # 2. Check unallocated GPT gap anywhere on disk for a new dedicated ESP
+    # Check unallocated GPT gaps for a replacement partition.
     local best_gap_bytes=$(( best_gap_sec * SECTOR_SIZE ))
     if (( part_count < 128 && best_gap_bytes >= req_bytes )); then
         STRATEGY="new_esp_unallocated"
@@ -338,7 +310,7 @@ analyze_layout() {
         MAX_TARGET_BYTES="$best_gap_bytes"
     fi
 
-    # 3. Check tail partition for online Btrfs shrink + tail ESP creation
+    # Check tail partition for online Btrfs shrink + tail ESP creation
     if [[ -n "$TAIL_DEV" && -b "$TAIL_DEV" && "$TAIL_DEV" != "$ESP_DEV" ]] && (( part_count < 128 )); then
         TAIL_PARTN="$(resolve_part_num "$TAIL_DEV" || echo 0)"
         TAIL_FSTYPE="$(lsblk -dno FSTYPE "$TAIL_DEV" 2>/dev/null | tr -d ' ' || true)"
@@ -779,29 +751,12 @@ find_next_free_partn() {
 }
 
 # Variables tracked for emergency rollback
-BACKUP_DIR=""
 TMP_ESP_MNT=""
 SFDISK_BACKUP=""
 ROLLBACK_DISK=""
 ROLLBACK_BTRFS_MNT=""
 ROLLBACK_BOOT_ENTRY=""
-ROLLBACK_REMOUNT_DEV=""
-ROLLBACK_REMOUNT_TARGET=""
 AUTOMOUNT_UNIT=""
-ESP_FORMAT_STARTED=0
-ESP_VOL_ID=""
-
-# Once the old partition is reformatted only the backup holds its files, so they go back
-# onto it, formatting it again first if the failed format left nothing mountable.
-restore_esp_backup() {
-    [[ -n "$BACKUP_DIR" && -d "$BACKUP_DIR" ]] || return 0
-    emit_progress "restore" 0 "Putting the boot files back on ${ESP_DEV}..."
-    if ! mountpoint -q "$ESP_MNT" 2>/dev/null && ! mount "$ESP_DEV" "$ESP_MNT" 2>/dev/null; then
-        mkfs.vfat -F 32 -n "EFI" ${ESP_VOL_ID:+-i "$ESP_VOL_ID"} "$ESP_DEV" >/dev/null 2>&1 || return 1
-        mount "$ESP_DEV" "$ESP_MNT" || return 1
-    fi
-    copy_esp_tree "$BACKUP_DIR" "$ESP_MNT"
-}
 
 cleanup_and_rollback() {
     local exit_code=$?
@@ -830,21 +785,13 @@ cleanup_and_rollback() {
                 rollback_incomplete "Btrfs on ${TAIL_DEV} was left smaller, since its partition could not be confirmed back at its old size. The backups are in ${BACKUP_BASE}."
             fi
         fi
-        if (( ESP_FORMAT_STARTED )); then
-            restore_esp_backup || true
-        elif [[ -n "$ROLLBACK_REMOUNT_DEV" && -n "$ROLLBACK_REMOUNT_TARGET" ]]; then
-            if ! mountpoint -q "$ROLLBACK_REMOUNT_TARGET" 2>/dev/null; then
-                mount "$ROLLBACK_REMOUNT_DEV" "$ROLLBACK_REMOUNT_TARGET" 2>/dev/null || true
-            fi
-        fi
     fi
     if [[ -n "$AUTOMOUNT_UNIT" ]]; then
         systemctl daemon-reload 2>/dev/null || true
         systemctl start "$AUTOMOUNT_UNIT" 2>/dev/null || true
     fi
-    # Both backups stay after a failure, for recovery by hand.
+    # The partition table backup stays after a failure for recovery by hand.
     if (( exit_code == 0 )); then
-        [[ -n "$BACKUP_DIR" && -d "$BACKUP_DIR" ]] && rm -rf "$BACKUP_DIR"
         [[ -n "$SFDISK_BACKUP" && -f "$SFDISK_BACKUP" ]] && rm -f "$SFDISK_BACKUP"
     fi
     return 0
@@ -887,72 +834,7 @@ cmd_resize() {
     local target_sec=$(( (target_mb * 1048576) / SECTOR_SIZE ))
     target_sec=$(( (target_sec / align_sec) * align_sec ))
 
-    if [[ "$STRATEGY" == "inplace_grow" ]]; then
-        # ── Strategy 1: Grow existing ESP in place ──────────────────────────
-        if (( target_sec > GAP_SIZE_SEC )); then
-            target_sec="$GAP_SIZE_SEC"
-        fi
-
-        emit_progress "backup" 18 "Backing up EFI boot files from ${ESP_MNT}..."
-        BACKUP_DIR="$(mktemp -d "$BACKUP_BASE/efi-backup.XXXXXX")"
-        chmod 0700 "$BACKUP_DIR"
-        cp -a "$ESP_MNT/." "$BACKUP_DIR/"
-        sync
-
-        # Stop systemd automount unit if active so it doesn't remount during mkfs
-        local unit_escaped
-        unit_escaped="$(systemd-escape -p --suffix=automount "$ESP_MNT" 2>/dev/null || true)"
-        if [[ -n "$unit_escaped" ]] && systemctl is-active --quiet "$unit_escaped" 2>/dev/null; then
-            AUTOMOUNT_UNIT="$unit_escaped"
-            systemctl stop "$AUTOMOUNT_UNIT" 2>/dev/null || true
-        fi
-
-        emit_progress "partition" 40 "Unmounting ${ESP_MNT} and extending GPT partition ${ESP_DEV}..."
-        ROLLBACK_DISK="$ESP_DISK"
-        ROLLBACK_REMOUNT_DEV="$ESP_DEV"
-        ROLLBACK_REMOUNT_TARGET="$ESP_MNT"
-
-        umount "$ESP_MNT" || die_json "Could not unmount ${ESP_MNT}; close any open files on the boot partition."
-
-        # Extend partition end boundary via sfdisk
-        printf ',%s\n' "$target_sec" | sfdisk --force --no-reread -N "$ESP_PARTN" "$ESP_DISK" >/dev/null
-        refresh_kernel_parttable "$ESP_DISK"
-        await_kernel_part "$ESP_DEV" "$GAP_START_SEC" "$target_sec" \
-            || die_json "The kernel did not take the larger ${ESP_DEV}; nothing was formatted."
-
-        emit_progress "format" 60 "Formatting expanded FAT32 EFI System Partition..."
-        # In-place growth must keep the existing FAT volume ID.
-        ESP_VOL_ID="${ESP_UUID//-/}"
-        ESP_VOL_ID="${ESP_VOL_ID^^}"
-        [[ "$ESP_VOL_ID" =~ ^[0-9A-F]{8}$ ]] || die_json "The original EFI volume ID could not be read; nothing was formatted."
-        # From here the partition table stays grown, and a failure restores the files instead.
-        ROLLBACK_DISK=""
-        ESP_FORMAT_STARTED=1
-        mkfs.vfat -F 32 -n "EFI" -i "$ESP_VOL_ID" "$ESP_DEV" >/dev/null
-        refresh_kernel_parttable "$ESP_DISK"
-
-        emit_progress "restore" 78 "Mounting ${ESP_MNT} and restoring boot files..."
-        mount "$ESP_DEV" "$ESP_MNT"
-        copy_esp_tree "$BACKUP_DIR" "$ESP_MNT"
-
-        emit_progress "verify" 92 "Verifying bootloader integrity and UKI hashes..."
-        verify_esp_contents "$BACKUP_DIR" "$ESP_MNT" || die_json "Bootloader verification failed after restore (backup preserved at $BACKUP_DIR)."
-
-        local final_bytes
-        final_bytes="$(lsblk -bdno SIZE "$ESP_DEV" 2>/dev/null | tr -d ' ' || echo 0)"
-        if (( final_bytes < target_mb * 1024 * 1024 * 90 / 100 )); then
-            die_json "Kernel reported unchanged partition size (${final_bytes} bytes) on ${ESP_DEV}."
-        fi
-
-        if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
-            systemctl daemon-reload 2>/dev/null || true
-        fi
-
-        emit_progress "done" 100 "EFI boot partition expanded in place to $(( final_bytes / (1024 * 1024) )) MB."
-        return 0
-    fi
-
-    # ── Strategy 2 & 3: Build & verify new GPT ESP before atomic cutover ────
+    # Build and verify the replacement before changing the boot or mount targets.
     local new_esp_start=0 new_esp_sec="$target_sec"
     local new_partn
     new_partn="$(find_next_free_partn "$ESP_DISK")" || die_json "No free GPT partition number available on $ESP_DISK."
