@@ -597,12 +597,12 @@ activate_esp() {
 }
 
 write_cutover_state() {
-    local mp="$1" old="$2" new="$3" uuid="$4" loader="$5" dir tmp
+    local mp="$1" old="$2" new="$3" uuid="$4" loader="$5" action="${6:-finish}" dir tmp
     dir="$(dirname -- "$CUTOVER_STATE")"
     mkdir -p "$dir"
     tmp="$(mktemp "$dir/efi-resize.XXXXXX")"
-    jq -nc --arg mount "$mp" --arg old "$old" --arg new "$new" --arg uuid "$uuid" --arg loader "$loader" \
-        '{mount:$mount, old:$old, new:$new, uuid:$uuid, loader:$loader}' > "$tmp"
+    jq -nc --arg mount "$mp" --arg old "$old" --arg new "$new" --arg uuid "$uuid" --arg loader "$loader" --arg action "$action" \
+        '{mount:$mount, old:$old, new:$new, uuid:$uuid, loader:$loader, action:$action}' > "$tmp"
     # Flushed before it takes its name, so a power cut never leaves an empty record behind.
     sync -- "$tmp"
     mv -f -- "$tmp" "$CUTOVER_STATE"
@@ -613,16 +613,18 @@ write_cutover_state() {
     sync -f -- "$dir"
 }
 
-# Fills the caller's mp, old, guid, uuid and loader from the record.
+# Fills the caller's fields from the record.
 read_cutover_state() {
     mp="$(jq -er '.mount' "$CUTOVER_STATE" 2>/dev/null)" && old="$(jq -er '.old' "$CUTOVER_STATE")" \
         && guid="$(jq -er '.new' "$CUTOVER_STATE")" && uuid="$(jq -er '.uuid' "$CUTOVER_STATE")" \
-        && loader="$(jq -er '.loader' "$CUTOVER_STATE")" \
+        && loader="$(jq -er '.loader' "$CUTOVER_STATE")" && action="$(jq -er '.action // "finish"' "$CUTOVER_STATE")" \
         || die_json "The EFI resize record cannot be read. Boot updates are paused."
     [[ "$mp" == /boot || "$mp" == /boot/efi || "$mp" == /efi || ( -n "$MOUNT_OVERRIDE" && "$mp" == "$MOUNT_OVERRIDE" ) ]] \
         || die_json "The EFI resize record has an invalid mount path."
     [[ "$guid" =~ ^[[:xdigit:]-]+$ && "$old" =~ ^[[:xdigit:]-]+$ && "$uuid" =~ ^[[:xdigit:]-]+$ ]] \
         || die_json "The EFI resize record has an invalid partition identifier."
+    [[ "$guid" != "$old" && ( "$action" == finish || "$action" == cancel ) ]] \
+        || die_json "The EFI resize record has an invalid operation."
 }
 
 # The device mounted at $1, once any pending automount has fired.
@@ -651,8 +653,12 @@ switch_esp_mount() {
 }
 
 finish_cutover() {
-    local mp old guid uuid loader dev current rc
+    local mp old guid uuid loader action dev current rc
     read_cutover_state
+    if [[ "$action" == cancel ]]; then
+        cancel_cutover
+        return
+    fi
     dev="$(blkid -t "PARTUUID=$guid" -o device || true)"
     [[ -b "$dev" && "$(blkid -s UUID -o value "$dev")" == "$uuid" ]] && is_esp_partition "$dev" \
         || die_json "The replacement EFI partition could not be verified. Boot updates are paused."
@@ -681,12 +687,15 @@ finish_cutover() {
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
     ESP_MNT="$mp"
     ESP_DEV="$dev"
+    if [[ "${1:-}" == report_recovery ]]; then
+        emit_progress "done" 100 "The interrupted EFI resize was completed."
+    fi
 }
 
 # Backs out of a prepared switch that cannot finish. The original partition takes the mount, fstab
-# and firmware order back, and the replacement is left in place, emptied so nothing boots from it.
+# and firmware order back. Remove the replacement's loader files before allowing boot updates.
 cancel_cutover() {
-    local mp old guid uuid loader old_dev old_uuid new_dev current rc entries num original_source
+    local mp old guid uuid loader action old_dev old_uuid new_dev current rc entries num original_source
     read_cutover_state
     old_dev="$(blkid -t "PARTUUID=$old" -o device || true)"
     old_uuid=""
@@ -707,6 +716,9 @@ cancel_cutover() {
     if [[ ! -f "$mp/${loader//\\//}" ]]; then
         [[ -z "$current" || "$current" == "$old_dev" ]] || switch_esp_mount "$mp" "$current" "$old_dev" || true
         die_json "The original EFI loader is missing, so the resize was not canceled."
+    fi
+    if [[ "$action" != cancel ]]; then
+        write_cutover_state "$mp" "$old" "$guid" "$uuid" "$loader" cancel
     fi
     if awk -v mp="$mp" -v src="UUID=$uuid" '!/^[[:space:]]*#/ && $2 == mp && $1 == src { found = 1 } END { exit !found }' "$FSTAB_PATH"; then
         original_source="UUID=$old_uuid"
@@ -729,19 +741,25 @@ cancel_cutover() {
     if [[ -d /run/systemd/system ]]; then
         systemctl daemon-reload
     fi
-    # Its loader copy would still be found by firmware that scans every EFI partition.
-    local cleared=0
-    if [[ -b "$new_dev" && "$(blkid -s UUID -o value "$new_dev" 2>/dev/null || true)" == "$uuid" ]] \
-        && ! findmnt -n -S "$new_dev" >/dev/null 2>&1; then
-        wipefs -a "$new_dev" >/dev/null 2>&1 && cleared=1
+    # Firmware can scan the replacement even after its NVRAM entry is gone.
+    if [[ -b "$new_dev" && "$(blkid -s UUID -o value "$new_dev" 2>/dev/null || true)" == "$uuid" ]]; then
+        is_esp_partition "$new_dev" || die_json "The replacement is no longer an EFI partition. Boot updates are paused."
+        if findmnt -n -S "$new_dev" >/dev/null 2>&1; then
+            die_json "The replacement EFI partition is still mounted. Unmount it and retry cancellation. Boot updates are paused."
+        fi
+        mkdir -p /run/mainstream
+        TMP_ESP_MNT="$(mktemp -d /run/mainstream/cancel-esp.XXXXXX)"
+        mount -t vfat -o umask=0077 "$new_dev" "$TMP_ESP_MNT" \
+            || die_json "Could not mount the replacement EFI partition. Retry cancellation before updating."
+        rm -rf -- "$TMP_ESP_MNT/EFI" && sync -f -- "$TMP_ESP_MNT" \
+            || die_json "Could not remove the replacement EFI loaders. Retry cancellation before updating."
+        umount "$TMP_ESP_MNT" || die_json "Could not unmount the replacement EFI partition. Retry cancellation before updating."
+        rmdir "$TMP_ESP_MNT"
+        TMP_ESP_MNT=""
     fi
     rm -f -- "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
-    if (( cleared )); then
-        emit_progress "done" 100 "The EFI resize was canceled. ${new_dev} was emptied and left in place."
-    else
-        emit_progress "done" 100 "The EFI resize was canceled. The unused replacement partition was left in place."
-    fi
+    emit_progress "done" 100 "The EFI resize was canceled. The unused replacement partition was left in place."
 }
 
 find_next_free_partn() {
@@ -821,8 +839,7 @@ cmd_resize() {
 
     if [[ -e "$CUTOVER_STATE" ]]; then
         trap cleanup_and_rollback EXIT
-        finish_cutover
-        emit_progress "done" 100 "The interrupted EFI resize was completed."
+        finish_cutover report_recovery
         return 0
     fi
 
