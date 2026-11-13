@@ -517,7 +517,8 @@ update_fstab_esp_source() {
     local mp="$1" source="$2" match="${3:-}" tmp
     [[ -f "$FSTAB_PATH" ]] || return 1
     tmp="$(mktemp "${FSTAB_PATH}.efi-resize.XXXXXX")" || return 1
-    if awk -v mp="$mp" -v src="$source" -v match_src="$match" '
+    if EFI_FSTAB_SOURCE="$source" awk -v mp="$mp" -v match_src="$match" '
+        BEGIN { src = ENVIRON["EFI_FSTAB_SOURCE"] }
         /^[[:space:]]*#/ || NF < 3 { print; next }
         $2 == mp && (match_src == "" || $1 == match_src) {
             updated = 1
