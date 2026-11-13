@@ -41,7 +41,7 @@ function redditPost(title, text) {
 function siteFor(app, title, text) {
     const name = String(app || "").trim().toLowerCase();
     if (name === "reddit") return redditPost(String(title || "").trim(), String(text || "")) || sites.reddit;
-    return sites[name] || "";
+    return Object.prototype.hasOwnProperty.call(sites, name) ? sites[name] : "";
 }
 
 // The text to look for a web address in. Apps wrap what a person typed in

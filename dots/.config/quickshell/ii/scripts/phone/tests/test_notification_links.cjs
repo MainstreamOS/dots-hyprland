@@ -19,6 +19,7 @@ test('known phone apps open the page that lists their notifications', () => {
     assert.equal(links.linkFor(phone('Gmail', 'Sender', 'Subject\nText'), []), 'https://mail.google.com/');
     assert.equal(links.linkFor(phone(' X ', 'Someone', 'A post'), []), 'https://x.com/notifications');
     assert.equal(links.linkFor(phone('Unknown App', 'Title', 'Text'), []), '');
+    assert.equal(links.linkFor(phone('constructor', 'Title', 'Text'), []), '');
 });
 
 test('a Reddit post is looked up in the community that announced it', () => {
