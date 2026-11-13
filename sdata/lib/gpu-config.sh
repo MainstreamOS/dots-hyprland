@@ -291,37 +291,54 @@ _gpu_limine_conf() {
         if [[ -f "$f" ]]; then printf '%s\n' "$f"; return 0; fi
     done
 }
-# This system's command line out of limine.conf, or nothing. A shared ESP holds
-# other systems' entries too, so entries naming different roots are not trusted
-# and the running command line is used instead. Only the option prefix goes:
-# arguments like cryptdevice keep their colon-separated mapper name and options.
+# On a shared ESP, only trust an entry whose root, unlock options and
+# filesystem flags match the running kernel. Fall back when identity is
+# missing or there are multiple different matches.
 _gpu_limine_cmdline() {
-    local conf
+    local conf running="$1"
     conf="$(_gpu_limine_conf)"
     [[ -n "$conf" ]] || return 0
-    awk '
-        tolower($0) ~ /^[[:space:]]*(kernel_)?cmdline[[:space:]]*:/ {
-            sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, "")
-            root = ""
-            for (i = 1; i <= NF; i++) if ($i ~ /^root=/) root = $i
-            if (!seen) { seen = 1; first = $0; first_root = root }
-            else if (root != first_root) mixed = 1
+    printf '%s\n' "$running" | awk '
+        function boot_key(line,    i, n, args, root, flags, crypto, type, key) {
+            n = split(line, args, /[[:space:]]+/)
+            for (i = 1; i <= n; i++) {
+                if (args[i] ~ /^root=/) {
+                    if (root != "") return ""
+                    root = args[i]
+                } else if (args[i] ~ /^rootflags=/) {
+                    if (flags != "") return ""
+                    flags = args[i]
+                } else if (args[i] ~ /^rootfstype=/) {
+                    type = args[i]
+                } else if (args[i] ~ /^(cryptdevice|rd[.]luks[.][^=]+)=/) {
+                    crypto = crypto " " args[i]
+                }
+            }
+            return root == "" ? "" : root "|" flags "|" type "|" crypto
         }
-        END { if (seen && !mixed) print first }
-    ' "$conf" 2>/dev/null || true
+        NR == FNR { running = boot_key($0); next }
+        running != "" && tolower($0) ~ /^[[:space:]]*(kernel_)?cmdline[[:space:]]*:/ {
+            sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, "")
+            if (boot_key($0) != running) next
+            if (!seen) { seen = 1; first = $0 }
+            else if ($0 != first) ambiguous = 1
+        }
+        END { if (seen && !ambiguous) print first }
+    ' - "$conf" 2>/dev/null || true
 }
 _gpu_cmdline_current() {
-    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" seed
+    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" seed running
     if [[ -f "$kc" ]]; then
         # mkinitcpio skips this file's comment lines, so they are no arguments.
         grep -v '^[[:space:]]*#' "$kc" || true
         return 0
     fi
-    seed="$(_gpu_limine_cmdline)"
+    running="$(_gpu_proc_cmdline)"
+    seed="$(_gpu_limine_cmdline "$running")"
     if [[ -n "${seed//[[:space:]]/}" ]]; then
         printf '%s\n' "$seed"
     else
-        _gpu_proc_cmdline | sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g'
+        sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g' <<<"$running"
     fi
 }
 # Writes the tokens back as one line, under the comment lines already there.
