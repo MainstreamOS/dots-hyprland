@@ -206,6 +206,13 @@ Scope { // Scope
             property bool extend: false
             property real sidebarWidth: panelWindow.extend ? Appearance.sizes.sidebarWidthExtended : Appearance.sizes.sidebarWidth
             property var contentParent: sidebarLeftBackground
+            readonly property var monitorData: HyprlandData.monitors.find(m => m.name === panelWindow.screen?.name)
+            // A resize can lag behind a change to the space reserved above or below us.
+            readonly property real availableHeight: {
+                const reserved = panelWindow.monitorData?.reserved;
+                const screenHeight = panelWindow.screen?.height ?? panelWindow.height;
+                return Math.min(panelWindow.height, screenHeight - (reserved?.[1] ?? 0) - (reserved?.[3] ?? 0));
+            }
 
             function hide() {
                 GlobalStates.sidebarLeftOpen = false
@@ -263,8 +270,9 @@ Scope { // Scope
             }
             onVisibleChanged: {
                 panelWindow.syncFocusGrab();
-                if (root.pin) HyprlandData.refreshSoon();
+                if (panelWindow.visible || root.pin) HyprlandData.refreshSoon();
             }
+            onHeightChanged: if (panelWindow.visible) HyprlandData.refreshSoon()
             Connections {
                 target: root
                 function onPinChanged() {
@@ -308,7 +316,7 @@ Scope { // Scope
                 x: panelWindow.onRight ? parent.width - width - Appearance.sizes.hyprlandGapsOut
                     : Appearance.sizes.hyprlandGapsOut
                 width: panelWindow.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
-                height: parent.height - Appearance.sizes.hyprlandGapsOut * 2 - panelWindow.barInset
+                height: Math.max(0, panelWindow.availableHeight - Appearance.sizes.hyprlandGapsOut * 2 - panelWindow.barInset)
                 color: Appearance.colors.colLayer0
                 border.width: 1
                 border.color: Appearance.colors.colLayer0Border
