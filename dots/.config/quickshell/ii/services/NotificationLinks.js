@@ -26,24 +26,28 @@ const sites = {
 };
 const xApp = /^(x(?:\.com)?|twitter(?:\.com)?)$/;
 
-// Reddit titles a post's notification with its community, as "GeminiAI:" or
-// "Now in r/elgato", and the text is the post's title: enough to find the post.
-// A reply names a community too, but its text is a comment no search finds.
+function postExcerpt(text) {
+    return IslandText.body(text, true).split("\n")[0].slice(0, 120)
+        .replace(/(?:\.{3}|…)\s*$/, "").trim();
+}
+
 function redditPost(title, text) {
-    const community = /^([A-Za-z0-9_]{2,21}):$/.exec(title) || /^\S+(?: \S+)? in r\/([A-Za-z0-9_]{2,21})$/.exec(title);
-    if (!community) return "";
-    const page = "https://www.reddit.com/r/" + community[1] + "/";
-    const post = text.split("\n")[0].trim();
-    return post ? page + "search/?q=" + encodeURIComponent(post) + "&restrict_sr=1" : page;
+    // Reply and mention alerts lead to the inbox when no direct link is available.
+    if (/\b(?:replied to|mentioned you)\b/i.test(title)) return sites.reddit;
+    const community = /^([A-Za-z0-9_]{2,21}):$/.exec(title)
+        || /(?:^|\s)r\/([A-Za-z0-9_]{2,21}):?$/i.exec(title);
+    const page = community ? "https://www.reddit.com/r/" + community[1] + "/" : "https://www.reddit.com/";
+    const post = postExcerpt(text);
+    if (!post) return community ? page : sites.reddit;
+    return page + "search/?q=" + encodeURIComponent(post) + (community ? "&restrict_sr=1" : "");
 }
 
 function siteFor(app, title, text) {
-    if (app === "reddit") return redditPost(String(title || "").trim(), String(text || "")) || sites.reddit;
+    if (app === "reddit") return redditPost(String(title || "").trim(), text);
     if (xApp.test(app)) {
         // The phone often sends only a post excerpt. Search X for the first
         // line, dropping a trailing ellipsis if the phone truncated it.
-        const excerpt = IslandText.body(text, true).split("\n")[0].slice(0, 120)
-            .replace(/(?:\.{3}|…)\s*$/, "").trim();
+        const excerpt = postExcerpt(text);
         return excerpt ? "https://x.com/search?q=" + encodeURIComponent(excerpt) : "https://x.com/notifications";
     }
     return Object.prototype.hasOwnProperty.call(sites, app) ? sites[app] : "";
@@ -63,7 +67,7 @@ function linkText(entry) {
         .replace(/[‎‏‪-‮⁦-⁩]/g, " ")
         .replace(/[“”]/g, '"')
         // A notification can include a post or short link without its scheme.
-        .replace(/(^|[\s<("'“‘])((?:www\.|mobile\.)?(?:x\.com|twitter\.com|t\.co)\/(?=[\w%-]))/gi,
+        .replace(/(^|[\s<("'“‘])((?:www\.|mobile\.)?(?:x\.com|twitter\.com|t\.co|reddit\.com|redd\.it)\/(?=[\w%-]))/gi,
             "$1https://$2");
 }
 

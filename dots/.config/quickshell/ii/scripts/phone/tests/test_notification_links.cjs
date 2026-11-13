@@ -38,6 +38,22 @@ test('a Reddit post is looked up in the community that announced it', () => {
     assert.equal(links.linkFor(phone('Reddit', 'Now in r/elgato', ''), []), 'https://www.reddit.com/r/elgato/');
     assert.equal(links.linkFor(phone('Reddit', 'u/someone replied to your comment in r/elgato', 'Hi'), []),
         'https://www.reddit.com/notifications');
+    assert.equal(resolve(phone('Reddit', 'Trending right now in r/linux', 'A post &amp; its title…\nMore')),
+        'https://www.reddit.com/r/linux/search/?q=A%20post%20%26%20its%20title&restrict_sr=1');
+});
+
+test('a Reddit post excerpt without a community searches all of Reddit', () => {
+    assert.equal(resolve(phone('Reddit', 'Suggested post', 'A post &amp; its title…')),
+        'https://www.reddit.com/search/?q=A%20post%20%26%20its%20title');
+    assert.equal(resolve(phone('Reddit', 'u/someone mentioned you in r/linux', 'Hi')),
+        'https://www.reddit.com/notifications');
+    assert.equal(resolve(phone('Reddit', 'Reddit', '')), 'https://www.reddit.com/notifications');
+});
+
+test('a Reddit post URL takes precedence over a search', () => {
+    assert.equal(resolve(phone('Reddit', 'r/linux', 'See reddit.com/r/linux/comments/abc/example?share=1')),
+        'https://reddit.com/r/linux/comments/abc/example?share=1');
+    assert.equal(resolve(phone('Reddit', 'Suggested post', 'See redd.it/abc')), 'https://redd.it/abc');
 });
 
 test('desktop notifications only have the links their text holds', () => {
