@@ -512,17 +512,21 @@ verify_esp_contents() {
     return 0
 }
 
-# Atomically point the configured mount at the replacement FAT volume.
-update_fstab_esp_uuid() {
-    local mp="$1" new_uuid="$2" tmp
+# Atomically change only the EFI mount, retaining other fstab edits.
+update_fstab_esp_source() {
+    local mp="$1" source="$2" match="${3:-}" tmp
     [[ -f "$FSTAB_PATH" ]] || return 1
     tmp="$(mktemp "${FSTAB_PATH}.efi-resize.XXXXXX")" || return 1
-    if awk -v mp="$mp" -v uuid="$new_uuid" '
+    if awk -v mp="$mp" -v src="$source" -v match_src="$match" '
         /^[[:space:]]*#/ || NF < 3 { print; next }
-        $2 == mp { $1 = "UUID=" uuid; updated = 1 }
+        $2 == mp && (match_src == "" || $1 == match_src) {
+            updated = 1
+            if (src == "") next
+            $1 = src
+        }
         { print }
         END {
-            if (!updated) printf "UUID=%s\t%s\tvfat\tumask=0077\t0 2\n", uuid, mp
+            if (!updated && match_src == "") printf "%s\t%s\tvfat\tumask=0077\t0 2\n", src, mp
         }
     ' "$FSTAB_PATH" > "$tmp" && chmod --reference="$FSTAB_PATH" "$tmp" \
         && mv -f -- "$tmp" "$FSTAB_PATH" && sync -f -- "$(dirname -- "$FSTAB_PATH")"; then
@@ -665,7 +669,7 @@ finish_cutover() {
     loader_path="${loader//\\//}"
     [[ -f "$mp/$loader_path" ]] || die_json "The replacement EFI loader is missing. Boot updates are paused."
     activate_esp "$dev" "$guid" "$loader" || die_json "The new firmware boot entry could not be activated. Boot updates are paused."
-    update_fstab_esp_uuid "$mp" "$uuid" || die_json "Could not save the replacement EFI mount in fstab. Boot updates are paused."
+    update_fstab_esp_source "$mp" "UUID=$uuid" || die_json "Could not save the replacement EFI mount in fstab. Boot updates are paused."
     if [[ "$(findmnt -en -o MAJ:MIN -M "$mp")" != "$(lsblk -dno MAJ:MIN "$dev")" ]]; then
         die_json "The mounted EFI partition does not match the replacement. Boot updates are paused."
     fi
@@ -681,7 +685,7 @@ finish_cutover() {
 # Backs out of a prepared switch that cannot finish. The original partition takes the mount, fstab
 # and firmware order back, and the replacement is left in place, emptied so nothing boots from it.
 cancel_cutover() {
-    local mp old guid uuid loader old_dev old_uuid new_dev current rc entries num
+    local mp old guid uuid loader old_dev old_uuid new_dev current rc entries num original_source
     read_cutover_state
     old_dev="$(blkid -t "PARTUUID=$old" -o device || true)"
     old_uuid=""
@@ -704,7 +708,11 @@ cancel_cutover() {
         die_json "The original EFI loader is missing, so the resize was not canceled."
     fi
     if awk -v mp="$mp" -v src="UUID=$uuid" '!/^[[:space:]]*#/ && $2 == mp && $1 == src { found = 1 } END { exit !found }' "$FSTAB_PATH"; then
-        update_fstab_esp_uuid "$mp" "$old_uuid" \
+        original_source="UUID=$old_uuid"
+        if [[ -f "${FSTAB_PATH}.bak-efi-resize" ]]; then
+            original_source="$(awk -v mp="$mp" '!/^[[:space:]]*#/ && NF >= 3 && $2 == mp { print $1; exit }' "${FSTAB_PATH}.bak-efi-resize")"
+        fi
+        update_fstab_esp_source "$mp" "$original_source" "UUID=$uuid" \
             || die_json "Could not put the original EFI mount back in fstab. Boot updates are paused."
     fi
     if ! nvram_skipped; then
