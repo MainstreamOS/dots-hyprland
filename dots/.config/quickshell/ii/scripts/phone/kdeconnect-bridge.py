@@ -56,6 +56,8 @@ deleted_conversations = {}
 # Threads the tab asked for; loading the thread list reports every other one too.
 requested = set()
 loading_threads = set()
+legacy_pages = {}
+THREAD_PAGE_SIZE = 100
 subscribed = set()
 pairing_watched = set()
 watch_lock = threading.Lock()
@@ -81,6 +83,8 @@ thumb_queue = WorkQueue(workers=3, capacity=64, name="phone_thumb")
 preview_queue = WorkQueue(workers=1, capacity=2, name="phone_preview")
 # Notification lookups read every phone notification object; keep them off the message queue.
 notify_queue = WorkQueue(workers=1, capacity=16, name="phone_notifications")
+# A slow phone history reply must not hold up sends or incoming messages.
+history_queue = WorkQueue(workers=1, capacity=4, name="phone_history")
 notification_index = None
 backend = "KDE Connect"
 named_generation = -1
@@ -181,7 +185,7 @@ def load_threads():
 
 def save_threads(strict=False):
     try:
-        payload = {f"{dev}:{tid}": sorted(bucket.values(), key=lambda m: m.get("date", 0))[-100:]
+        payload = {f"{dev}:{tid}": sorted(bucket.values(), key=lambda m: m.get("date", 0))[-THREAD_PAGE_SIZE:]
                    for (dev, tid), bucket in list(threads.items()) if bucket}
         payload["_lists"] = {device: sorted(ids) for device, ids in list(listed_threads.items())}
         payload["_deleted"] = deleted_conversations
@@ -545,7 +549,10 @@ def attachment_metadata(device, uid, path):
         fail("attachment", "Media queue is busy; try again", device=device, uid=str(uid))
 
 
-LINK_SLACK = 120
+def sent_file_fingerprint(info):
+    """Identify the file as it was when sent, including in-place rewrites."""
+    # No device number: a btrfs subvolume can be given another one at each boot.
+    return f"{info.st_ino}:{info.st_size}:{info.st_mtime_ns}:{info.st_ctime_ns}"
 
 
 def stale_links(links):
@@ -556,9 +563,15 @@ def stale_links(links):
         if not isinstance(link, dict) or not link.get("uid"):
             continue
         try:
-            since = float(link.get("since") or 0) / 1000
             info = os.stat(str(link["path"]))
-            current = stat.S_ISREG(info.st_mode) and not (since > 0 and info.st_mtime > since + LINK_SLACK)
+            fingerprint = link.get("fingerprint")
+            if fingerprint:
+                matches = sent_file_fingerprint(info) == fingerprint
+            else:
+                # Older history only has a millisecond timestamp for the send.
+                since = float(link.get("since") or 0)
+                matches = since <= 0 or info.st_mtime_ns // 1_000_000 <= since
+            current = stat.S_ISREG(info.st_mode) and matches
         except (OSError, KeyError, TypeError, ValueError):
             current = False
         if not current:
@@ -942,6 +955,7 @@ def remove_thread(device, tid):
         listed_threads[device].discard(int(tid))
     requested.discard((device, int(tid)))
     loading_threads.discard((device, int(tid)))
+    legacy_pages.pop((device, int(tid)), None)
     save_threads_soon()
     emit("removed", device=device, thread=int(tid))
 
@@ -955,6 +969,11 @@ def on_message(device, params, live=False):
     prev_max_date = max((m.get("date", 0) for m in bucket.values()), default=0)
     is_new = msg["uid"] not in bucket
     bucket[msg["uid"]] = msg
+    page = legacy_pages.get((device, tid))
+    if page and msg["date"] < page["before"]:
+        page["messages"][msg["uid"]] = msg
+        if len(page["messages"]) >= THREAD_PAGE_SIZE:
+            finish_legacy_page((device, tid), page)
     listed_threads.setdefault(device, set()).add(tid)
     save_threads_soon()
     if (device, tid) not in loading_threads or is_new or msg.get("date", 0) >= prev_max_date:
@@ -971,7 +990,7 @@ def on_loaded(device, params):
     save_threads_soon()
     if (device, tid) not in requested:
         return
-    msgs = sorted(threads.get((device, tid), {}).values(), key=lambda m: m["date"])
+    msgs = sorted(threads.get((device, tid), {}).values(), key=lambda m: m["date"])[-THREAD_PAGE_SIZE:]
     emit("thread", device=device, thread=tid, messages=msgs, loaded=count)
 
 
@@ -1105,7 +1124,7 @@ def conversations(device):
         tid = int(m["thread"])
         existing = threads.get((device, tid), {})
         if len(existing) > 1:
-            msgs = sorted(existing.values(), key=lambda x: x["date"])[-100:]
+            msgs = sorted(existing.values(), key=lambda x: x["date"])[-THREAD_PAGE_SIZE:]
             emit("thread", device=device, thread=tid, messages=msgs, loaded=len(msgs), cached=True)
 
     # A connected phone supplies a fresh listing; offline views keep the cache.
@@ -1130,15 +1149,72 @@ def thread(device, thread_id, count):
          GLib.Variant("(xii)", (tid, 0, count)))
 
 
+def finish_legacy_page(key, page):
+    if legacy_pages.get(key) is not page:
+        return
+    del legacy_pages[key]
+    messages = sorted(page["messages"].values(), key=lambda m: m["date"])[-THREAD_PAGE_SIZE:]
+    emit("olderThread", **page["fields"], messages=messages,
+         more=len(messages) >= THREAD_PAGE_SIZE and page["more"])
+
+
+def older_thread(device, tid, before, offset, fields):
+    if before <= 0 or offset < 0:
+        raise ValueError("Invalid older conversation range")
+    path = device_path(device)
+    try:
+        rows = call(path, CONVERSATIONS_IFACE, "requestOlderConversation",
+                    GLib.Variant("(xxi)", (tid, before, THREAD_PAGE_SIZE)), "(av)", timeout=45000)[0]
+    except GLib.Error as error:
+        if Gio.DBusError.get_remote_error(error) != "org.freedesktop.DBus.Error.UnknownMethod":
+            raise
+    else:
+        messages = [m for row in rows if (m := message(device, row)) and m["thread"] == tid and m["date"] <= before]
+        more = len(rows) >= THREAD_PAGE_SIZE and any(m["date"] < before for m in messages)
+        emit("olderThread", messages=messages, more=more)
+        return
+
+    # KDE Connect returns offset ranges through conversationUpdated signals.
+    # Older Rust Connect versions can request a larger window from the newest.
+    end = offset + THREAD_PAGE_SIZE
+    if backend == "rust-connect":
+        if offset >= 500:
+            emit("olderThread", messages=[], more=False)
+            return
+        end = min(end, 500)
+    key = (device, tid)
+    page = {"before": before, "fields": fields, "messages": {}, "more": backend != "rust-connect" or end < 500}
+    legacy_pages[key] = page
+    try:
+        call(path, CONVERSATIONS_IFACE, "requestConversation",
+             GLib.Variant("(xii)", (tid, 0 if backend == "rust-connect" else offset, end)))
+    except GLib.Error:
+        if legacy_pages.get(key) is page:
+            del legacy_pages[key]
+        raise
+    def finish():
+        return not background(finish_legacy_page, key, page)
+    GLib.timeout_add_seconds(40 if backend == "rust-connect" else 10, finish)
+
+
 def attachment_files(paths):
     """Files to send by MMS. KDE Connect opens each as a plain path, not a URL."""
     out = []
-    for p in (paths or []):
-        if isinstance(p, str) and os.path.isabs(p) and os.path.isfile(p):
-            prepared = prepare_mms_attachment(p)
-            if prepared and os.path.isfile(prepared):
-                out.append(prepared)
-    return out
+    fingerprints = {}
+    for path in paths or []:
+        if not isinstance(path, str) or not os.path.isabs(path):
+            continue
+        try:
+            info = os.stat(path)
+        except OSError:
+            continue
+        if not stat.S_ISREG(info.st_mode):
+            continue
+        prepared = prepare_mms_attachment(path)
+        if prepared and os.path.isfile(prepared):
+            out.append(prepared)
+            fingerprints[path] = sent_file_fingerprint(info)
+    return out, fingerprints
 
 
 def thread_addresses(device, tid):
@@ -1280,6 +1356,9 @@ def handle_command(cmd):
             delete_conversations(device, cmd.get("threads"))
         elif kind == "thread":
             thread(device, cmd["thread"], cmd.get("count", 50))
+        elif kind == "olderThread":
+            older_thread(device, int(cmd["thread"]), int(cmd["before"]), int(cmd["offset"]),
+                         dict(request_context.fields))
         elif kind in ("reply", "send"):
             if device not in known_reachable:
                 raise ValueError("The phone is not reachable; your message was kept for retry")
@@ -1351,11 +1430,15 @@ def handle(line):
     if kind in ("reply", "send") and cmd.get("attachments"):
         def prepare():
             return attachment_files(cmd["attachments"])
-        def prepared(paths, error):
-            if error:
+        def prepared(result, error):
+            if generation != backend_generation:
+                fail(kind, "Phone backend restarted; try again", **request_fields(cmd))
+            elif error:
                 fail(kind, error, **request_fields(cmd))
             else:
-                cmd["attachments"] = paths
+                cmd["attachments"], fingerprints = result
+                # Send the fingerprints before the phone can report its copy.
+                emit("sentFiles", generation=generation, fingerprints=fingerprints, **request_fields(cmd))
                 if not io_queue.submit(key, execute):
                     fail(kind, "Phone queue is busy; try again", **request_fields(cmd))
         accepted = media_queue.submit(key, prepare, prepared)
@@ -1365,6 +1448,8 @@ def handle(line):
         accepted = media_queue.submit(key, execute)
     elif kind == "devices":
         accepted = device_queue.submit(key, execute)
+    elif kind == "olderThread":
+        accepted = history_queue.submit(key, execute)
     else:
         accepted = io_queue.submit(key, execute)
     if not accepted:
@@ -1376,6 +1461,7 @@ def owner_changed(connection, sender, path, interface, name, parameters, *_):
     _, old, new = parameters.unpack()
     backend_generation += 1
     known_reachable = set()
+    legacy_pages.clear()
     notification_index.invalidate()
     last_sent.clear()
     emit("backend", available=bool(new), reset=True)
@@ -1425,6 +1511,7 @@ def main():
         loop.run()
     finally:
         io_queue.close()
+        history_queue.close()
         media_queue.close()
         thumb_queue.close()
         preview_queue.close()

@@ -19,7 +19,8 @@ def bridge_functions():
              "call": Mock(), "device_path": lambda d: d, "CONVERSATIONS_IFACE": "conversations",
              "load_active": Mock(return_value=[]), "dedup_addresses": lambda a: a,
              "resync_soon": Mock(),
-             "loading_threads": set(), "started_ms": 1000, "message": lambda d, m: m,
+             "loading_threads": set(), "legacy_pages": {}, "THREAD_PAGE_SIZE": 100,
+             "started_ms": 1000, "message": lambda d, m: m,
              "sync_deletions": Mock(), "requested": set(), "forget_attachments": Mock(),
              "media_metadata": {}, "valid_device": lambda d: True, "valid_uid": lambda u: True,
              "GLib": type("GLib", (), {"Variant": staticmethod(lambda sig, value: value)})}

@@ -745,6 +745,7 @@ Item {
         }
         function onReachableChanged() { if (!Phone.reachable) root.composerPickerOpen = false; }
         function onOpenThreadChanged() {
+            messageList.historyAnchor = null;
             root.composerPickerOpen = false;
             root.stopMedia();
             root.switchDraft();
@@ -752,6 +753,8 @@ Item {
             messageList.wasAtBottom = true;
             root.snapToBottom();
         }
+        function onOlderMessagesAdding() { messageList.captureHistoryAnchor(); }
+        function onOlderMessagesAdded() { messageList.restoreHistoryAnchor(); }
     }
 
     Connections {
@@ -1100,13 +1103,49 @@ Item {
                 animateAppearance: false
                 model: Phone.threadMessages
                 property bool wasAtBottom: true
+                property var historyAnchor: null
                 readonly property bool isAtBottom: messageList.atYEnd || (messageList.contentHeight > 0 && messageList.contentY + messageList.height >= messageList.contentHeight - 50)
-                onContentYChanged: if (messageList.userScrolling) messageList.wasAtBottom = messageList.isAtBottom
-                onMovementEnded: messageList.wasAtBottom = messageList.isAtBottom
+                readonly property bool nearTop: contentY <= originY + Math.max(48, height / 3)
+
+                function captureHistoryAnchor(): void {
+                    messageList.forceLayout();
+                    const top = messageList.contentY;
+                    const x = messageList.width / 2;
+                    for (let y = top + 1; y < top + messageList.height; y += 4) {
+                        const anchor = messageList.itemAt(x, y);
+                        if (!anchor) continue;
+                        messageList.historyAnchor = { uid: anchor.modelData.uid, offset: anchor.y - top };
+                        return;
+                    }
+                }
+
+                function restoreHistoryAnchor(): void {
+                    const anchor = messageList.historyAnchor;
+                    if (!anchor) return;
+                    messageList.forceLayout();
+                    const index = Phone.threadMessages.findIndex(m => m.uid === anchor.uid);
+                    if (index >= 0) {
+                        messageList.positionViewAtIndex(index, ListView.Beginning);
+                        messageList.forceLayout();
+                        const item = messageList.itemAtIndex(index);
+                        if (item) messageList.contentY = messageList.clampToWheelRange(item.y - anchor.offset);
+                    }
+                    messageList.historyAnchor = null;
+                }
+
+                onContentYChanged: if (messageList.userScrolling) {
+                    messageList.wasAtBottom = messageList.isAtBottom;
+                    if (messageList.nearTop && !messageList.historyAnchor) Phone.loadOlderMessages();
+                }
+                onMovementEnded: {
+                    messageList.wasAtBottom = messageList.isAtBottom;
+                    if (nearTop && !historyAnchor) Phone.loadOlderMessages();
+                }
+                onUserScrollingChanged: if (userScrolling && nearTop && !historyAnchor) Phone.loadOlderMessages()
                 onFlickEnded: messageList.wasAtBottom = messageList.isAtBottom
-                onCountChanged: if (messageList.wasAtBottom && !messageList.userScrolling && !root.reactionBarOpen && !reactionScrollAnim.running && root.pendingReactionMessage === null) root.snapToBottom()
-                onHeightChanged: if (messageList.wasAtBottom && !messageList.userScrolling && !root.reactionBarOpen && !reactionScrollAnim.running && root.pendingReactionMessage === null) root.snapToBottom()
-                onContentHeightChanged: if (messageList.wasAtBottom && !messageList.userScrolling && !root.reactionBarOpen && !reactionScrollAnim.running && root.pendingReactionMessage === null) messageList.positionViewAtEnd()
+                onCountChanged: if (!messageList.historyAnchor && messageList.wasAtBottom && !messageList.userScrolling && !root.reactionBarOpen && !reactionScrollAnim.running && root.pendingReactionMessage === null) root.snapToBottom()
+                onHeightChanged: if (!messageList.historyAnchor && messageList.wasAtBottom && !messageList.userScrolling && !root.reactionBarOpen && !reactionScrollAnim.running && root.pendingReactionMessage === null) root.snapToBottom()
+                onContentHeightChanged: if (!messageList.historyAnchor && messageList.wasAtBottom && !messageList.userScrolling && !root.reactionBarOpen && !reactionScrollAnim.running && root.pendingReactionMessage === null) messageList.positionViewAtEnd()
                 onMovingChanged: if (moving) root.closeReactionBar()
                 onFlickStarted: root.closeReactionBar()
 
@@ -1117,6 +1156,7 @@ Item {
 
                     Rectangle {
                         anchors.centerIn: parent
+                        visible: !Phone.olderRequest
                         height: 22
                         implicitWidth: dayHeaderLabel.implicitWidth + 18
                         radius: 11
@@ -1130,6 +1170,12 @@ Item {
                             font.weight: Font.Medium
                             color: Appearance.colors.colSubtext
                         }
+                    }
+                    MaterialLoadingIndicator {
+                        anchors.centerIn: parent
+                        visible: !!Phone.olderRequest
+                        loading: visible
+                        implicitSize: 20
                     }
                 }
 

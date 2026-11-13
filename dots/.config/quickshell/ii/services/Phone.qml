@@ -96,7 +96,8 @@ Singleton {
     function syncDevice(): void {
         if (!root.connected || !root.reachable || !root.canMessage) return;
         root.command({cmd: "conversations", device: root.deviceId});
-        if (root.openThread >= 0) root.command({cmd: "thread", device: root.deviceId, thread: root.openThread, count: 100});
+        if (root.openThread >= 0)
+            root.command({cmd: "thread", device: root.deviceId, thread: root.openThread, count: root.threadPageSize});
     }
     function refreshConnection(): void {
         root.command({cmd: "devices"});
@@ -116,6 +117,9 @@ Singleton {
         root.places = [];
         root.dropAttachmentActions();
         root.prefetched = ({});
+        root.linkCheckRequest = "";
+        root.olderRequest = "";
+        olderThreadTimeout.stop();
         root.threadLoading = false;
         root.openingFilePath = "";
         for (const request in root.pendingSends) root.resolveSend(request, false);
@@ -255,6 +259,12 @@ Singleton {
         root.conversationsDeleted(device, threads, before);
     }
     property bool threadLoading: false
+    readonly property int threadPageSize: 100
+    property string olderRequest: ""
+    property bool olderAvailable: true
+    property double oldestHistoryDate: 0
+    signal olderMessagesAdding()
+    signal olderMessagesAdded()
     property var pendingTarget: null
 
     property bool mounting: false
@@ -467,46 +477,74 @@ Singleton {
         }
     }
 
-    // A sent file is shown from where it was sent. The bridge says which of those have
-    // since gone or been given to another file, and the phone's own copy shows instead.
+    // Old saved mappings are paths. New ones also identify the file as it was sent.
+    function sentLinkPath(link): string {
+        return typeof link === "string" ? link : (link?.path ?? "");
+    }
+
+    property string linkCheckRequest: ""
     property var checkedLinks: ({})
     function checkLinks(): void {
         if (!root.deviceId) return;
-        const links = [];
+        const links = {};
         const saved = root.savedLocalSent._deviceAttachments?.[root.deviceId] ?? {};
-        for (const uid in saved) {
-            // Both kinds of id carry the time they were made, in milliseconds.
-            const made = /^(?:local-|PART_)(\d{12,14})/.exec(uid);
-            links.push({ uid, path: saved[uid], since: made ? Number(made[1]) : 0 });
-        }
         for (const sent of root.savedLocalSent._outgoingAttachments ?? []) {
             if (sent.device !== root.deviceId) continue;
             for (const a of sent.attachments ?? []) {
                 const path = a.path || a.thumb;
-                if (a.uid && path) links.push({ uid: String(a.uid), path, since: Number(sent.date) || 0 });
+                if (a.uid && path) links[a.uid] = { uid: String(a.uid), path, since: Number(sent.date) || 0 };
             }
         }
-        if (links.length === 0) return;
-        root.checkedLinks = ObjectUtils.fromEntries(links.map(link => [link.uid, link.path]));
-        root.command({ cmd: "links", device: root.deviceId, links });
+        for (const [uid, link] of Object.entries(saved)) {
+            const path = root.sentLinkPath(link);
+            if (!path) continue;
+            const made = /^(?:local-|PART_)(\d{12,14})/.exec(uid);
+            const since = links[uid]?.path === path ? links[uid].since : (made ? Number(made[1]) : 0);
+            links[uid] = { uid, path, since, fingerprint: link?.fingerprint ?? "" };
+        }
+        root.checkedLinks = links;
+        root.linkCheckRequest = Object.keys(links).length
+            ? root.command({ cmd: "links", device: root.deviceId, links: Object.values(links) }) : "";
     }
 
     function dropLinks(uids): void {
-        const gone = ObjectUtils.fromEntries((uids ?? []).map(uid => [String(uid), root.checkedLinks[uid] ?? ""]));
-        if (Object.keys(gone).length === 0) return;
-        const live = ([uid]) => gone[uid] === undefined;
-        root.attachmentFiles = ObjectUtils.fromEntries(Object.entries(root.attachmentFiles).filter(live));
         const saved = root.savedLocalSent._deviceAttachments?.[root.deviceId] ?? {};
+        const gone = {};
+        const fingerprints = new Set();
+        for (const uid of uids ?? []) {
+            const checked = root.checkedLinks[uid];
+            if (!checked) continue;
+            const current = saved[uid];
+            if (current && (root.sentLinkPath(current) !== checked.path || (current?.fingerprint ?? "") !== checked.fingerprint))
+                continue;
+            gone[uid] = checked.path;
+            if (checked.fingerprint) fingerprints.add(checked.fingerprint);
+        }
+        // The phone can report its attachment ID while a check is in flight.
+        for (const [uid, link] of Object.entries(saved)) {
+            if (fingerprints.has(link?.fingerprint)) gone[uid] = root.sentLinkPath(link);
+        }
+        if (Object.keys(gone).length === 0) return;
+        const files = Object.assign({}, root.attachmentFiles);
+        const thumbs = Object.assign({}, root.attachmentThumbs);
+        const durations = Object.assign({}, root.attachmentDurations);
+        for (const [uid, path] of Object.entries(gone)) {
+            if (files[uid] && files[uid] !== path) continue;
+            delete files[uid];
+            delete thumbs[uid];
+            delete durations[uid];
+            delete root.prefetched[uid];
+        }
+        root.attachmentFiles = files;
+        root.attachmentThumbs = thumbs;
+        root.attachmentDurations = durations;
         root.savedLocalSent = Object.assign({}, root.savedLocalSent, {
             _deviceAttachments: Object.assign({}, root.savedLocalSent._deviceAttachments, {
-                [root.deviceId]: ObjectUtils.fromEntries(Object.entries(saved).filter(live))
-            }),
-            _outgoingAttachments: (root.savedLocalSent._outgoingAttachments ?? []).map(sent => sent.device !== root.deviceId
-                ? sent : Object.assign({}, sent, { attachments: (sent.attachments ?? []).map(a =>
-                    gone[String(a.uid)] === undefined ? a : Object.assign({}, a, { path: "", thumb: "" })) }))
+                [root.deviceId]: ObjectUtils.fromEntries(Object.entries(saved)
+                    .filter(([uid, link]) => gone[uid] !== root.sentLinkPath(link)))
+            })
         });
-        saveSentTimer.restart();
-        // Messages already loaded let go of the file too.
+        // Clear the optimistic history too, or it will recreate the link on reload.
         const release = messages => {
             let changed = false;
             for (const message of messages ?? []) for (const a of message.attachments ?? []) {
@@ -517,6 +555,9 @@ Singleton {
             }
             return changed;
         };
+        release((root.savedLocalSent._outgoingAttachments ?? []).filter(message => message.device === root.deviceId));
+        if (release(root.localSent)) root.localSent = root.localSent.slice();
+        root.persistLocalSent();
         if (release(root.threadMessages)) root.threadMessages = root.threadMessages.slice();
         let cacheChanged = false;
         for (const messages of Object.values(root.threadCache)) cacheChanged = release(messages) || cacheChanged;
@@ -565,6 +606,8 @@ Singleton {
         if (id === root.deviceId) return;
         root.cancelFilePreview();
         root.clearThumbnails();
+        root.linkCheckRequest = "";
+        root.olderRequest = "";
         root.deviceId = id;
         root.conversations = [];
         root.conversationsLoaded = false;
@@ -575,7 +618,9 @@ Singleton {
         root.mountPoint = "";
         root.places = [];
         root.mountError = "";
-        root.attachmentFiles = root.savedLocalSent._deviceAttachments?.[id] || ({});
+        const savedLinks = root.savedLocalSent._deviceAttachments?.[id] ?? {};
+        root.attachmentFiles = ObjectUtils.fromEntries(Object.entries(savedLinks)
+            .map(([uid, link]) => [uid, root.sentLinkPath(link)]));
         root.attachmentDurations = ({});
         root.attachmentThumbs = ({});
         root.dropAttachmentActions();
@@ -587,6 +632,10 @@ Singleton {
     }
 
     function openConversation(thread): void {
+        root.olderRequest = "";
+        olderThreadTimeout.stop();
+        root.olderAvailable = true;
+        root.oldestHistoryDate = 0;
         root.openThread = thread;
         const cached = root.threadCache[thread];
         const latest = root.conversations.find(m => m.thread === thread);
@@ -594,7 +643,8 @@ Singleton {
             root.recordAttachmentMeta(latest.attachments);
             root.prefetchMedia(latest.attachments);
         }
-        const initial = (cached && cached.length > 0) ? cached : (latest ? [latest] : []);
+        const initial = (cached && cached.length > 0) ? cached.slice(-root.threadPageSize) : (latest ? [latest] : []);
+        root.threadCache[thread] = initial;
         for (const m of initial) {
             if (m.attachments) {
                 root.recordAttachmentMeta(m.attachments);
@@ -605,9 +655,26 @@ Singleton {
         root.threadLoading = root.connected && root.reachable && !(cached && cached.length > 1);
         if (root.threadLoading) threadTimeout.restart();
         else threadTimeout.stop();
-        root.command({ "cmd": "thread", "device": root.deviceId, "thread": thread, "count": 100 });
         root.checkLinks();
+        root.command({ cmd: "thread", device: root.deviceId, thread, count: root.threadPageSize });
         root.conversationOpened(thread);
+    }
+
+    function loadOlderMessages(): void {
+        if (!root.connected || !root.reachable || root.threadLoading || root.olderRequest || !root.olderAvailable || root.openThread < 0) return;
+        const messages = root.threadCache[root.openThread] ?? [];
+        if (messages.length < root.threadPageSize) return;
+        const before = Number(messages[0]?.date);
+        if (!(before > 0)) return;
+        root.olderRequest = root.command({ cmd: "olderThread", device: root.deviceId, thread: root.openThread,
+            before, offset: messages.length });
+        if (root.olderRequest) olderThreadTimeout.restart();
+    }
+
+    function mergeThreadPage(current, page): var {
+        const messages = new Map(current.map(m => [m.uid, m]));
+        for (const message of page) messages.set(message.uid, message);
+        return Array.from(messages.values()).sort(root.byDate);
     }
 
     function matchTargetToThread(target): int {
@@ -720,6 +787,8 @@ Singleton {
     }
 
     function closeConversation(): void {
+        root.olderRequest = "";
+        olderThreadTimeout.stop();
         root.openThread = -1;
         root.threadMessages = [];
         root.threadLoading = false;
@@ -729,13 +798,26 @@ Singleton {
         return (paths ?? []).map(p => String(p)).filter(p => p.startsWith("/"));
     }
 
-    function storeAttachmentMapping(uid, path): void {
+    function storeAttachmentMapping(uid, path, fingerprint = "", device = root.deviceId): void {
         if (!uid || !path) return;
-        const current = root.savedLocalSent._deviceAttachments?.[root.deviceId] || ({});
-        if (current[uid] !== path) {
-            const updated = Object.assign({}, current, { [uid]: path });
-            root.savedLocalSent = Object.assign({}, root.savedLocalSent, { _deviceAttachments: Object.assign({}, root.savedLocalSent._deviceAttachments || {}, {[root.deviceId]: updated}) });
-            saveSentTimer.restart();
+        const current = root.savedLocalSent._deviceAttachments?.[device] ?? {};
+        const previous = current[uid];
+        if (root.sentLinkPath(previous) === path && (!fingerprint || previous?.fingerprint === fingerprint)) return;
+        const updated = Object.assign({}, current, { [uid]: { path, fingerprint } });
+        root.savedLocalSent = Object.assign({}, root.savedLocalSent, {
+            _deviceAttachments: Object.assign({}, root.savedLocalSent._deviceAttachments, { [device]: updated })
+        });
+        saveSentTimer.restart();
+    }
+
+    function recordSentFingerprints(event): void {
+        const pending = root.pendingSends[event.request];
+        if (!pending || pending.device !== event.device) return;
+        const saved = root.savedLocalSent._deviceAttachments?.[event.device] ?? {};
+        for (const { uid, path } of pending.attachments ?? []) {
+            const fingerprint = event.fingerprints?.[path];
+            if (fingerprint && root.sentLinkPath(saved[uid]) === path)
+                root.storeAttachmentMapping(uid, path, fingerprint, event.device);
         }
     }
 
@@ -778,9 +860,12 @@ Singleton {
     // Shows a message as sent at once, until the phone reports it.
     function showLocalSend(request, thread, body, addresses, files): void {
         root.lastSendRequest = request;
-        root.pendingSends = Object.assign({}, root.pendingSends, {[request]: {device: root.deviceId, deadline: Date.now() + 180000}});
         const copy = { "thread": thread, "uid": -(Date.now()), "type": 6, "request": request, "date": Date.now(), "body": body,
             "addresses": addresses, "attachments": files.map(f => root.localAttachment(f)), "read": true, "local": true };
+        root.pendingSends = Object.assign({}, root.pendingSends, {[request]: {
+            device: root.deviceId, deadline: Date.now() + 180000,
+            attachments: copy.attachments.map(({ uid, path }) => ({ uid, path }))
+        }});
         root.recordSentMessageMeta(copy);
         root.localSent = root.localSent.concat([copy]);
         root.persistLocalSent();
@@ -896,6 +981,7 @@ Singleton {
     function withLocal(messages, thread): var {
         const real = (messages ?? []).filter(m => !m.local);
         const prevCount = root.localSent.length;
+        const sentLinks = root.savedLocalSent._deviceAttachments?.[root.deviceId] ?? {};
         // Phone messages already taken as the report of a send from here, kept
         // with the pending sends so a later refresh, or a reload, cannot spend
         // one again on a second send with the same text.
@@ -927,12 +1013,12 @@ Singleton {
                             const lAtt = l.attachments[ai];
                             const mAtt = m.attachments[ai];
                             const resolvedPath = lAtt.path || lAtt.thumb;
-                            if (resolvedPath) {
-                                if (!mAtt.path) mAtt.path = resolvedPath;
+                            if (resolvedPath && !mAtt.path) {
+                                mAtt.path = resolvedPath;
                                 if (!mAtt.thumb) mAtt.thumb = resolvedPath;
                                 if (mAtt.uid) {
                                     root.attachmentFiles = Object.assign({}, root.attachmentFiles, { [mAtt.uid]: resolvedPath });
-                                    root.storeAttachmentMapping(mAtt.uid, resolvedPath);
+                                    root.storeAttachmentMapping(mAtt.uid, resolvedPath, sentLinks[lAtt.uid]?.fingerprint);
                                 }
                             }
                         }
@@ -970,7 +1056,7 @@ Singleton {
                                 att.thumb = p;
                                 if (att.uid) {
                                     root.attachmentFiles = Object.assign({}, root.attachmentFiles, { [att.uid]: p });
-                                    root.storeAttachmentMapping(att.uid, p);
+                                    root.storeAttachmentMapping(att.uid, p, sentLinks[candidate.attachments[ai].uid]?.fingerprint);
                                 }
                             }
                         }
@@ -1273,18 +1359,21 @@ Singleton {
             }
             if (event.device !== root.deviceId || !event.message) break;
             const message = event.message;
+            const opened = message.thread === root.openThread;
+            const existing = root.threadCache[message.thread] ?? [];
+            if (opened && message.date < (root.oldestHistoryDate
+                || (existing.length >= root.threadPageSize ? Number(existing[0].date) : 0))) break;
             if (message.attachments) {
                 root.recordAttachmentMeta(message.attachments);
-                if (message.thread === root.openThread) root.prefetchMedia(message.attachments);
+                if (opened) root.prefetchMedia(message.attachments);
             }
             root.upsertConversation(message);
             if (message.thread !== undefined) {
-                const existing = (root.threadCache[message.thread] ?? []).filter(m => m.uid !== message.uid);
-                existing.push(message);
-                existing.sort(root.byDate);
-                root.threadCache[message.thread] = existing;
+                const combined = root.mergeThreadPage(existing, [message]);
+                root.threadCache[message.thread] = opened && root.oldestHistoryDate
+                    ? combined : combined.slice(-root.threadPageSize);
             }
-            if (message.thread === root.openThread) {
+            if (opened) {
                 const nextMsgs = root.withLocal((root.threadCache[root.openThread] ?? root.threadMessages.filter(m => m.uid !== message.uid).concat([message])), root.openThread);
                 if (!root.sameThreadMessages(root.threadMessages, nextMsgs)) {
                     root.threadMessages = nextMsgs;
@@ -1294,7 +1383,11 @@ Singleton {
         }
         case "thread": {
             if (event.device !== root.deviceId) break;
-            const threadMsgs = root.keepMessages(event.messages, event.device);
+            let threadMsgs = root.keepMessages(event.messages, event.device);
+            if (event.thread === root.openThread) {
+                threadMsgs = root.mergeThreadPage(root.threadCache[event.thread] ?? [], threadMsgs);
+                if (!root.oldestHistoryDate) threadMsgs = threadMsgs.slice(-root.threadPageSize);
+            }
             root.messagesSynced(event.device, threadMsgs);
             const allAtts = [];
             for (const m of threadMsgs) {
@@ -1316,6 +1409,30 @@ Singleton {
             if (!root.sameThreadMessages(root.threadMessages, nextMsgs)) {
                 root.threadMessages = nextMsgs;
             }
+            break;
+        }
+        case "olderThread": {
+            if (event.device !== root.deviceId || event.thread !== root.openThread || event.request !== root.olderRequest) break;
+            olderThreadTimeout.stop();
+            root.olderRequest = "";
+            root.olderAvailable = !!event.more;
+            const page = root.keepMessages(event.messages, event.device);
+            const existing = root.threadCache[event.thread] ?? [];
+            const messages = root.mergeThreadPage(existing, page);
+            if (messages.length === existing.length) {
+                // Nothing here can be shown, so asking again would bring the same page.
+                root.olderAvailable = false;
+                break;
+            }
+            root.oldestHistoryDate = Number(messages[0].date);
+            root.threadCache[event.thread] = messages;
+            const attachments = [];
+            for (const message of page) attachments.push(...(message.attachments ?? []));
+            root.recordAttachmentMeta(attachments);
+            root.prefetchMedia(attachments);
+            root.olderMessagesAdding();
+            root.threadMessages = root.withLocal(messages, event.thread);
+            root.olderMessagesAdded();
             break;
         }
         case "conversationsDeleted":
@@ -1383,7 +1500,10 @@ Singleton {
             break;
         }
         case "links":
-            if (event.device === root.deviceId) root.dropLinks(event.stale);
+            if (event.device === root.deviceId && event.request === root.linkCheckRequest) {
+                root.linkCheckRequest = "";
+                root.dropLinks(event.stale);
+            }
             break;
         case "duration": {
             if (event.device && event.device !== root.deviceId) break;
@@ -1400,6 +1520,9 @@ Singleton {
             }
             break;
         }
+        case "sentFiles":
+            root.recordSentFingerprints(event);
+            break;
         case "sent":
             root.resolveSend(event.request, true);
             break;
@@ -1417,6 +1540,11 @@ Singleton {
                 root.threadLoading = false;
                 threadTimeout.stop();
             }
+            if (event.context === "olderThread") {
+                if (event.request !== root.olderRequest) break;
+                olderThreadTimeout.stop();
+                root.olderRequest = "";
+            }
             if (event.context === "reply" || event.context === "send") root.resolveSend(event.request, false);
             if (event.context === "attachment") root.attachmentFailed(event.uid, event.device);
             if (event.context === "open") {
@@ -1431,7 +1559,7 @@ Singleton {
     // Messages with the same time (the text and media of one MMS) keep the phone's order,
     // so a rebuild doesn't swap them.
     function byDate(a, b): int {
-        return (a.date - b.date) || ((Number(a.uid) || 0) - (Number(b.uid) || 0));
+        return Math.sign((a.date - b.date) || ((Number(a.uid) || 0) - (Number(b.uid) || 0)));
     }
 
     function isImage(attachment): bool {
@@ -1509,6 +1637,11 @@ Singleton {
         id: threadTimeout
         interval: 15000
         onTriggered: root.threadLoading = false
+    }
+    Timer {
+        id: olderThreadTimeout
+        interval: 50000
+        onTriggered: root.olderRequest = ""
     }
 
     Timer {
