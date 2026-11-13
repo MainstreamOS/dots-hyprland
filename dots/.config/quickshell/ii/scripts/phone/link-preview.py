@@ -12,7 +12,10 @@ import sys
 import os
 import re
 import json
+import base64
 import hashlib
+import secrets
+import http.server
 import fcntl
 import ipaddress
 import socket
@@ -570,8 +573,146 @@ def resolve_url(url, index):
     return res
 
 YTDLP_FORMAT = "best[height<=720][ext=mp4]/best[ext=mp4]/best"
-# YouTube often serves only separate video and audio; a download can merge them (H.264 for the player).
-YTDLP_MERGED_FORMAT = "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/" + YTDLP_FORMAT
+# Sites often serve only separate video and audio; a download can merge them (H.264 for the player).
+# A long video drops to a smaller picture so the download stays one a play button can wait for.
+YTDLP_MERGED_FORMAT = ("bv*[height<=720][vcodec^=avc1][filesize<?150M]+ba[ext=m4a]/"
+                       "bv*[height<=480][vcodec^=avc1][filesize<?150M]+ba[ext=m4a]/" + YTDLP_FORMAT)
+DOWNLOAD_BYTES = "300M"
+HLS_SERVE_SECONDS = 600
+
+
+def stream_answers(stream):
+    """Whether an address plays for someone who knows nothing but the address, as the player does."""
+    try:
+        req = urllib.request.Request(stream, headers={"User-Agent": USER_AGENT, "Range": "bytes=0-1023"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            return resp.status in (200, 206)
+    except Exception:
+        return False
+
+
+def single_quality_playlist(master, base):
+    """One H.264 quality of at most 720p from an HLS master playlist, with the original audio. Given
+    the whole list, the player probes every quality and every dubbed track before it starts."""
+    lines = master.splitlines()
+    variants = []
+    for i, line in enumerate(lines[:-1]):
+        if not line.startswith("#EXT-X-STREAM-INF"):
+            continue
+        height = re.search(r"RESOLUTION=\d+x(\d+)", line)
+        rate = re.search(r"BANDWIDTH=(\d+)", line)
+        codecs = re.search(r'CODECS="([^"]*)"', line)
+        audio = re.search(r'AUDIO="([^"]*)"', line)
+        variants.append({"height": int(height[1]) if height else 0, "rate": int(rate[1]) if rate else 0,
+                         "h264": bool(codecs and codecs[1].startswith("avc1")), "audio": audio[1] if audio else "",
+                         "line": line, "url": urllib.parse.urljoin(base, lines[i + 1].strip())})
+    if not variants:
+        return None
+    fits = [v for v in variants if v["height"] <= 720]
+    pool = [v for v in fits if v["h264"]] or fits or [min(variants, key=lambda v: v["height"])]
+    best = max(pool, key=lambda v: (v["height"], v["rate"]))
+    out = ["#EXTM3U", "#EXT-X-INDEPENDENT-SEGMENTS"]
+    urls = [best["url"]]
+    tracks = [l for l in lines if l.startswith("#EXT-X-MEDIA") and "TYPE=AUDIO" in l
+              and f'GROUP-ID="{best["audio"]}"' in l]
+
+    def original(track):
+        name = re.search(r'NAME="([^"]*)"', track)
+        tags = re.search(r'YT-EXT-XTAGS="([^"]*)"', track)
+        try:
+            decoded = base64.urlsafe_b64decode(tags[1] + "=" * (-len(tags[1]) % 4)) if tags else b""
+        except ValueError:
+            decoded = b""
+        return b"original" in decoded or bool(name and "original" in name[1])
+
+    track = (next((t for t in tracks if original(t)), None)
+             or next((t for t in tracks if "DEFAULT=YES" in t), None) or (tracks[0] if tracks else None))
+    if track:
+        uri = re.search(r'URI="([^"]*)"', track)
+        if uri:
+            absolute = urllib.parse.urljoin(base, uri[1])
+            urls.append(absolute)
+            track = track.replace(uri[0], f'URI="{absolute}"')
+        out.append(track.replace("DEFAULT=NO", "DEFAULT=YES"))
+    if not all(public_url(u) for u in urls):
+        return None
+    return "\n".join(out + [best["line"], best["url"]]) + "\n"
+
+
+def serve_playlist(text):
+    """The player follows a playlist to other hosts only when the playlist itself came over HTTP, so a
+    child process hands it out on a loopback port for a while and then leaves."""
+    body = text.encode()
+    path = "/" + secrets.token_urlsafe(16) + ".m3u8"
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            found = self.path == path
+            self.send_response(200 if found else 404)
+            self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+            self.send_header("Content-Length", str(len(body) if found else 0))
+            self.end_headers()
+            if found and self.command == "GET":
+                self.wfile.write(body)
+        do_HEAD = do_GET
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    url = f"http://127.0.0.1:{server.server_address[1]}{path}"
+    if os.fork():
+        server.socket.close()
+        return url
+    try:
+        # The shell waits for this script's output to close, so the child lets go of it.
+        os.setsid()
+        null = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(null, fd)
+        server.timeout = 5
+        deadline = time.monotonic() + HLS_SERVE_SECONDS
+        while time.monotonic() < deadline:
+            server.handle_request()
+    finally:
+        os._exit(0)
+
+
+def youtube_hls(clean, auth_args, key):
+    """A stream address for a YouTube video, or None. YouTube refuses its plain file addresses to any
+    player but the one that asked for them, and still serves HLS to all."""
+    cache = os.path.join(MEDIA_DIR, f"{key}.m3u8")
+    try:
+        playlist = ""
+        if os.path.isfile(cache):
+            with open(cache) as saved:
+                playlist = saved.read()
+            expires = re.search(r"/expire/(\d+)/", playlist)
+            if not expires or int(expires[1]) < time.time() + 900:
+                playlist = ""
+        if not playlist:
+            cmd = ["yt-dlp", "-j", "--no-playlist", "--no-warnings", *auth_args, clean]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+            if res.returncode != 0:
+                return None
+            formats = json.loads(res.stdout).get("formats") or []
+            manifest = next((f["manifest_url"] for f in formats
+                             if str(f.get("protocol", "")).startswith("m3u8") and f.get("manifest_url")), "")
+            if not manifest or not public_url(manifest):
+                return None
+            req = urllib.request.Request(manifest, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                master = read_body(resp, PAGE_BYTES)[:PAGE_BYTES].decode("utf-8", "replace")
+            playlist = single_quality_playlist(master, manifest)
+            if not playlist:
+                return None
+            with atomic_file(cache, prefix="hls-") as output:
+                output.write(playlist)
+        return serve_playlist(playlist)
+    except Exception as e:
+        print(f"Failed to get an HLS stream for {clean}: {e}", file=sys.stderr)
+        return None
+
 
 
 def browser_profile():
@@ -617,8 +758,8 @@ def get_stream_url(url, browser_sign_in=False):
     def download():
         try:
             cmd = ["yt-dlp", "-f", YTDLP_MERGED_FORMAT, "--merge-output-format", "mp4", "--no-playlist", "--no-warnings",
-                   "-o", target_template, *auth_args, clean]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                   "--max-filesize", DOWNLOAD_BYTES, "-o", target_template, *auth_args, clean]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
             cached = cached_media(url_hash) if res.returncode == 0 else None
             return {"url": url, **cached} if cached else None
         except Exception as e:
@@ -628,21 +769,29 @@ def get_stream_url(url, browser_sign_in=False):
     def direct():
         try:
             cmd = ["yt-dlp", "-g", "-f", YTDLP_FORMAT, "--no-playlist", "--no-warnings", *auth_args, clean]
-            if is_youtube and not auth_args:
-                # YouTube's web clients no longer offer video and audio in one stream; its mobile site still does.
-                cmd[1:1] = ["--extractor-args", "youtube:player_client=mweb"]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=14)
             if res.returncode == 0:
                 lines = [l.strip() for l in res.stdout.splitlines() if l.strip().startswith("http")]
-                if lines:
+                # An address the site then refuses is no stream; the download gets its turn instead.
+                if lines and stream_answers(lines[0]):
                     return {"url": url, "stream_url": lines[0], "status": "ok"}
         except Exception as e:
             print(f"Failed to get stream url for {url}: {e}", file=sys.stderr)
         return None
 
+    def hls():
+        stream = youtube_hls(clean, auth_args, url_hash)
+        return {"url": url, "stream_url": stream, "status": "ok"} if stream else None
+
     # TikTok and Instagram CDN URLs refuse playback without the site's referer, so their media is downloaded
     # first; for other sites a stream that cannot be played directly is downloaded instead.
-    for attempt in (download, direct) if is_tiktok or is_instagram else (direct, download):
+    if is_youtube:
+        attempts = (hls, download)
+    elif is_tiktok or is_instagram:
+        attempts = (download, direct)
+    else:
+        attempts = (direct, download)
+    for attempt in attempts:
         result = attempt()
         if result:
             return result
@@ -652,7 +801,7 @@ def get_stream_url(url, browser_sign_in=False):
         profile = browser_profile()
         if profile:
             auth_args = ["--cookies-from-browser", profile]
-            for attempt in (direct, download):
+            for attempt in attempts:
                 result = attempt()
                 if result:
                     return result
