@@ -68,6 +68,7 @@ ClippingRectangle {
     Component.onCompleted: root.attachPlayer()
 
     function togglePlayback(): void {
+        if (root.resolvingStream) return;
         if (!root.player) {
             Qt.openUrlExternally(root.url);
             return;

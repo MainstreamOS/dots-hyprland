@@ -18,12 +18,14 @@ def resolver():
     tree = ast.parse(source.read_text())
     tree.body = [n for n in tree.body if isinstance(n, ast.FunctionDef)
                  and n.name in {"on_host", "normalize_url", "get_stream_url", "browser_profile",
-                                "single_quality_playlist"}]
+                                "single_quality_playlist", "time_left"}]
     scope = dict(os=os, re=__import__("re"), urllib=__import__("urllib"), hashlib=hashlib, base64=base64,
                  configparser=configparser, subprocess=Mock(), sys=__import__("sys"),
                  MEDIA_DIR="/unused", YTDLP_FORMAT="best", YTDLP_MERGED_FORMAT="merged", DOWNLOAD_BYTES="1M",
+                 time=Mock(), YOUTUBE_PLAYBACK_SECONDS=40,
                  cached_media=Mock(return_value=None), youtube_hls=Mock(return_value=None),
                  stream_answers=Mock(return_value=True), public_url=Mock(return_value=True))
+    scope["time"].monotonic.return_value = 0
     exec(compile(tree, str(source), "exec"), scope)
     return scope
 
@@ -56,7 +58,16 @@ class VideoSignInTests(unittest.TestCase):
         first, second = (call.args[1] for call in r["youtube_hls"].call_args_list)
         self.assertEqual(first, [])
         self.assertEqual(second, ["--cookies-from-browser", "firefox:/profile"])
-        self.assertNotIn("--cookies-from-browser", r["subprocess"].run.call_args_list[0].args[0])
+        r["subprocess"].run.assert_not_called()
+
+    def test_youtube_attempts_share_one_deadline(self):
+        r = resolver()
+        r["browser_profile"] = Mock(return_value="firefox:/profile")
+        r["time"].monotonic.side_effect = [100, 112, 125, 129]
+        r["subprocess"].run.return_value = Mock(returncode=1)
+        self.assertEqual(r["get_stream_url"]("https://youtu.be/abcdefghijk", True)["status"], "error")
+        self.assertEqual([call.args[3] for call in r["youtube_hls"].call_args_list], [140, 140])
+        self.assertEqual(r["subprocess"].run.call_args.kwargs["timeout"], 11)
 
     def test_missing_profile_keeps_normal_fallback(self):
         r = resolver()

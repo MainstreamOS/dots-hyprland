@@ -238,22 +238,32 @@ Singleton {
     function fetchStream(url: string, callback): void {
         if (!url || typeof callback !== "function") return;
         const script = FileUtils.trimFileProtocol(`${Directories.scriptPath}/phone/link-preview.py`);
+        const youtube = /^https?:\/\/([^/]+\.)?(youtube\.com|youtu\.be)(?:[/:?#]|$)/i.test(url);
         const proc = streamProcComponent.createObject(root, {
             command: ["python3", "-I", script, "stream", url].concat(
                 Config.options.sidebar.phone.youtubeBrowserSignIn ? ["--browser-sign-in"] : []),
-            targetUrl: url,
+            timeoutMs: youtube ? 42000 : 120000,
             cb: callback
         });
         if (proc) proc.running = true;
+        else callback("");
     }
 
     Component {
         id: streamProcComponent
         Process {
             id: streamProcItem
-            property string targetUrl: ""
+            required property int timeoutMs
             property var cb: null
             property bool completed: false
+            Timer {
+                interval: streamProcItem.timeoutMs
+                running: streamProcItem.running && !streamProcItem.completed
+                onTriggered: {
+                    streamProcItem.running = false;
+                    streamProcItem.complete();
+                }
+            }
             stdout: StdioCollector {
                 id: streamCollector
                 onStreamFinished: streamProcItem.complete()

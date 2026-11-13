@@ -117,9 +117,9 @@ FETCH_SECONDS = 15
 IMAGE_PIXELS = 40_000_000
 
 
-def read_body(resp, limit):
+def read_body(resp, limit, deadline=None):
     """At most limit + 1 bytes; a body still arriving after FETCH_SECONDS is abandoned."""
-    deadline = time.monotonic() + FETCH_SECONDS
+    deadline = min(deadline, time.monotonic() + FETCH_SECONDS) if deadline is not None else time.monotonic() + FETCH_SECONDS
     chunks, size = [], 0
     while size <= limit:
         if time.monotonic() > deadline:
@@ -579,6 +579,7 @@ YTDLP_MERGED_FORMAT = ("bv*[height<=720][vcodec^=avc1][filesize<?150M]+ba[ext=m4
                        "bv*[height<=480][vcodec^=avc1][filesize<?150M]+ba[ext=m4a]/" + YTDLP_FORMAT)
 DOWNLOAD_BYTES = "300M"
 HLS_SERVE_SECONDS = 600
+YOUTUBE_PLAYBACK_SECONDS = 40
 
 
 def stream_answers(stream):
@@ -678,7 +679,14 @@ def serve_playlist(text):
         os._exit(0)
 
 
-def youtube_hls(clean, auth_args, key):
+def time_left(deadline, limit):
+    remaining = min(limit, deadline - time.monotonic())
+    if remaining <= 0:
+        raise TimeoutError("Playback request took too long")
+    return remaining
+
+
+def youtube_hls(clean, auth_args, key, deadline):
     """A stream address for a YouTube video, or None. YouTube refuses its plain file addresses to any
     player but the one that asked for them, and still serves HLS to all."""
     cache = os.path.join(MEDIA_DIR, f"{key}.m3u8")
@@ -692,7 +700,7 @@ def youtube_hls(clean, auth_args, key):
                 playlist = ""
         if not playlist:
             cmd = ["yt-dlp", "-j", "--no-playlist", "--no-warnings", *auth_args, clean]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=time_left(deadline, 12))
             if res.returncode != 0:
                 return None
             formats = json.loads(res.stdout).get("formats") or []
@@ -701,13 +709,14 @@ def youtube_hls(clean, auth_args, key):
             if not manifest or not public_url(manifest):
                 return None
             req = urllib.request.Request(manifest, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                master = read_body(resp, PAGE_BYTES)[:PAGE_BYTES].decode("utf-8", "replace")
+            with urllib.request.urlopen(req, timeout=time_left(deadline, 8)) as resp:
+                master = read_body(resp, PAGE_BYTES, deadline)[:PAGE_BYTES].decode("utf-8", "replace")
             playlist = single_quality_playlist(master, manifest)
             if not playlist:
                 return None
             with atomic_file(cache, prefix="hls-") as output:
                 output.write(playlist)
+        time_left(deadline, 1)
         return serve_playlist(playlist)
     except Exception as e:
         print(f"Failed to get an HLS stream for {clean}: {e}", file=sys.stderr)
@@ -754,12 +763,13 @@ def get_stream_url(url, browser_sign_in=False):
 
     target_template = os.path.join(MEDIA_DIR, f"{url_hash}.%(ext)s")
     auth_args = []
+    deadline = time.monotonic() + YOUTUBE_PLAYBACK_SECONDS if is_youtube else None
 
     def download():
         try:
             cmd = ["yt-dlp", "-f", YTDLP_MERGED_FORMAT, "--merge-output-format", "mp4", "--no-playlist", "--no-warnings",
                    "--max-filesize", DOWNLOAD_BYTES, "-o", target_template, *auth_args, clean]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=time_left(deadline, 90) if deadline is not None else 90)
             cached = cached_media(url_hash) if res.returncode == 0 else None
             return {"url": url, **cached} if cached else None
         except Exception as e:
@@ -780,31 +790,31 @@ def get_stream_url(url, browser_sign_in=False):
         return None
 
     def hls():
-        stream = youtube_hls(clean, auth_args, url_hash)
+        stream = youtube_hls(clean, auth_args, url_hash, deadline)
         return {"url": url, "stream_url": stream, "status": "ok"} if stream else None
 
-    # TikTok and Instagram CDN URLs refuse playback without the site's referer, so their media is downloaded
-    # first; for other sites a stream that cannot be played directly is downloaded instead.
     if is_youtube:
-        attempts = (hls, download)
-    elif is_tiktok or is_instagram:
-        attempts = (download, direct)
-    else:
-        attempts = (direct, download)
-    for attempt in attempts:
-        result = attempt()
+        result = hls()
         if result:
             return result
-    # Metadata fetching never reads browser cookies. Only an explicitly enabled
-    # YouTube playback request may retry with the user's existing sign-in.
-    if is_youtube and browser_sign_in:
-        profile = browser_profile()
+        # Only an explicitly enabled YouTube playback request reads browser sign-in.
+        profile = browser_profile() if browser_sign_in and time.monotonic() < deadline else ""
         if profile:
             auth_args = ["--cookies-from-browser", profile]
-            for attempt in attempts:
-                result = attempt()
-                if result:
-                    return result
+            result = hls()
+            if result:
+                return result
+        if time.monotonic() < deadline:
+            result = download()
+            if result:
+                return result
+    else:
+        # TikTok and Instagram CDN URLs need the site's referer, so try the download first.
+        attempts = (download, direct) if is_tiktok or is_instagram else (direct, download)
+        for attempt in attempts:
+            result = attempt()
+            if result:
+                return result
     return {"url": url, "stream_url": "", "status": "error"}
 
 def main():
