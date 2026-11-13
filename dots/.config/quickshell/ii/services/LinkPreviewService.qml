@@ -256,7 +256,7 @@ Singleton {
             required property int timeoutMs
             property var cb: null
             property bool completed: false
-            Timer {
+            property Timer playbackTimeout: Timer {
                 interval: streamProcItem.timeoutMs
                 running: streamProcItem.running && !streamProcItem.completed
                 onTriggered: {
