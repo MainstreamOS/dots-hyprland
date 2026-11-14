@@ -253,7 +253,14 @@ _hardware_quirks() {
     fi
 }
 
+# Save the affected entries before the normal kernel hook can replace them.
+# The repair hook later checks the replacement even if it no longer says fred=on.
+_prepare_fred_boot_repair() {
+    /usr/bin/mainstream-boot-verify --prepare-fred
+}
+
 post_install() {
+    _prepare_fred_boot_repair
     _migrate
     _mdns_arrived
     _sharing_arrived
@@ -262,6 +269,7 @@ post_install() {
 }
 
 post_upgrade() {
+    _prepare_fred_boot_repair
     _migrate "$2"
     if [ "$(vercmp "$2" 1.0-14)" -lt 0 ]; then
         _mdns_arrived
