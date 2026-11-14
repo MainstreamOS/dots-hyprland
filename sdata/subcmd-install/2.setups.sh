@@ -1531,29 +1531,26 @@ function setup_quiet_shutdown(){
 showfun setup_quiet_shutdown
 v setup_quiet_shutdown
 
-# mpris-hyprland: per-tab MPRIS bridge for Firefox/Zen/LibreWolf/etc.
-# Replaces plasma-browser-integration with a lightweight (~2MB binary)
-# alternative that doesn't drag in the KDE chain. Always installed —
-# the media-control panel needs this to show track info, position,
-# YouTube thumbnails, and a working seek bar for any Firefox-based
-# browser. Auto-detects which forks are installed and writes per-fork
-# native-messaging manifests for each.
+# mpris-hyprland: per-tab MPRIS bridge for Firefox- and Chromium-based browsers, without
+# plasma-browser-integration's KDE chain. Flatpak browsers cannot see the package, so setup-browsers covers them.
 function setup_mpris_hyprland(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
     echo -e "${STY_YELLOW}[$0]: mpris-hyprland setup is currently Arch-only. Skipping.${STY_RST}"
     return 0
   fi
+  # The [mainstream] prebuilt, as the ISO installs it; the source build needs the Rust toolchain.
   if pacman -Qq mpris-hyprland &>/dev/null; then
     echo -e "${STY_GREEN}[$0]: mpris-hyprland already installed — skipping.${STY_RST}"
-    return 0
-  fi
-  # The [mainstream] prebuilt, as the ISO installs it; the source build below needs the Rust toolchain.
-  if pacman -Si mpris-hyprland &>/dev/null && sudo pacman -S --needed --noconfirm mpris-hyprland; then
+  elif pacman -Si mpris-hyprland &>/dev/null && sudo pacman -S --needed --noconfirm mpris-hyprland; then
     echo -e "${STY_GREEN}[$0]: Installed prebuilt mpris-hyprland from [mainstream].${STY_RST}"
-    return 0
+  else
+    x bash "${REPO_ROOT}/scripts/setup-mpris-hyprland.sh" \
+      || echo -e "${STY_YELLOW}[$0]: mpris-hyprland install hit an error — see above. Continuing with the rest of setup.${STY_RST}"
   fi
-  x bash "${REPO_ROOT}/scripts/setup-mpris-hyprland.sh" \
-    || echo -e "${STY_YELLOW}[$0]: mpris-hyprland install hit an error — see above. Continuing with the rest of setup.${STY_RST}"
+  if [[ -x /usr/lib/mpris-hyprland/setup-browsers ]]; then
+    /usr/lib/mpris-hyprland/setup-browsers --user \
+      || echo -e "${STY_YELLOW}[$0]: Media controls could not be set up for every Flatpak browser. Continuing with the rest of setup.${STY_RST}"
+  fi
 }
 showfun setup_mpris_hyprland
 v setup_mpris_hyprland

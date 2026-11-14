@@ -22,7 +22,7 @@
 #   0    everything succeeded or was skipped
 #   101  the dotfiles did not update; the machine is still on its old release
 #   102  the dotfiles updated, but updatems-system did not finish
-#   100  completed with errors: snap or extras failed, or [mainstream] was switched off
+#   100  completed with errors: snap, extras or browser media controls failed, or [mainstream] was switched off
 #   105  held: the EFI partition is too full to rebuild the boot image safely; no package changed
 #   106  the boot menu would not start the system and could not be repaired; do not restart
 #   107  Hyprland's Lua configs must be installed before upgrading to 0.57
@@ -368,6 +368,7 @@ DOTFILES_SYS_RC=0
 QT_PIN_HELD=0
 TOPGRADE_RC=0
 ANTIGRAVITY_RC=0
+BROWSER_MEDIA_RC=0
 AUR_NOTE=""
 FLATPAK_NOTE=""
 SNAP_NOTE=""
@@ -776,6 +777,41 @@ fi
 # Before the extras, which can run for hours, so the answer is not held back.
 boot_postcheck
 
+# ── 5d. Browser media controls ──────────────────────────────────────────────
+# A Flatpak browser sees none of mpris-hyprland's files, so the package's helper
+# keeps a copy inside each one it supports.
+BROWSER_SETUP=/usr/lib/mpris-hyprland/setup-browsers
+if [[ -x "$BROWSER_SETUP" ]] && _br_out=$(mktemp); then
+    # The step can run in the background as the user, so it writes through a
+    # descriptor it inherits. The file is unlinked at once, so a Stop leaves nothing.
+    exec {_br_w}>"$_br_out" {_br_r}<"$_br_out"
+    rm -f "$_br_out"
+    user_step 120 env HOME="$ORIG_HOME" \
+        bash -c 'exec "$0" --user >&"$1"' "$BROWSER_SETUP" "$_br_w"
+    BROWSER_MEDIA_RC=$?
+    exec {_br_w}>&-
+    _br_failed=0
+    while IFS=$'\t' read -r _br_state _ _br_name _br_reason; do
+        case "$_br_state" in
+            added)
+                echo ""
+                echo "── $(tf "Media controls for %s were added. They start working the next time you open it." "$_br_name")"
+                ;;
+            failed)
+                _br_failed=1
+                echo ""
+                echo ">>> $(tf "Media controls for %s could not be set up. The rest of the update is not affected." "$_br_name")"
+                [[ -n "$_br_reason" ]] && echo "    $_br_reason"
+                ;;
+        esac
+    done <&"$_br_r"
+    exec {_br_r}<&-
+    if [[ "$BROWSER_MEDIA_RC" -ne 0 && "$_br_failed" -eq 0 ]]; then
+        echo ""
+        echo ">>> $(t "Browser media controls could not be set up. The rest of the update is not affected.")"
+    fi
+fi
+
 # ── 6. Extras (topgrade for developer ecosystems) ───────────────────────────
 # Room for large Proton downloads without holding the sudo rule open all day.
 # Flatpak sandboxes (ProtonPlus) are outside its reach and finish on their own.
@@ -1031,6 +1067,9 @@ printf "  %-30s %s\n" "$(t "Developer extras (topgrade):")"  "$(status_for "$SKI
 if [[ -n "$AGY_BIN" || "$AG_DESKTOP_INSTALLED" -eq 1 ]]; then
     printf "  %-30s %s\n" "$(t "Antigravity:")"                  "$(status_for "$SKIP_EXTRAS"   "$ANTIGRAVITY_RC" "$ANTIGRAVITY_NOTE")"
 fi
+if [[ -x "$BROWSER_SETUP" ]]; then
+    printf "  %-30s %s\n" "$(t "Browser media controls:")"       "$(status_for 0 "$BROWSER_MEDIA_RC")"
+fi
 if [[ -n "$BOOT_RC" ]]; then
     case "$BOOT_RC" in
         0) BOOT_STATUS="$(t "ok")"
@@ -1056,8 +1095,9 @@ if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
     echo ">>>     sudo mainstream-keyring-repair"
 fi
 
-# Primary failures (pacman, AUR, flatpak) return their own code. Snap and extras
-# are soft: 100, which the page shows as success while the summary marks the step.
+# Primary failures (pacman, AUR, flatpak) return their own code. Snap, extras and
+# browser media controls are soft: 100, which the page shows as success while the
+# summary marks the step.
 # The Qt pin hold comes first so the page can say why the desktop did not update.
 # Only a boot menu that would not start the system outranks it.
 if [[ "$BOOT_RC" == 1 ]]; then exit 106; fi
@@ -1071,5 +1111,6 @@ if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_RC"     -ne 0 ]]; then exit 101
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 102;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$TOPGRADE_RC"     -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$ANTIGRAVITY_RC"  -ne 0 ]]; then exit 100;            fi
+if [[ "$BROWSER_MEDIA_RC" -ne 0 ]]; then exit 100; fi
 if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then exit 100; fi
 exit 0

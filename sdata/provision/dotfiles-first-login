@@ -278,6 +278,12 @@ STUB_EOF
         disown
     fi
 
+    # Media controls for Flatpak browsers, which cannot see mpris-hyprland's files.
+    if [[ -x /usr/lib/mpris-hyprland/setup-browsers ]]; then
+        /usr/lib/mpris-hyprland/setup-browsers --user \
+            || echo "[first-login] WARN: browser media controls setup failed"
+    fi
+
     if (( COLORS_READY )) && command -v notify-send &>/dev/null; then
         notify-send "Setup Complete" \
             "Your Hyprland desktop is fully configured!" \
