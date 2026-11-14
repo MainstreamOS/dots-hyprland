@@ -1,0 +1,11 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = mainstream-system
+
+[Action]
+Description = Checking boot images for missing root arguments...
+When = PostTransaction
+Depends = limine-mkinitcpio-hook
+Exec = /usr/bin/mainstream-boot-verify --repair-fred

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# mainstream-hardware-quirks: applies the module options, boot options and services some
+# mainstream-hardware-quirks: applies the module options and services some
 # hardware needs. Runs on first boot and every update, and changes a file only when its content
 # differs.
 #
 # Usage: mainstream-hardware-quirks [--packages]
 #   --packages  prints the packages this machine's quirks need and changes nothing, since the
 #               engine itself runs inside pacman's transaction where it cannot install any.
+#   --remove-fred-override  removes only the obsolete boot setting, including in a chroot.
 
 set -euo pipefail
 
@@ -40,20 +41,6 @@ pci_has() {
         [[ " $* " == *" $id "* ]] && return 0
     done
     return 1
-}
-
-# lspci wakes a sleeping discrete GPU, so it runs at most once and only on Intel machines.
-is_intel_ptl() {
-    [[ "$CPU_VENDOR" == GenuineIntel ]] || return 1
-    if [[ -z "${INTEL_PTL:-}" ]]; then
-        INTEL_PTL=0
-        if command -v lspci >/dev/null 2>&1; then
-            grep -qiE '(vga|3d|display).*panther lake' <<<"$(lspci 2>/dev/null)" && INTEL_PTL=1
-        elif [[ "$CPU_MODEL" == 204 ]]; then
-            INTEL_PTL=1
-        fi
-    fi
-    (( INTEL_PTL ))
 }
 
 is_apple() {
@@ -133,14 +120,13 @@ print_packages() {
     return 0
 }
 
-# ── Intel Panther Lake: FRED ───────────────────────────────────────────────
-# Flexible Return and Event Delivery replaces the old interrupt path and is off unless asked for.
-apply_intel_ptl_fred() {
-    is_intel_ptl || return 0
-    [[ -f /etc/default/limine || -f /etc/limine-entry-tool.conf ]] || return 0
-    if write_if_changed /etc/limine-entry-tool.d/mainstream-intel-ptl-fred.conf 'KERNEL_CMDLINE[default]+=" fred=on"'; then
-        log "Turned on FRED for Intel Panther Lake."
-        NEED_MKINITCPIO=1
+# limine-entry-tool falls back to /etc/kernel/cmdline only when no
+# KERNEL_CMDLINE applies. The old drop-in hid the root and unlock options.
+remove_intel_ptl_fred_override() {
+    local conf=/etc/limine-entry-tool.d/mainstream-intel-ptl-fred.conf
+    if [[ -f "$conf" && "$(< "$conf")" == 'KERNEL_CMDLINE[default]+=" fred=on"' ]]; then
+        rm -f -- "$conf"
+        log "Removed the FRED override so Limine can use the system kernel command line."
     fi
 }
 
@@ -186,27 +172,14 @@ apply_intel_power_services() {
 }
 
 main() {
-    if [[ "${1:-}" == --packages ]]; then
-        print_packages
-        return 0
-    fi
-    NEED_MKINITCPIO=0
-
-    apply_intel_ptl_fred
+    case "${1:-}" in
+        --packages) print_packages; return ;;
+        --remove-fred-override) remove_intel_ptl_fred_override; return ;;
+    esac
+    remove_intel_ptl_fred_override
     apply_intel_wifi7_eht_quirk
     apply_apple_quirks
     apply_intel_power_services
-
-    # limine-mkinitcpio also renews the boot entries' hashes; a plain mkinitcpio -P leaves
-    # Limine refusing the rebuilt images. The update defers it to the next kernel update.
-    if (( NEED_MKINITCPIO )) && [[ ${EUID:-$(id -u)} -eq 0 && -z "${MAINSTREAM_QUIRKS_DEFER_REBUILD:-}" ]]; then
-        log "Hardware quirks changed the initramfs or kernel options. Rebuilding the boot images..."
-        if command -v limine-mkinitcpio >/dev/null 2>&1; then
-            limine-mkinitcpio || true
-        elif command -v mkinitcpio >/dev/null 2>&1; then
-            mkinitcpio -P || true
-        fi
-    fi
 }
 
 main "$@"

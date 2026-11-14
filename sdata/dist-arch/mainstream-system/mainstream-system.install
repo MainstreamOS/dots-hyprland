@@ -246,9 +246,11 @@ _sharing_keep_packages() {
 # A chroot, such as the ISO build, would read the building machine's hardware. Installed
 # systems get the quirks on first boot and every update.
 _hardware_quirks() {
-    systemd-detect-virt --chroot -q 2>/dev/null && return 0
-    # Inside pacman's transaction the boot images are left for the next kernel update.
-    MAINSTREAM_QUIRKS_DEFER_REBUILD=1 /usr/lib/mainstream/mainstream-hardware-quirks >/dev/null 2>&1 || true
+    if systemd-detect-virt --chroot -q 2>/dev/null; then
+        /usr/lib/mainstream/mainstream-hardware-quirks --remove-fred-override
+    else
+        /usr/lib/mainstream/mainstream-hardware-quirks
+    fi
 }
 
 post_install() {
