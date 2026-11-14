@@ -5,9 +5,11 @@
 # The bridge host embeds its OWN pid in its bus name, and the browser names
 # its built-in player after its D-Bus connection or its pid depending on
 # version — so no name-level linkage exists between the two. What does hold
-# everywhere: the bridge host is a direct child of the browser process that
+# natively: the bridge host is a direct child of the browser process that
 # owns the built-in's connection. Resolve both connections to processes and
-# match the built-in's pid against the bridges' parent pids.
+# match the built-in's pid against the bridges' parent pids. A Flatpak app
+# reaches the bus through one xdg-dbus-proxy, which the bus reports as the pid
+# of every connection from it, so a built-in sharing a bridge's pid counts too.
 set -u
 
 pid_of() {
@@ -19,27 +21,28 @@ pid_of() {
 }
 ppid_of() { awk '/^PPid:/{print $2}' "/proc/$1/status" 2>/dev/null; }
 
-declare -A bridge_parents=()
+declare -A covering=()
 builtins=()
 for name in "$@"; do
     case "$name" in
-        *.firefox.instance*_t*|*.chromium.instance*_t*)
+        *.firefox.instance*_t*|*.chromium.instance*_t*|*.brave.instance*_t*)
             pid=$(pid_of "$name") || continue
             [ -n "$pid" ] || continue
+            covering[$pid]=1
             pp=$(ppid_of "$pid")
-            [ -n "$pp" ] && bridge_parents[$pp]=1
+            [ -n "$pp" ] && covering[$pp]=1
             ;;
-        *.firefox.instance*|*.chromium.instance*|*.chrome.instance*)
+        *.firefox.instance*|*.chromium.instance*|*.chrome.instance*|*.brave.instance*)
             builtins+=("$name")
             ;;
     esac
 done
 
 [ ${#builtins[@]} -eq 0 ] && exit 0
-[ ${#bridge_parents[@]} -eq 0 ] && exit 0
+[ ${#covering[@]} -eq 0 ] && exit 0
 for name in "${builtins[@]}"; do
     pid=$(pid_of "$name")
     [ -n "$pid" ] || continue
-    [ -n "${bridge_parents[$pid]:-}" ] && printf '%s\n' "$name"
+    [ -n "${covering[$pid]:-}" ] && printf '%s\n' "$name"
 done
 exit 0

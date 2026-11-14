@@ -74,9 +74,10 @@ Singleton {
 	// mpris-hyprland also bridges Chromium: a Chromium session publishes
 	// org.mpris.MediaPlayer2.chromium.instance<pid>_t<window>. The _t<digits>
 	// segment distinguishes the per-window bridge from Chromium's own native
-	// single player (…chromium.instance<n>, no _t).
+	// single player (…chromium.instance<n>, no _t). Brave bridges use .brave.
+	// instead, since its Flatpak may own only org.mpris.MediaPlayer2.brave.*.
 	function isChromiumMprisBridge(name) {
-		return /\.chromium\.instance\d+_t\d+/.test(name ?? '');
+		return /\.(chromium|brave)\.instance\d+_t\d+/.test(name ?? '');
 	}
 	// A browser's own sparse single MPRIS player (Firefox built-in, Chromium
 	// native), as opposed to the rich per-window bridge players. Split per
@@ -88,7 +89,8 @@ Singleton {
 	function isBuiltinChromiumPlayer(name) {
 		name = name ?? '';
 		return (name.startsWith('org.mpris.MediaPlayer2.chromium')
-			|| name.startsWith('org.mpris.MediaPlayer2.chrome'))
+			|| name.startsWith('org.mpris.MediaPlayer2.chrome')
+			|| name.startsWith('org.mpris.MediaPlayer2.brave.'))
 			&& !isChromiumMprisBridge(name);
 	}
 	function isBuiltinBrowserPlayer(name) {
@@ -99,7 +101,8 @@ Singleton {
 	// connection. No name-level linkage exists — the bridge embeds its own
 	// host pid while the browser names its player after its connection or
 	// its pid depending on version — so the resolve goes through D-Bus and
-	// /proc in a helper.
+	// /proc in a helper. In a Flatpak both connections come from the one
+	// xdg-dbus-proxy, so a shared connection pid also counts.
 	property var coveredBuiltins: []
 	Process {
 		id: coveredBuiltinsProc
