@@ -19,9 +19,13 @@ hl.env("GDK_WAYLAND_DISABLE", "ext_background_effect_manager_v1")
 -- later duplicates changes nothing except how much work an application does
 -- when it searches these directories.
 local xdg_data_dirs_old = os.getenv("XDG_DATA_DIRS") or ""
+local xdg_data_home = os.getenv("XDG_DATA_HOME")
+if not xdg_data_home or xdg_data_home == "" then
+    xdg_data_home = home_dir .. "/.local/share"
+end
 local xdg_data_dirs_seen = {}
 local xdg_data_dirs = {}
-for dir in (home_dir .. "/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share:" .. xdg_data_dirs_old):gmatch("[^:]+") do
+for dir in (xdg_data_home .. "/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share:" .. xdg_data_dirs_old):gmatch("[^:]+") do
     if not xdg_data_dirs_seen[dir] then
         xdg_data_dirs_seen[dir] = true
         xdg_data_dirs[#xdg_data_dirs + 1] = dir

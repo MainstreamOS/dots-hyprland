@@ -82,7 +82,6 @@ role_probe_mimes() {
 # under hypr/custom/ instead.
 role_primary_mime() {
     case "$1" in
-        browser)     echo "x-scheme-handler/https" ;;
         email)       echo "x-scheme-handler/mailto" ;;
         fileManager) echo "inode/directory" ;;
         textEditor)  echo "text/plain" ;;
@@ -199,11 +198,12 @@ read_entry() {
             else if (key == "Hidden") hidden = value
             else if (key == "Terminal") terminal = value
             else if (key == "Type") type = value
+            else if (key == "TryExec") tryexec = value
         }
         END {
-            printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\n",
+            printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\n",
                 name, icon, exec, categories, mimetypes,
-                nodisplay, hidden, terminal, type
+                nodisplay, hidden, terminal, type, tryexec
         }
     ' "$1" 2>/dev/null
 }
@@ -223,15 +223,22 @@ find_entry_file() {
         [ -d "$dir" ] || continue
         candidate="$dir/$id.desktop"
         [ -f "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
-    done < <(app_dirs)
-    # An id carrying dashes may be a file in a subdirectory.
-    while read -r dir; do
-        [ -d "$dir" ] || continue
+        # Check nested entries in this directory before lower-priority locations.
+        [[ "$id" == *-* ]] || continue
         while IFS= read -r candidate; do
             [ "$(entry_id "$dir" "$candidate")" = "$id" ] && { printf '%s\n' "$candidate"; return 0; }
-        done < <(find "$dir" -name '*.desktop' -xtype f 2>/dev/null)
+        done < <(find "$dir" -mindepth 2 -name '*.desktop' -xtype f 2>/dev/null)
     done < <(app_dirs)
     return 1
+}
+
+browser_entry_file() {
+    local file name _icon _exec _categories _mimetypes _nodisplay hidden _terminal type tryexec
+    file="$(find_entry_file "$1")" || return 1
+    IFS=$'\037' read -r name _icon _exec _categories _mimetypes _nodisplay hidden _terminal type tryexec <<< "$(read_entry "$file")"
+    [ -n "$name" ] && [ "$type" = Application ] && [ "$hidden" != true ] || return 1
+    [ -z "$tryexec" ] || type -P -- "$tryexec" >/dev/null || return 1
+    printf '%s\n' "$file"
 }
 
 # The command a keybind runs: the Exec line with the placeholders the spec
@@ -268,16 +275,39 @@ cmd_roles() {
     done
 }
 
+mime_default_id() {
+    local id
+    id="$(xdg-mime query default "$1" 2>/dev/null | head -n 1)"
+    printf '%s\n' "${id%.desktop}"
+}
+
+browser_default_ids() {
+    mime_default_id x-scheme-handler/https
+    mime_default_id x-scheme-handler/http
+    local file="$CUSTOM_DIR/apps.browser"
+    if [ -r "$file" ]; then
+        head -n 1 "$file"
+    fi
+}
+
 # The app holding a role right now. The system answers for every role that
 # owns MIME types; a role no type speaks for is remembered in its own file,
 # and so is one whose app has not been chosen here yet.
 role_current() {
     local key="$1" mime id file
+    if [ "$key" = browser ]; then
+        while IFS= read -r id; do
+            if [ -n "$id" ] && browser_entry_file "$id" >/dev/null; then
+                printf '%s\n' "$id"
+                return
+            fi
+        done < <(browser_default_ids)
+        return
+    fi
     id=""
     mime="$(role_primary_mime "$key")"
     if [ -n "$mime" ]; then
-        id="$(xdg-mime query default "$mime" 2>/dev/null | head -n 1)"
-        id="${id%.desktop}"
+        id="$(mime_default_id "$mime")"
     fi
     if [ -z "$id" ]; then
         file="$CUSTOM_DIR/apps.$key"
@@ -294,7 +324,7 @@ cmd_get() {
 }
 
 cmd_candidates() {
-    local role="${1:-}" dir file id fields name categories mimetypes nodisplay hidden terminal type
+    local role="${1:-}" dir file id name categories mimetypes nodisplay hidden terminal type tryexec
     local -a cats probes
     [ -n "$role" ] || { echo "default-apps.sh: candidates needs a role" >&2; return 2; }
     read -r -a cats <<< "$(role_categories "$role")"
@@ -317,10 +347,11 @@ cmd_candidates() {
             id="$(entry_id "$dir" "$file")"
             case "$seen" in *" $id "*) continue ;; esac
             seen="$seen$id "
-            IFS=$'\037' read -r name _icon _exec categories mimetypes nodisplay hidden terminal type <<< "$(read_entry "$file")"
+            IFS=$'\037' read -r name _icon _exec categories mimetypes nodisplay hidden terminal type tryexec <<< "$(read_entry "$file")"
             [ -n "$name" ] || continue
             [ -z "$type" ] || [ "$type" = "Application" ] || continue
             [ "$hidden" = "true" ] && continue
+            [ -z "$tryexec" ] || type -P -- "$tryexec" >/dev/null || continue
             # Entries kept out of the menus are the url handlers apps install
             # beside themselves, not apps in their own right. The one exception
             # is the app already holding the role, emitted above whatever it
@@ -357,19 +388,21 @@ cmd_candidates() {
 
 launch_browser_entry() {
     local file
-    file="$(find_entry_file "$1")" || return 1
+    file="$(browser_entry_file "$1")" || return 1
     gio launch "$file" 2>/dev/null
 }
 
 cmd_launch_browser() {
-    local current rank id
-    current="$(role_current browser)"
-    if [ -n "$current" ] && launch_browser_entry "$current"; then
-        return 0
-    fi
+    local id _rank seen=" "
+    while IFS= read -r id; do
+        [ -n "$id" ] || continue
+        [[ "$seen" == *" $id "* ]] && continue
+        seen="$seen$id "
+        launch_browser_entry "$id" && return 0
+    done < <(browser_default_ids)
 
-    while IFS=$'\t' read -r rank id; do
-        [ "$id" = "$current" ] && continue
+    while IFS=$'\t' read -r _rank id; do
+        [[ "$seen" == *" $id "* ]] && continue
         launch_browser_entry "$id" && return 0
     done < <(cmd_candidates browser | sort -s -n -k1,1)
     return 1
@@ -381,7 +414,12 @@ cmd_set() {
     id="${id%.desktop}"
 
     local file
-    file="$(find_entry_file "$id")" || { echo "default-apps.sh: no desktop entry named $id" >&2; return 1; }
+    if [ "$role" = browser ]; then
+        file="$(browser_entry_file "$id")"
+    else
+        file="$(find_entry_file "$id")"
+    fi
+    [ -n "$file" ] || { echo "default-apps.sh: no desktop entry named $id" >&2; return 1; }
 
     local mimes lua rc=0
     read -r -a mimes <<< "$(role_write_mimes "$role" | tr -s '[:space:]' ' ')"
@@ -401,17 +439,18 @@ cmd_set() {
 
     lua="$(role_lua "$role")"
     if [ -n "$lua" ]; then
-        local fields name exec command
-        IFS=$'\037' read -r name _icon exec _categories _mimetypes _nodisplay _hidden _terminal _type <<< "$(read_entry "$file")"
+        local name exec command
+        IFS=$'\037' read -r name _icon exec _rest <<< "$(read_entry "$file")"
         command="$(exec_command "$exec")"
         [ -n "$command" ] || { echo "default-apps.sh: $id has no command to run" >&2; return 1; }
         mkdir -p "$CUSTOM_DIR"
         # The id on the first line for the page to read back, the command on
         # the second for variables.lua, so one file answers both.
         printf '%s\n%s\n' "$id" "$command" > "$CUSTOM_DIR/apps.$role"
-        # A run pointed at another custom directory is not talking to the
-        # session on screen, so it leaves that session alone.
-        [ -n "${MAINSTREAM_APPS_CUSTOM_DIR:-}" ] || hyprctl reload >/dev/null 2>&1 || true
+        # Super+B reads the browser at launch time. Other shortcuts read on reload.
+        if [ "$role" != browser ] && [ -z "${MAINSTREAM_APPS_CUSTOM_DIR:-}" ]; then
+            hyprctl reload >/dev/null 2>&1 || true
+        fi
     fi
     return "$rc"
 }
