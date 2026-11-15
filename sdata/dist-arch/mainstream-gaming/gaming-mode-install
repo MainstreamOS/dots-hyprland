@@ -3,15 +3,15 @@
 # user authenticates once. The gamescope session stack is a dependency of
 # mainstream-gaming and is already present; this pulls Steam and the 32-bit
 # Vulkan stack, kept out of the base install so non-gamers carry none of it.
-#
-# pacman -Sy (refresh) before installing these leaf packages follows the common
-# gaming-setup idiom; users who want a strict full upgrade can run their normal
-# system update first.
 set -e
 
-# Refresh up front so the resolvability checks below and the install itself
-# read the same, current databases.
+# Refresh so the checks below and the install read the current databases. New packages
+# over an out-of-date system would be a partial upgrade, so that waits for a full update.
 pacman -Sy --noconfirm
+if pacman -Qu 2>/dev/null | grep -qv '\[ignored\]'; then
+    echo "Update Mainstream from Settings > Update first, then set up Gaming Mode again." >&2
+    exit 3
+fi
 
 pkgs=(
     steam

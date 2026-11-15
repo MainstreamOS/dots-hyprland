@@ -159,7 +159,12 @@ fi
 # 1. Pull Steam + the 32-bit stack on first use (pkexec prompts for a password once).
 if ! command -v steam >/dev/null 2>&1; then
     notify "Installing Steam and the 32-bit gaming stack (one-time setup)..."
-    if ! pkexec /usr/bin/gaming-mode-install; then
+    install_rc=0
+    pkexec /usr/bin/gaming-mode-install || install_rc=$?
+    if (( install_rc == 3 )); then
+        notify -c "Update Mainstream from Settings > Update first, then press Super+G again."
+        exit 1
+    elif (( install_rc != 0 )); then
         notify -c "Setup was cancelled or failed -- staying on the desktop."
         exit 1
     fi
