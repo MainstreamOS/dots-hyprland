@@ -8,6 +8,9 @@ layout(std140, binding = 0) uniform buf {
     mat4 qt_Matrix;
     float qt_Opacity;
     float sdrPaperWhite;  // SDR reference white in nits (default 203)
+    float toneMapHdr;
+    vec2 texelStep;
+    vec2 footprint;
 };
 
 // ST.2084 (PQ) constants
@@ -48,8 +51,52 @@ vec3 linearToSrgb(vec3 c) {
     return mix(lo, hi, step(0.0031308, c));
 }
 
+// Catmull-Rom area filter adapted from Andrew Lee's end4-pC a247231.
+const int maxTaps = 8;
+
+float catmullRom(float x) {
+    x = abs(x);
+    if (x < 1.0) return (1.5 * x - 2.5) * x * x + 1.0;
+    if (x < 2.0) return ((-0.5 * x + 2.5) * x - 4.0) * x + 2.0;
+    return 0.0;
+}
+
+vec4 samplePreview() {
+    if (max(footprint.x, footprint.y) <= 0.0)
+        return texture(source, qt_TexCoord0);
+
+    vec2 scale = max(footprint, vec2(1.0));
+    vec2 stride = max(vec2(1.0), ceil(2.0 * scale / float(maxTaps)));
+    vec2 pos = qt_TexCoord0 / texelStep;
+    vec2 center = floor(pos) + 0.5;
+    vec2 weights[2 * maxTaps + 1];
+    for (int i = 0; i <= 2 * maxTaps; i++) {
+        vec2 distance = (center + float(i - maxTaps) * stride - pos) / scale;
+        weights[i] = vec2(catmullRom(distance.x), catmullRom(distance.y));
+    }
+
+    vec4 sum = vec4(0.0);
+    float weightSum = 0.0;
+    for (int y = 0; y <= 2 * maxTaps; y++) {
+        if (weights[y].y == 0.0) continue;
+        for (int x = 0; x <= 2 * maxTaps; x++) {
+            if (weights[x].x == 0.0) continue;
+            float weight = weights[x].x * weights[y].y;
+            vec2 tap = center + vec2(float(x - maxTaps), float(y - maxTaps)) * stride;
+            sum += weight * texture(source, tap * texelStep);
+            weightSum += weight;
+        }
+    }
+    vec4 color = clamp(sum / max(weightSum, 1e-6), 0.0, 1.0);
+    return vec4(min(color.rgb, vec3(color.a)), color.a);
+}
+
 void main() {
-    vec4 tex = texture(source, qt_TexCoord0);
+    vec4 tex = samplePreview();
+    if (toneMapHdr == 0.0) {
+        fragColor = tex * qt_Opacity;
+        return;
+    }
 
     // PQ decode -> linear nits
     vec3 linearHdr = pqToLinear(tex.rgb);

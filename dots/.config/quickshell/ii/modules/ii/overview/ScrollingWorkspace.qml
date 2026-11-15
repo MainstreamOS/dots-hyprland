@@ -288,6 +288,7 @@ Item {
                     HdrScreencopyView {
                         id: preview
                         anchors.fill: parent
+                        sharpenDownscale: true
                         captureSource: root.controller.captureReady && !tile.captureSuppressed && root.controller.rendering
                             && (tile.visible || root.controller.dragItem === tile) ? tile.modelData : null
                         live: !root.controller.searching && !root.controller.activationPending && root.controller.opened

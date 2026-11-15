@@ -151,6 +151,7 @@ Item { // Window
     HdrScreencopyView {
         id: windowPreview
         anchors.fill: parent
+        sharpenDownscale: true
         captureSource: (GlobalStates.overviewOpen && !root.captureSuppressed) ? root.toplevel : null
         live: true
         constraintSize: Qt.size(Math.max(1, root.targetWindowWidth), Math.max(1, root.targetWindowHeight))
