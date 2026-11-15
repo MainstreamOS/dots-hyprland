@@ -16,6 +16,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
+import "modules/settings/settings-search.js" as SettingsSearch
 // The Background page previews the wallpaper transitions; pages load by path,
 // so the module has to be named here for the scanner to find it.
 import qs.modules.ii.background
@@ -194,11 +195,109 @@ ApplicationWindow {
 
     // Every page change asks first whether an update has replaced this
     // window's files, since the page would load from them.
-    function requestPage(index) {
+    function requestPage(index, setting) {
         if (root.restarting || index < 0 || index >= root.pages.length)
             return;
+        root.pendingSetting = setting ?? null;
+        root.closeSearch();
         root.pendingPage = index;
         root.checkFiles();
+    }
+
+    property var pendingSetting: {
+        const label = Quickshell.env("QS_SETTINGS_SEARCH_LABEL");
+        const sections = Quickshell.env("QS_SETTINGS_SEARCH_SECTIONS");
+        return label ? {page: root.initialPage, sourceLabel: label, sourceSections: sections ? sections.split("\n") : []} : null;
+    }
+    property var settingsIndex: ({})
+    property bool settingsIndexLoaded: false
+    property bool settingsIndexFailed: false
+    property bool searching: false
+    property Item searchReturnFocus: null
+    readonly property var searchEntries: root.searching ? SettingsSearch.prepareEntries(root.pages, root.settingsIndex, label => Translation.tr(label)) : []
+    readonly property var searchMatches: SettingsSearch.search(root.searchEntries, searchField.text)
+
+    function openSearch() {
+        if (root.restarting) return;
+        if (!root.searching) {
+            const focused = root.activeFocusItem;
+            root.searchReturnFocus = focused !== searchField && root.isTextEntry(focused) ? focused : null;
+        }
+        root.pendingSetting = null;
+        root.searching = true;
+        if (!searchIndex.running && !root.settingsIndexLoaded) {
+            root.settingsIndexFailed = false;
+            searchIndex.running = true;
+        }
+        searchField.forceActiveFocus(Qt.ShortcutFocusReason);
+        searchField.selectAll();
+    }
+
+    function closeSearch() {
+        if (!root.searching) return;
+        root.searching = false;
+        searchField.clear();
+        searchField.focus = false;
+        const previous = root.searchReturnFocus;
+        root.searchReturnFocus = null;
+        if (previous?.visible && previous.enabled)
+            previous.forceActiveFocus(Qt.OtherFocusReason);
+        else
+            searchNavButton.forceActiveFocus(Qt.OtherFocusReason);
+    }
+
+    function openSearchResult(result) {
+        if (!result) return;
+        root.pendingSettingsSection = "";
+        root.requestPage(result.page, result.pageOnly ? null : result);
+    }
+
+    function revealSearchResult() {
+        const result = root.pendingSetting;
+        const page = pageLoader.item;
+        if (root.searching || !result || result.page !== root.currentPage || pageLoader.status !== Loader.Ready
+                || pageLoader.source.toString().split("/").pop() !== root.pages[result.page].component.split("/").pop())
+            return;
+        Qt.callLater(() => {
+            if (root.searching || root.pendingSetting !== result || pageLoader.item !== page) return;
+            root.pendingSetting = null;
+            page.revealSetting?.(Translation.tr(result.sourceLabel), result.sourceSections.map(label => Translation.tr(label)));
+        });
+    }
+
+    Process {
+        id: searchIndex
+        running: false
+        command: ["python3", "-I", Quickshell.shellPath("scripts/settings/search-index.py"), ...root.pages.map(page => page.component)]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const index = {};
+                for (const line of text.trim().split("\n")) {
+                    if (!line) continue;
+                    try {
+                        const row = JSON.parse(line);
+                        if (Array.isArray(row.entries))
+                            index[row.page] = row.entries;
+                    } catch (error) {
+                        console.warn("Could not read a Settings search entry:", error);
+                    }
+                }
+                root.settingsIndex = index;
+                root.settingsIndexLoaded = root.pages.every(page => Object.prototype.hasOwnProperty.call(index, page.component));
+                root.settingsIndexFailed = !root.settingsIndexLoaded;
+            }
+        }
+    }
+
+    Shortcut {
+        sequences: [StandardKey.Find]
+        onActivated: root.openSearch()
+    }
+
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.searching
+        onActivated: root.closeSearch()
     }
 
     // Set once an update has replaced the code this window runs. A page loaded
@@ -264,6 +363,8 @@ ApplicationWindow {
         }
         if (moving)
             root.currentPage = target;
+        else if (target !== -1)
+            root.revealSearchResult();
     }
 
     // Flags the pages already keep for work under way, some on rows inside
@@ -286,7 +387,7 @@ ApplicationWindow {
         if (root.appsUsed && (DefaultApps.busyRole !== "" || AutostartApps.busyId !== ""))
             return true;
         const focused = root.activeFocusItem;
-        if (root.isTextEntry(focused) && focused.text.length > 0)
+        if (focused !== searchField && root.isTextEntry(focused) && focused.text.length > 0)
             return true;
         const stack = pageLoader.item ? [pageLoader.item] : [];
         const seen = new Set();
@@ -321,6 +422,8 @@ ApplicationWindow {
             environment: ({
                 "QS_SETTINGS_PAGE": root.pages[index].component.split("/").pop(),
                 "QS_SETTINGS_SECTION": root.pendingSettingsSection || null,
+                "QS_SETTINGS_SEARCH_LABEL": root.pendingSetting?.sourceLabel || null,
+                "QS_SETTINGS_SEARCH_SECTIONS": root.pendingSetting?.sourceSections.join("\n") || null,
                 "QS_SETTINGS_TAB": null,
                 "QS_SHARING_FOLDER": null,
                 "QS_SETTINGS_SIZE": `${Math.round(root.width)}x${Math.round(root.height)}`,
@@ -744,11 +847,27 @@ ApplicationWindow {
                 id: navRailWrapper
                 Layout.fillHeight: true
                 Layout.margins: 5
-                // Wide enough for the longest page name, which a translation or larger text can stretch.
-                implicitWidth: Math.max(150 * Appearance.font.roomGrowth, navRail.implicitWidth)
+                implicitWidth: Math.max(150 * Appearance.font.roomGrowth, navRail.implicitWidth, searchNavButton.visualWidth)
+
+                SettingsNavButton {
+                    id: searchNavButton
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: implicitHeight
+                    toggled: root.searching
+                    buttonIcon: "search"
+                    buttonText: Translation.tr("Search")
+                    Accessible.name: buttonText
+                    onClicked: root.openSearch()
+                }
                 Flickable {
                     id: navRailFlickable
-                    anchors.fill: parent
+                    anchors.top: searchNavButton.bottom
+                    anchors.topMargin: 8
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
                     clip: true
                     contentWidth: width
                     contentHeight: navRail.implicitHeight
@@ -781,7 +900,7 @@ ApplicationWindow {
                             }
 
                             SettingsNavButton {
-                                toggled: root.currentPage === index
+                                toggled: !root.searching && root.currentPage === index
                                 onPressed: root.requestPage(index)
                                 buttonIcon: modelData.icon
                                 buttonIconRotation: modelData.iconRotation ?? 0
@@ -798,9 +917,134 @@ ApplicationWindow {
                 color: Appearance.m3colors.m3surfaceContainerLow
                 radius: Appearance.rounding.windowRounding - root.contentPadding
 
+                MaterialTextField {
+                    id: searchField
+                    visible: root.searching
+                    anchors.top: parent.top
+                    anchors.topMargin: 12
+                    anchors.left: searchResults.left
+                    anchors.right: searchResults.right
+                    implicitHeight: Math.round(48 * Appearance.font.roomGrowth)
+                    leftPadding: 36 * Appearance.font.roomGrowth
+                    rightPadding: clearSearch.visible ? clearSearch.width + 8 : 12
+                    placeholderText: Translation.tr("Search")
+                    Accessible.name: placeholderText
+                    selectByMouse: true
+                    wrapMode: TextInput.NoWrap
+                    onAccepted: root.openSearchResult(root.searchMatches[Math.max(0, searchResults.currentIndex)])
+                    Keys.onDownPressed: searchResults.incrementCurrentIndex()
+                    Keys.onUpPressed: searchResults.decrementCurrentIndex()
+
+                    MaterialSymbol {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10 * Appearance.font.roomGrowth
+                        anchors.verticalCenter: parent.verticalCenter
+                        iconSize: Appearance.font.scaled(20)
+                        color: Appearance.colors.colSubtext
+                        text: "search"
+                    }
+
+                    RippleButton {
+                        id: clearSearch
+                        visible: searchField.text.length > 0
+                        anchors.right: parent.right
+                        anchors.rightMargin: 5
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.round(32 * Appearance.font.roomGrowth)
+                        height: width
+                        buttonRadius: Appearance.rounding.full
+                        Accessible.name: Translation.tr("Clear search")
+                        onClicked: {
+                            searchField.clear();
+                            searchField.forceActiveFocus();
+                        }
+                        contentItem: MaterialSymbol {
+                            text: "close"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            iconSize: Appearance.font.scaled(17)
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
+                }
+
+                ListView {
+                    id: searchResults
+                    visible: root.searching
+                    anchors.top: searchField.bottom
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.margins: 12
+                    anchors.leftMargin: Math.max(12, (parent.width - 680 * Appearance.font.roomGrowth) / 2)
+                    anchors.rightMargin: anchors.leftMargin
+                    clip: true
+                    spacing: 4
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: root.searching ? root.searchMatches : []
+                    onModelChanged: currentIndex = model.length ? 0 : -1
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                    delegate: RippleButton {
+                        required property var modelData
+                        required property int index
+                        width: Math.max(0, ListView.view.width - 8)
+                        implicitHeight: contentItem.implicitHeight + 2 * verticalPadding
+                        horizontalPadding: 14
+                        verticalPadding: 10
+                        buttonRadius: Appearance.rounding.small
+                        colBackground: ListView.isCurrentItem ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer1
+                        Accessible.name: modelData.label
+                        Accessible.description: modelData.breadcrumb
+                        onClicked: root.openSearchResult(modelData)
+                        contentItem: RowLayout {
+                            spacing: 12
+                            MaterialSymbol {
+                                text: modelData.icon
+                                rotation: modelData.iconRotation
+                                iconSize: Appearance.font.scaled(22)
+                                color: Appearance.colors.colOnLayer1
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: modelData.label
+                                    textFormat: Text.PlainText
+                                    elide: Text.ElideRight
+                                }
+                                StyledText {
+                                    visible: modelData.breadcrumb.length > 0
+                                    Layout.fillWidth: true
+                                    text: modelData.breadcrumb
+                                    textFormat: Text.PlainText
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    color: Appearance.colors.colSubtext
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            MaterialSymbol {
+                                text: "chevron_right"
+                                iconSize: Appearance.font.scaled(18)
+                                color: Appearance.colors.colSubtext
+                            }
+                        }
+                    }
+                }
+
+                StyledText {
+                    anchors.centerIn: parent
+                    visible: root.searching && searchField.text.trim().length > 0
+                        && !searchIndex.running && searchResults.count === 0
+                    text: root.settingsIndexFailed ? Translation.tr("Unavailable") : Translation.tr("No results")
+                    color: Appearance.colors.colSubtext
+                }
+
                 Loader {
                     id: pageLoader
                     anchors.fill: parent
+                    visible: !root.searching
                     opacity: 1.0
 
                     active: Config.ready
@@ -814,6 +1058,7 @@ ApplicationWindow {
                         && (root.pages[root.currentPage]?.asynchronous ?? false)
 
                     onLoaded: {
+                        root.revealSearchResult();
                         const loadedPage = root.pages[root.currentPage].component;
                         if (loadedPage.endsWith("SharingConfig.qml"))
                             root.sharingUsed = true;

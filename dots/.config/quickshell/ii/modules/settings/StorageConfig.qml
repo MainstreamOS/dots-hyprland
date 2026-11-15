@@ -543,7 +543,7 @@ ContentPage {
                                     * diskCard.modelData.used / diskCard.modelData.total
                                 width: Math.max(0, diskBar.width * share - 2)
                                 visible: width > 1
-                                height: parent.height
+                                height: diskBar.height
                                 topLeftRadius: first ? 8 : 2
                                 bottomLeftRadius: first ? 8 : 2
                                 topRightRadius: last ? 8 : 2
@@ -660,6 +660,7 @@ ContentPage {
             Rectangle {
                 id: cleanRow
                 required property var modelData
+                readonly property string searchLabel: modelData.name
                 readonly property var found: root.cleanups[modelData.id] ?? { size: 0, items: [] }
                 readonly property bool cleaning: root.cleaningId === modelData.id
                 property bool confirming: false

@@ -10,7 +10,10 @@ import "connectivity"
 Item {
     id: root
 
+    function revealSetting(label, sections) { bluetoothPage.revealSetting(label, sections); }
+
     ContentPage {
+        id: bluetoothPage
         anchors.fill: parent
         forceWidth: true
 

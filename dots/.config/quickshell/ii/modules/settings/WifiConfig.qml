@@ -199,7 +199,10 @@ Item {
         color: Appearance.colors.colSubtext
     }
 
+    function revealSetting(label, sections) { wifiPage.revealSetting(label, sections); }
+
     ContentPage {
+        id: wifiPage
         anchors.fill: parent
         forceWidth: true
 

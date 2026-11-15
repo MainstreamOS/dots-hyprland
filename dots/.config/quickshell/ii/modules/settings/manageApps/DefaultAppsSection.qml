@@ -30,6 +30,7 @@ ContentSection {
         delegate: Rectangle {
             id: roleRow
             required property var modelData
+            readonly property string searchLabel: modelData.label
 
             Layout.fillWidth: true
             implicitHeight: 60
