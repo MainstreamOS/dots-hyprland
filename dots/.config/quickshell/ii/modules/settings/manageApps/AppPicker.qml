@@ -45,7 +45,10 @@ Item {
 
     function nameFor(entryId) {
         const entry = picker.entryFor(entryId);
-        if (entry && entry.name.length > 0) return entry.name;
+        if (entry && entry.name.length > 0) {
+            const executable = entry.command[0]?.split("/").pop();
+            return picker.roleKey === "browser" && executable === "flatpak" ? `${entry.name} (Flatpak)` : entry.name;
+        }
         // A default set by something else can name an app that is no longer
         // installed. Saying the id is more use than saying nothing.
         return entryId ?? "";

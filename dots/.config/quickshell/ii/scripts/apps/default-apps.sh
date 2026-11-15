@@ -6,14 +6,14 @@
 # that make it real, so picking one app writes every type at once instead of
 # leaving photos opening in one viewer and screenshots in another.
 #
-# Roles the keybinds launch (SUPER + B and friends) also get a file under
-# hypr/custom/, which hyprland/variables.lua reads on every reload, so the key
-# and the double click reach the same app.
+# Roles with keybinds also get a file under hypr/custom/. The browser shortcut
+# checks the default for web links first so changes take effect immediately.
 #
 #   roles                     one role per line: key, label, lua global
 #   get                       one line per role: key, desktop id
 #   candidates <role>         rank and desktop id, best fit first
 #   set <role> <desktop id>   make it the default
+#   launch-browser            open the default browser without a URL
 set -uo pipefail
 
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -229,7 +229,7 @@ find_entry_file() {
         [ -d "$dir" ] || continue
         while IFS= read -r candidate; do
             [ "$(entry_id "$dir" "$candidate")" = "$id" ] && { printf '%s\n' "$candidate"; return 0; }
-        done < <(find "$dir" -name '*.desktop' -type f 2>/dev/null)
+        done < <(find "$dir" -name '*.desktop' -xtype f 2>/dev/null)
     done < <(app_dirs)
     return 1
 }
@@ -312,6 +312,7 @@ cmd_candidates() {
 
     while read -r dir; do
         [ -d "$dir" ] || continue
+        # Flatpak exports desktop entries as symlinks to the active deployment.
         while IFS= read -r file; do
             id="$(entry_id "$dir" "$file")"
             case "$seen" in *" $id "*) continue ;; esac
@@ -350,8 +351,28 @@ cmd_candidates() {
             fi
             [ "$matched" -eq 0 ] && continue
             printf '%s\t%s\n' "$matched" "$id"
-        done < <(find "$dir" -name '*.desktop' -type f 2>/dev/null)
+        done < <(find "$dir" -name '*.desktop' -xtype f 2>/dev/null)
     done < <(app_dirs)
+}
+
+launch_browser_entry() {
+    local file
+    file="$(find_entry_file "$1")" || return 1
+    gio launch "$file" 2>/dev/null
+}
+
+cmd_launch_browser() {
+    local current rank id
+    current="$(role_current browser)"
+    if [ -n "$current" ] && launch_browser_entry "$current"; then
+        return 0
+    fi
+
+    while IFS=$'\t' read -r rank id; do
+        [ "$id" = "$current" ] && continue
+        launch_browser_entry "$id" && return 0
+    done < <(cmd_candidates browser | sort -s -n -k1,1)
+    return 1
 }
 
 cmd_set() {
@@ -400,8 +421,9 @@ case "${1:-}" in
     get)        shift; cmd_get "$@" ;;
     candidates) shift; cmd_candidates "$@" ;;
     set)        shift; cmd_set "$@" ;;
+    launch-browser) cmd_launch_browser ;;
     *)
-        echo "usage: default-apps.sh roles|get|candidates <role>|set <role> <desktop id>" >&2
+        echo "usage: default-apps.sh roles|get|candidates <role>|set <role> <desktop id>|launch-browser" >&2
         exit 2
         ;;
 esac

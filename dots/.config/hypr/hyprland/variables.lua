@@ -7,10 +7,8 @@ hl.env("qsConfig", "ii")
 -- Apps
 -- PULL REQUESTS ADDING MORE WILL NOT BE ACCEPTED, CONFIG FOR YOURSELF
 --
--- Settings > Manage writes the app chosen for a role into one file per
--- role under custom/, read here on every reload so a key opens the same app a
--- double click does. Each chain below stays the fallback for a role nobody has
--- picked: the first of those installed is what runs.
+-- Settings > Manage writes app choices under custom/ for these shortcuts.
+-- The browser shortcut reads the current default for web links at launch time.
 local HOME = os.getenv("HOME") or ""
 
 local function chosenApp(role, fallback)
@@ -25,7 +23,10 @@ local function chosenApp(role, fallback)
 end
 terminal = chosenApp("terminal", "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'kitty -1' 'foot' 'alacritty' 'wezterm' 'konsole' 'kgx' 'uxterm' 'xterm'")
 fileManager = chosenApp("fileManager", "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'nautilus --new-window' 'dolphin' 'nemo' 'thunar' 'kitty -1 fish -c yazi'")
-browser = chosenApp("browser", "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'chromium' 'zen-browser' 'firefox' 'brave' 'microsoft-edge-stable' 'opera' 'librewolf'")
+browser = "~/.config/quickshell/$qsConfig/scripts/apps/default-apps.sh launch-browser"
+    .. " || ~/.config/hypr/hyprland/scripts/launch_first_available.sh"
+    .. " 'chromium' 'zen-browser' 'firefox' 'brave' 'brave-browser' 'google-chrome-stable'"
+    .. " 'microsoft-edge-stable' 'opera' 'vivaldi' 'librewolf'"
 codeEditor = chosenApp("codeEditor", "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'windsurf' 'antigravity' 'code' 'codium' 'cursor' 'zed' 'zedit' 'zeditor' 'kate' 'gnome-text-editor' 'emacs' 'command -v nvim && kitty -1 nvim' 'command -v micro && kitty -1 micro'")
 officeSoftware = "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'wps' 'onlyoffice-desktopeditors' 'libreoffice'"
 textEditor = chosenApp("textEditor", "~/.config/hypr/hyprland/scripts/launch_first_available.sh 'kate' 'gnome-text-editor' 'emacs'")
