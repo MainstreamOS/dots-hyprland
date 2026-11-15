@@ -171,6 +171,59 @@ apply_intel_power_services() {
     return 0
 }
 
+# ── HP laptops with TI TAS2783 speaker amps ────────────────────────────────
+# Temporary: linux-firmware adds HP's speaker variant to these amps' file names and the kernel
+# does not ask for it, so they stay silent. Point each name it asks for at this laptop's own file.
+apply_hp_tas2783_firmware() {
+    [[ "$SYS_VENDOR" =~ ^(HP|Hewlett-Packard) ]] || return 0
+    local efivar=/sys/firmware/efi/efivars/HPSpeakerID-c49593a4-d099-419b-a2c3-67e980e61d1e
+    local firmware=/usr/lib/firmware amp dir ssid link uid variant want ext target linked=false
+    [[ -r "$efivar" ]] || return 0
+    # One ASCII digit after the variable's four attribute bytes.
+    variant="$(od -An -j4 -N1 -c "$efivar" 2>/dev/null | tr -d ' ')"
+    [[ "$variant" == [01] ]] || return 0
+    for amp in /sys/bus/soundwire/devices/sdw:*:*:0102:0000:*:*; do
+        [[ -e "$amp" ]] || continue
+        IFS=: read -r _ _ link _ _ _ uid <<< "${amp##*/}"
+        # The kernel names the file after the nearest PCI device above the amp.
+        ssid=""
+        dir="$(readlink -f "$amp")"
+        while [[ "$dir" == /sys/devices/* ]]; do
+            if [[ "$(readlink -f "$dir/subsystem" 2>/dev/null)" == /sys/bus/pci ]]; then
+                ssid="$(< "$dir/subsystem_device")"
+                break
+            fi
+            dir="${dir%/*}"
+        done
+        [[ "$ssid" =~ ^0x[0-9a-fA-F]{4}$ ]] || continue
+        ssid="${ssid#0x}"
+        want="${ssid^^}-${link^^}-0x${uid^^}.bin"
+        if compgen -G "$firmware/$want*" >/dev/null; then
+            # linux-firmware ships the name itself now, so a link made here earlier goes.
+            for ext in .zst .xz ""; do
+                [[ "$(readlink "$firmware/updates/$want$ext" 2>/dev/null)" == ../ti/audio/tas2783/* ]] \
+                    && rm -f -- "$firmware/updates/$want$ext"
+            done
+            continue
+        fi
+        # Only ever this board's own file.
+        for ext in .zst .xz ""; do
+            target="ti/audio/tas2783/${ssid^^}-$variant-${link^^}-0x${uid^^}.bin$ext"
+            [[ -e "$firmware/$target" ]] && break
+            target=""
+        done
+        [[ -n "$target" ]] || continue
+        [[ "$(readlink "$firmware/updates/$want$ext" 2>/dev/null)" == "../$target" ]] && continue
+        mkdir -p "$firmware/updates"
+        ln -sfn "../$target" "$firmware/updates/$want$ext"
+        linked=true
+    done
+    if $linked; then
+        log "Linked the speaker firmware for this HP laptop. The speakers work after the next restart."
+    fi
+    return 0
+}
+
 main() {
     case "${1:-}" in
         --packages) print_packages; return ;;
@@ -180,6 +233,7 @@ main() {
     apply_intel_wifi7_eht_quirk
     apply_apple_quirks
     apply_intel_power_services
+    apply_hp_tas2783_firmware
 }
 
 main "$@"
