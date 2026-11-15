@@ -107,7 +107,12 @@ Scope {
         // Build each launcher window alongside desktop startup. Opening the
         // launcher finishes any pending creation so the first request works.
         loading: true
-        onOpenRequestedChanged: if (openRequested) active = true
+        onOpenRequestedChanged: {
+            if (!openRequested || active) return;
+            active = true;
+            // This window was created during the open signal and missed it.
+            if (openRequested) item?.prepareOpen();
+        }
         Component.onCompleted: if (openRequested) active = true
 
     component: PanelWindow {
@@ -387,20 +392,21 @@ Scope {
                     panelWindow.resetDrawer();
                     flickable.contentY = 0;
                 } else {
-                    panelWindow.keyboardPrimed = panelWindow.contentItem.Window.active;
-                    panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
-                    if (!overviewScope.dontAutoCancelSearch) {
-                        searchWidget.cancelSearch();
-                    }
-                    // Reset drawer state on open.
-                    panelWindow.resetDrawer();
-                    // Focus the search box as the surface takes keyboard focus.
-                    if (panelWindow.useScrollingLauncher)
-                        Qt.callLater(panelWindow.beginScrollingLauncher);
-                    else
-                        Qt.callLater(searchWidget.focusSearchInput);
+                    panelWindow.prepareOpen();
                 }
             }
+        }
+
+        function prepareOpen() {
+            keyboardPrimed = contentItem.Window.active;
+            launcherLayout = currentWorkspaceLayout;
+            if (!overviewScope.dontAutoCancelSearch) searchWidget.cancelSearch();
+            resetDrawer();
+            // Focus the search box as the surface takes keyboard focus.
+            if (useScrollingLauncher)
+                Qt.callLater(beginScrollingLauncher);
+            else
+                Qt.callLater(searchWidget.focusSearchInput);
         }
 
         onMonitorIsFocusedChanged: {
