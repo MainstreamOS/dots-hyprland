@@ -26,8 +26,8 @@ const sites = {
 };
 const xApp = /^(x(?:\.com)?|twitter(?:\.com)?)$/;
 
-function postExcerpt(text) {
-    let excerpt = IslandText.body(text, true).split("\n")[0];
+function postExcerpt(text, markup = true) {
+    let excerpt = IslandText.body(text, markup).split("\n")[0];
     if (excerpt.length > 120) {
         // Half an emoji cannot go in an address, and a search finds whole words only.
         excerpt = excerpt.slice(0, 120).replace(/[\ud800-\udbff]$/, "");
@@ -48,8 +48,28 @@ function redditPost(title, text) {
     return page + "search/?q=" + encodeURIComponent(post) + (community ? "&restrict_sr=1" : "");
 }
 
-function siteFor(app, title, text) {
+// YouTube tags a video alert "<video id>::<uuid>", and the phone's notification key carries that tag.
+const youtubeKey = /^-?\d+\|com\.google\.android\.youtube\|-?\d+\|([\w-]{11})::[\da-f]{8}-/;
+
+// Other YouTube alerts name the channel and the video but send no link, so search
+// for them. Its own wording around the channel would only blur the search.
+function youtubeVideo(title, text, key) {
+    const video = youtubeKey.exec(String(key || ""));
+    if (video) return "https://www.youtube.com/watch?v=" + video[1];
+    // A notification title is plain text, and the video title in the text keeps every word.
+    const channel = postExcerpt(title, false).replace(/^(?:new video from\s+|live on youtube\s*:\s*)/i, "")
+        .replace(/\s+(?:uploaded|posted|is live(?: now)?|is premiering(?: now)?|premieres?(?: now)?)\s*:\s*/i, " ").trim();
+    const parts = [channel, postExcerpt(text)].filter(part => part && part.toLowerCase() !== "youtube");
+    // Drop a part the other already holds as whole words, as when the text repeats the title.
+    const words = part => " " + part.toLowerCase() + " ";
+    const query = parts.filter((part, index) => !parts.some((other, at) => at !== index
+        && words(other).includes(words(part)) && (other.length > part.length || at < index))).join(" ");
+    return query ? "https://www.youtube.com/results?search_query=" + encodeURIComponent(query) : sites.youtube;
+}
+
+function siteFor(app, title, text, key) {
     if (app === "reddit") return redditPost(String(title || "").trim(), text);
+    if (app === "youtube") return youtubeVideo(title, text, key);
     if (xApp.test(app)) {
         // The phone often sends only a post excerpt. Search X for the first
         // line, dropping a trailing ellipsis if the phone truncated it.
@@ -87,5 +107,5 @@ function linkFor(entry, urls) {
     if (found) return found;
     if (entry.phoneOrigin && xApp.test(app)) return siteFor(app, entry.summary, entry.body);
     if (webLinks[0]) return webLinks[0];
-    return entry.phoneOrigin ? siteFor(app, entry.summary, entry.body) : "";
+    return entry.phoneOrigin ? siteFor(app, entry.summary, entry.body, entry.kdeInternalId) : "";
 }
