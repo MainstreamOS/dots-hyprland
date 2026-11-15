@@ -67,9 +67,22 @@ ApplicationWindow {
         Quickshell.execDetached(["sudo", "-n", "/usr/bin/gaming-mode-switch", "set", "return-target", v]);
     }
     function setBootTarget(v) {
-        if (v === root.bootTarget) return;
+        if (v === root.bootTarget || bootTargetGaming.running) return;
+        // Booting into Gaming Mode logs in without a password, so turning it on asks for one.
+        if (v === "gaming") {
+            bootTargetGaming.running = true;
+            return;
+        }
         root.bootTarget = v;
         Quickshell.execDetached(["sudo", "-n", "/usr/bin/gaming-mode-switch", "set", "boot-target", v]);
+    }
+    Process {
+        id: bootTargetGaming
+        command: ["pkexec", "/usr/bin/gaming-mode-switch", "set", "boot-target", "gaming"]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0)
+                root.bootTarget = "gaming";
+        }
     }
     function setOpenSetup(v) {
         if (v === root.openSetup) return;

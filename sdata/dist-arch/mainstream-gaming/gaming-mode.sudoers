@@ -3,4 +3,6 @@
 # the exact gaming-mode-switch invocations -- no wildcards, nothing else is granted.
 # (boot-gaming and the boot-time reset run as root via the sddm.service ExecStartPre
 # gaming-mode-arm-check, not through sudo; `get` is read-only and needs no rule.)
-%wheel ALL=(root) NOPASSWD: /usr/bin/gaming-mode-switch gaming, /usr/bin/gaming-mode-switch desktop, /usr/bin/gaming-mode-switch logout, /usr/bin/gaming-mode-switch reset, /usr/bin/gaming-mode-switch set return-target desktop, /usr/bin/gaming-mode-switch set return-target greeter, /usr/bin/gaming-mode-switch set boot-target desktop, /usr/bin/gaming-mode-switch set boot-target gaming, /usr/bin/gaming-mode-switch set open-setup remember, /usr/bin/gaming-mode-switch set open-setup always
+# Booting straight into Gaming Mode logs in without a password at every start, so
+# turning it on goes through pkexec and asks for one.
+%wheel ALL=(root) NOPASSWD: /usr/bin/gaming-mode-switch gaming, /usr/bin/gaming-mode-switch desktop, /usr/bin/gaming-mode-switch logout, /usr/bin/gaming-mode-switch reset, /usr/bin/gaming-mode-switch set return-target desktop, /usr/bin/gaming-mode-switch set return-target greeter, /usr/bin/gaming-mode-switch set boot-target desktop, /usr/bin/gaming-mode-switch set open-setup remember, /usr/bin/gaming-mode-switch set open-setup always

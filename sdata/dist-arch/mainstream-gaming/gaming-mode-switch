@@ -24,8 +24,9 @@
 #              on the first sddm start of a cold boot when boot-target=gaming.
 #   get/set  - read/write the small Gaming Mode preference store (return-target,
 #              boot-target, open-setup, autologin-user) at /etc/mainstream-gaming/prefs.conf. `get` is read-only and
-#              unprivileged; `set` is reached via the scoped sudoers rule from the menu,
-#              and autologin-user only as root, from the Accounts page's user-manager.
+#              unprivileged; `set` is reached via the scoped sudoers rule from the menu
+#              (boot-target gaming through pkexec, with a password), and autologin-user
+#              only as root, from the Accounts page's user-manager.
 #              `get boot-account` names who a cold boot enters Gaming Mode as, if anyone.
 #
 # One-shot autologin: SDDM autologins whenever the merged [Autologin] has a non-empty
@@ -57,9 +58,11 @@ valid_login_user() {
 }
 
 # Resolve the graphical user (only for the gaming/desktop autologin). sudo keeps it in
-# SUDO_USER; fall back to logname. Must be a real, login-capable, >=1000 account.
+# SUDO_USER and pkexec in PKEXEC_UID; fall back to logname. Must be a real, login-capable,
+# >=1000 account.
 resolve_user() {
     local u="${SUDO_USER:-}"
+    [[ -z "$u" && "${PKEXEC_UID:-}" =~ ^[0-9]+$ ]] && u="$(id -nu "$PKEXEC_UID" 2>/dev/null || true)"
     [[ -z "$u" ]] && u="$(logname 2>/dev/null || true)"
     if ! valid_login_user "$u"; then
         echo "gaming-mode-switch: refusing autologin for invalid user '$u'" >&2
