@@ -461,6 +461,7 @@ Item {
                                         HdrScreencopyView {
                                             id: screencopyView
                                             anchors.fill: parent
+                                            sharpenDownscale: true
                                             captureSource: windowButton.captureSuppressed ? null : windowButton.modelData
                                             live: true
                                             paintCursor: true
