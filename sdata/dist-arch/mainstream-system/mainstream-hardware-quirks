@@ -61,6 +61,13 @@ needs_broadcom_wl() {
     [[ ! "$SYS_VENDOR" =~ ^Apple ]] && pci_has 14e4:43a0 14e4:4331
 }
 
+# HP's TAS2783 amps pick their own channel, and Linux 7.3 sends each amp only one, which
+# silences a speaker. 7.4 dropped that, so the replacement driver is only for 7.3.
+needs_tas2783_stereo_fix() {
+    [[ "$SYS_VENDOR" =~ ^(HP|Hewlett-Packard) && "$(uname -r)" == 7.3.* ]] || return 1
+    compgen -G '/sys/bus/soundwire/devices/sdw:*:*:0102:0000:*:*' >/dev/null && available mainstream-tas2783-dkms
+}
+
 # A package the repositories do not carry yet is left out, so the install never fails on it.
 available() {
     pacman -Si "$1" >/dev/null 2>&1
@@ -116,6 +123,7 @@ print_packages() {
     is_intel_laptop && (( ${CPU_MODEL:-0} >= 42 )) && packages+=(thermald)
     is_intel_hybrid_laptop && packages+=(intel-lpmd)
     needs_broadcom_wl && mapfile -t -O "${#packages[@]}" packages < <(dkms_packages broadcom-wl-dkms)
+    needs_tas2783_stereo_fix && mapfile -t -O "${#packages[@]}" packages < <(dkms_packages mainstream-tas2783-dkms)
     (( ${#packages[@]} )) && printf '%s\n' "${packages[@]}"
     return 0
 }
