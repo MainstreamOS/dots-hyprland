@@ -110,8 +110,8 @@ ApplicationWindow {
     // ── Actions ────────────────────────────────────────────────────
     function askRemove(app) {
         if (root.busy) return
-        if (app.kind === "flatpak" || app.kind === "appimage") {
-            // Flatpaks and AppImages are never blocked by other apps, so they need no dry run.
+        if (app.kind === "flatpak" || app.kind === "appimage" || app.kind === "snap") {
+            // Flatpaks, Snaps and AppImages are never blocked by other apps, so they need no dry run.
             root.confirmPkg = app.pkg
             root.confirmName = app.name
             root.confirmDid = app.desktopId || ""
@@ -145,6 +145,8 @@ ApplicationWindow {
             removeProc.command = root.confirmInst === "user"
                 ? ["/usr/local/bin/app-remover", "remove-flatpak", root.confirmPkg, "user"]
                 : ["pkexec", "/usr/local/bin/app-remover", "remove-flatpak", root.confirmPkg, "system"]
+        } else if (root.confirmKind === "snap") {
+            removeProc.command = ["pkexec", "/usr/local/bin/app-remover", "remove-snap", root.confirmPkg]
         } else {
             removeProc.command = ["pkexec", "/usr/local/bin/app-remover", "remove", root.confirmPkg]
         }

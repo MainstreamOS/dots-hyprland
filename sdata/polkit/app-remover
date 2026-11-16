@@ -26,6 +26,10 @@
 #       flatpak system helper directly); a user installation belongs to the
 #       invoking user and MUST run unprivileged.
 #
+#   remove-snap <name>
+#       snap remove the app. Base, core and snapd snaps are refused. Invoked
+#       via pkexec.
+#
 #   cleanup <desktop-id>
 #       Delete the user-level .desktop override for a just-removed app (the
 #       launcher customizations shipped in ~/.local/share/applications, e.g.
@@ -35,7 +39,8 @@
 #
 #   list also carries flatpak apps whose exported .desktop is visible — the
 #   same set the launcher shows — tagged kind:"flatpak" with their
-#   installation, so the UI can route removal.
+#   installation, so the UI can route removal. Snap apps with a visible
+#   launcher entry are listed the same way, tagged kind:"snap".
 #
 # Protection is defense-in-depth: pacman itself refuses to remove anything
 # another package still depends on, and on top of that this helper refuses
@@ -121,6 +126,17 @@ desktop_value() {  # $1 = file  $2 = key
 
 # Sum of the installed sizes a bundle removal would reclaim (its whole
 # cascade when the dry run resolves, else just the meta itself).
+# Size of the installed revision's .snap file.
+snap_size() {  # $1 = snap name
+    local rev file
+    rev="$(snap list "$1" 2>/dev/null | awk 'NR==2 {print $3}')"
+    file="/var/lib/snapd/snaps/${1}_${rev}.snap"
+    [ -n "$rev" ] && [ -f "$file" ] || return 0
+    stat -c %s "$file" | awk '{ s = $1; u = "B"; split("KiB MiB GiB TiB", a, " ")
+        for (i = 0; s >= 1024 && i < 4; ) { s /= 1024; u = a[++i] }
+        printf (i ? "%.1f %s\n" : "%d %s\n"), s, u }'
+}
+
 bundle_size() {  # $1 = bundle pkgname
     local members
     members="$(pacman -Rs --print --print-format '%n' -- "$1" 2>/dev/null)" || members="$1"
@@ -230,6 +246,35 @@ _list_entries() {
                 '{pkg:$pkg,desktopId:$did,name:$name,icon:$icon,comment:$comment,size:$size,kind:"flatpak",installation:$inst}'
         done < <(flatpak list --app --columns=application,name,size,installation 2>/dev/null)
     fi
+
+    # Snap apps whose launcher entry is visible, one row per snap.
+    local sdir=/var/lib/snapd/desktop/applications sfile sname sseen=" "
+    if command -v snap >/dev/null 2>&1 && [ -d "$sdir" ]; then
+        for sfile in "$sdir"/*.desktop; do
+            [ -f "$sfile" ] || continue
+            grep -qiE '^NoDisplay=true' "$sfile" && continue
+            did="$(basename "$sfile" .desktop)"
+            sname="${did%%_*}"
+            case "$sseen" in *" $sname "*) continue ;; esac
+            sseen+="$sname "
+            name="$(desktop_value "$sfile" Name)"
+            [ -n "$name" ] || name="$sname"
+            icon="$(desktop_value "$sfile" Icon)"
+            [ -n "$icon" ] || icon="$sname"
+            comment="$(desktop_value "$sfile" Comment)"
+            override="$user_apps/$did.desktop"
+            if [ -f "$override" ]; then
+                oname="$(desktop_value "$override" Name)"
+                oicon="$(desktop_value "$override" Icon)"
+                [ -n "$oname" ] && name="$oname"
+                [ -n "$oicon" ] && icon="$oicon"
+            fi
+            if [ "$first" -eq 1 ]; then first=0; else printf ','; fi
+            jq -nc --arg pkg "$sname" --arg did "$did" --arg name "$name" --arg icon "$icon" \
+                --arg comment "$comment" --arg size "$(snap_size "$sname")" \
+                '{pkg:$pkg,desktopId:$did,name:$name,icon:$icon,comment:$comment,size:$size,kind:"snap"}'
+        done
+    fi
     printf ']\n'
 }
 
@@ -299,11 +344,26 @@ cmd_remove_flatpak() {  # $1 = app id  $2 = installation
     echo "Removed: $app"
 }
 
+cmd_remove_snap() {  # $1 = snap name
+    local name="${1:-}" notes
+    [ -n "$name" ] || die "no snap given"
+    printf '%s' "$name" | grep -qE '^[a-z0-9][a-z0-9-]*$' || die "invalid snap name"
+    [ "$EUID" -eq 0 ] || die "snap removal must run via pkexec"
+    notes="$(snap list "$name" 2>/dev/null | awk 'NR==2 {print $NF}')"
+    [ -n "$notes" ] || die "$name is not installed"
+    case ",$notes," in
+        *,base,*|*,core,*|*,snapd,*|*,gadget,*|*,kernel,*) die "$name is a system snap" ;;
+    esac
+    snap remove "$name"
+    echo "Removed: $name"
+}
+
 case "${1:-}" in
     list)           shift; cmd_list ;;
     preview)        shift; cmd_preview "${1:-}" ;;
     remove)         shift; cmd_remove "${1:-}" ;;
     remove-flatpak) shift; cmd_remove_flatpak "${1:-}" "${2:-}" ;;
+    remove-snap)    shift; cmd_remove_snap "${1:-}" ;;
     cleanup)        shift; cmd_cleanup "${1:-}" ;;
-    *)              die "unknown subcommand: ${1:-} (expected list|preview|remove|remove-flatpak|cleanup)" ;;
+    *)              die "unknown subcommand: ${1:-} (expected list|preview|remove|remove-flatpak|remove-snap|cleanup)" ;;
 esac
