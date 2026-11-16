@@ -489,5 +489,32 @@
         "6136518679a9cbdd70e853367ae70440ecd457ed"
       ]
     }
+  },
+  "4.1.1": {
+    "date": "2026-11-16",
+    "kind": "patch",
+    "summary": "A fix and polish release: a faster launcher with sharper window previews, media controls in Flatpak browsers, Super+B that follows your default browser, safer Gaming Mode setup, and sound on HP laptops with TAS2783 speakers",
+    "changes": [
+      "The cursor stays visible after updating to Linux 7.3 on AMD Polaris graphics cards and Macs with the T2 chip",
+      "Super+B now opens your default browser, whether it is a system package or a Flatpak",
+      "Media controls now work in Flatpak browsers such as Brave and Chrome, and updates set them up for you. Brave no longer shows each track twice",
+      "Window previews in the launcher and Dock stay sharp when they are scaled down (thanks to Andrew Lee's work in end4-pC)",
+      "Setting up Gaming Mode now asks you to update from Settings → Update first when your system is out of date, instead of installing Steam over older packages",
+      "Choosing Gaming Mode under When this computer starts up in Gaming Mode setup now asks for your password, since it signs in without one at every start",
+      "On Intel Panther Lake laptops, boot entries keep the settings that find and unlock your system, and kernel updates check and repair all current boot entries",
+      "HP laptops with TAS2783 speaker amplifiers, such as the OmniBook X 14 and 17, now have sound after an update and a restart, with both speakers playing on Linux 7.3"
+    ],
+    "otherCommits": {
+      "MainstreamOS/packages": [
+        "3d308b3a3b07cffdcdc786e1115fe3251804d17c",
+        "f578f5c40c18b792c8e9c10fdfa6c7df77179569",
+        "a37f1dc5a375b5382c2b28c599818d2c9c284864",
+        "f562b290d1e5981f590dfdeab73400fd9ffbcb5f"
+      ],
+      "MainstreamOS/mpris-hyprland": [
+        "6f8b507718e2157b99e7833c7b50768805983161",
+        "4767ea0c9759b8f277ca6289aca00581bca27a18"
+      ]
+    }
   }
 }
