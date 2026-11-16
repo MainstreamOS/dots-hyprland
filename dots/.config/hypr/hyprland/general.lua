@@ -300,3 +300,42 @@ hl.config({
         force_zero_scaling = true
     }
 })
+
+-- From Linux 7.3 the hardware cursor stays invisible on AMD Polaris cards and
+-- on Macs with the T2 chip, so draw it in software there. Set
+-- cursor.no_hardware_cursors back to false in custom/general.lua to undo this.
+local function needsSoftwareCursor()
+    local release = io.open("/proc/sys/kernel/osrelease", "r")
+    local major, minor = (release and release:read("*l") or ""):match("^(%d+)%.(%d+)")
+    if release then release:close() end
+    if not major or tonumber(major) * 100 + tonumber(minor) < 703 then
+        return false
+    end
+
+    local devices = io.open("/proc/bus/pci/devices", "r")
+    if not devices then
+        return false
+    end
+    local text = devices:read("a") or ""
+    devices:close()
+
+    -- Polaris 10, 11 and 12 and Vega M, from amdgpu's device table.
+    local polaris = {}
+    for id in ("67c0 67c1 67c2 67c4 67c7 67c8 67c9 67ca 67cc 67cf 67d0 67d4 67df 6fdf "
+            .. "67e0 67e1 67e3 67e7 67e8 67e9 67eb 67ef 67ff "
+            .. "6980 6981 6985 6986 6987 698f 6995 6997 699f 694c 694e 694f"):gmatch("%x+") do
+        polaris[id] = true
+    end
+    for line in text:gmatch("[^\n]+") do
+        local vendor, device = line:match("^%x+%s+(%x%x%x%x)(%x%x%x%x)")
+        vendor, device = (vendor or ""):lower(), (device or ""):lower()
+        if (vendor == "1002" and polaris[device])
+                or (vendor == "106b" and (device == "1801" or device == "1802")) then
+            return true
+        end
+    end
+    return false
+end
+if needsSoftwareCursor() then
+    hl.config({ cursor = { no_hardware_cursors = true } })
+end
