@@ -727,7 +727,7 @@ Item {
                         Config.options.sidebar.media.showLyrics = !Config.options.sidebar.media.showLyrics;
                     }
                     StyledToolTip {
-                        text: Translation.tr("Lyrics")
+                        text: LyricsService.isYoutube ? Translation.tr("Captions") : Translation.tr("Lyrics")
                     }
                 }
 

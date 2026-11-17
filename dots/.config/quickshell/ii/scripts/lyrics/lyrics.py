@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Synced lyrics for one song from LRCLIB (https://lrclib.net).
+"""Synced lyrics for one song from LRCLIB (https://lrclib.net) or YouTube captions.
 
-Usage: lyrics.py <title> <artist> <duration in seconds, 0 when unknown>
+Usage: lyrics.py <title> <artist> <duration in seconds, 0 when unknown> [youtube_id]
 
 Prints a single line:
-    <time>§<text>§<time>§<text>§...§ok    the song's synced lyrics
-    not_found                             LRCLIB has no synced lyrics for it
+    <time>§<text>§<time>§<text>§...§ok    the song's synced lyrics or captions
+    not_found                             no synced lyrics or captions found
     no_info                               the title or the artist is missing
-    offline                               LRCLIB could not be reached
+    offline                               the service could not be reached
     rate_limited§<seconds>                LRCLIB asked for no requests until then
 """
 import email.utils
+import html
 import json
 import math
 import os
@@ -19,12 +20,15 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import xml.etree.ElementTree as ET
 
 API = "https://lrclib.net/api"
 HOMEPAGE = "https://mainstreamos.org"
 TIMEOUT = 5
 # Used when LRCLIB asks for a pause without saying how long.
 DEFAULT_RETRY_AFTER = 60
+YT_PLAYER_API = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+YT_USER_AGENT = "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip"
 
 
 class RateLimited(Exception):
@@ -159,18 +163,114 @@ def fetch_lrclib(title: str, artist: str, duration: float) -> list:
     return []
 
 
+def _yt_fetch(url: str, payload: str | None = None) -> str:
+    """Fetches a YouTube endpoint via curl and returns its response body."""
+    cmd = [
+        "curl", "--silent", "--show-error", "--compressed",
+        "--connect-timeout", "2", "--max-time", str(TIMEOUT),
+        "--max-filesize", "2097152", "--proto", "=https",
+        "--user-agent", YT_USER_AGENT,
+    ]
+    if payload is not None:
+        cmd.extend(["--header", "Content-Type: application/json", "--data-raw", payload])
+    cmd.extend(["--write-out", "\n%{http_code}", url])
+    response = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT + 1)
+    if response.returncode:
+        raise RequestFailure(f"curl exited with status {response.returncode}")
+    body, status = response.stdout.rsplit("\n", 1)
+    code = int(status)
+    if code != 200:
+        raise RequestFailure(f"HTTP {code}")
+    return body
+
+
+def _preferred_lang() -> str:
+    """Two-letter language prefix from LC_ALL/LANG, defaulting to 'en'."""
+    locale = os.environ.get("LC_ALL") or os.environ.get("LANG") or ""
+    base = locale.split(".", 1)[0].split("@", 1)[0].split("_", 1)[0].split("-", 1)[0].lower()
+    if len(base) == 2 and base.isalpha():
+        return base
+    return "en"
+
+
+def _pick_caption_track(tracks: list) -> dict:
+    """Selects the best caption track matching the user's preferred language."""
+    lang = _preferred_lang()
+
+    def rank(track: dict) -> int:
+        code = (track.get("languageCode") or "").lower()
+        asr = track.get("kind") == "asr"
+        if code == lang:
+            return 2 if asr else 0
+        if code.startswith(f"{lang}-") or code.startswith(f"{lang}_"):
+            return 3 if asr else 1
+        if code == "en":
+            return 6 if asr else 4
+        if code.startswith("en-") or code.startswith("en_"):
+            return 7 if asr else 5
+        return 8
+
+    return min(tracks, key=rank)
+
+
+def fetch_youtube_captions(video_id: str) -> list:
+    """Fetches synced captions for a YouTube video ID via the player API."""
+    payload = json.dumps({
+        "context": {
+            "client": {
+                "clientName": "ANDROID",
+                "clientVersion": "20.10.38",
+                "hl": "en",
+                "gl": "US",
+            }
+        },
+        "videoId": video_id,
+    })
+    data = json.loads(_yt_fetch(YT_PLAYER_API, payload))
+    captions = data.get("captions") if isinstance(data, dict) else None
+    renderer = captions.get("playerCaptionsTracklistRenderer") if isinstance(captions, dict) else None
+    raw_tracks = renderer.get("captionTracks") if isinstance(renderer, dict) else None
+    tracks = [t for t in (raw_tracks or []) if isinstance(t, dict) and t.get("baseUrl")]
+    if not tracks:
+        return []
+
+    chosen = _pick_caption_track(tracks)
+    xml_body = _yt_fetch(chosen["baseUrl"])
+    if not xml_body.strip():
+        return []
+    try:
+        root = ET.fromstring(xml_body)
+    except ET.ParseError as err:
+        raise RequestFailure("Invalid caption XML") from err
+
+    lines = []
+    for p in root.iter("p"):
+        if "t" not in p.attrib:
+            continue
+        stamp = round(int(p.attrib["t"]) / 1000.0, 2)
+        raw_text = re.sub(r"(?:>{2,}|\u00bb+)", " ", html.unescape("".join(p.itertext())))
+        text = " ".join(raw_text.split())
+        if not text:
+            continue
+        if lines and lines[-1]["text"] == text and abs(lines[-1]["time"] - stamp) < 0.05:
+            continue
+        lines.append({"time": stamp, "text": text})
+    return sorted(lines, key=lambda line: line["time"])
+
+
 def main():
-    if len(sys.argv) < 4 or not sys.argv[1] or not sys.argv[2]:
+    youtube_id = sys.argv[4].strip() if len(sys.argv) >= 5 else ""
+    if not youtube_id and (len(sys.argv) < 4 or not sys.argv[1] or not sys.argv[2]):
         print("no_info", flush=True)
         return
-    title = sys.argv[1]
-    artist = sys.argv[2]
+    title = sys.argv[1] if len(sys.argv) > 1 else ""
+    artist = sys.argv[2] if len(sys.argv) > 2 else ""
     try:
-        duration = float(sys.argv[3])
+        duration = float(sys.argv[3]) if len(sys.argv) > 3 else 0
     except ValueError:
         duration = 0
     try:
-        lines = fetch_lrclib(title, artist, duration)
+        lines = fetch_youtube_captions(youtube_id) if youtube_id else fetch_lrclib(title, artist, duration)
     except RateLimited as limit:
         print(f"rate_limited§{limit.seconds}", flush=True)
         return

@@ -41,12 +41,19 @@ Singleton {
     // Zero when the player does not know it: Quickshell hands out the
     // position in its place, which would be sent as the song's length.
     readonly property real trackLength: (root.activePlayer?.lengthSupported ?? false) ? root.activePlayer.length : 0
+    readonly property string trackUrl: String(root.activePlayer?.metadata?.["xesam:url"] ?? "")
+    readonly property string trackArtUrl: root.activePlayer?.trackArtUrl ?? ""
+    readonly property string youtubeId: {
+        const match = (root.trackUrl + " " + root.trackArtUrl).match(/(?:(?:i|img)\.ytimg\.com\/(?:vi|vi_webp)\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+        return match ? match[1] : "";
+    }
+    readonly property bool isYoutube: root.youtubeId !== ""
     // Which song the lyrics belong to, and what answers are filed under. A
     // player change and a track change both come down to this changing. The
     // length is left out: some players only learn it once the song is under
     // way, and live streams report one that keeps growing, so it would count
     // as a new song every time, and be asked about again on every return.
-    readonly property string trackKey: JSON.stringify([root.trackArtist, root.trackTitle])
+    readonly property string trackKey: JSON.stringify([root.trackArtist, root.trackTitle, root.youtubeId])
 
     // Which song the lyrics on show belong to, or are being looked up for.
     property string loadedKey: ""
@@ -145,7 +152,7 @@ Singleton {
                 root.syncToPosition();
             return;
         }
-        if (!root.trackTitle || !root.trackArtist) {
+        if (!root.isYoutube && (!root.trackTitle || !root.trackArtist)) {
             root.show(key, "no_info", []);
             return;
         }
@@ -157,7 +164,8 @@ Singleton {
             `${FileUtils.trimFileProtocol(Directories.scriptPath)}/lyrics/lyrics.py`,
             StringUtils.cleanMusicTitle(root.trackTitle) || root.trackTitle,
             root.trackArtist,
-            String(Math.round(root.trackLength))
+            String(Math.round(root.trackLength)),
+            root.youtubeId
         ]);
     }
 

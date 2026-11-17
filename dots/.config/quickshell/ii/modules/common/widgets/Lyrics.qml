@@ -86,7 +86,9 @@ Item {
                 wrapMode: Text.WordWrap
                 color: root.dimColor
                 font.pixelSize: Appearance.font.pixelSize.small
-                text: root.unreachable ? Translation.tr("Couldn't reach LRCLIB") : Translation.tr("No lyrics found")
+                text: root.unreachable
+                    ? (LyricsService.isYoutube ? Translation.tr("Couldn't reach YouTube") : Translation.tr("Couldn't reach LRCLIB"))
+                    : (LyricsService.isYoutube ? Translation.tr("No captions") : Translation.tr("No lyrics found"))
             }
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
