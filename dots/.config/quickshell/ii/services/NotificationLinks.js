@@ -52,10 +52,15 @@ function redditPost(title, text) {
 const youtubeKey = /^-?\d+\|com\.google\.android\.youtube\|-?\d+\|([\w-]{11})::[\da-f]{8}-/;
 
 // Other YouTube alerts name the channel and the video but send no link, so search
-// for them. Its own wording around the channel would only blur the search.
+// for them. Comment activity alerts carry no video ID, so open comment history.
 function youtubeVideo(title, text, key) {
-    const video = youtubeKey.exec(String(key || ""));
+    const rawKey = String(key || "");
+    const video = youtubeKey.exec(rawKey);
     if (video) return "https://www.youtube.com/watch?v=" + video[1];
+    if (/\bACTIVITY_COMMENT_/i.test(rawKey)
+        || /\b(?:likes? on your (?:comment|reply)|replied to|mentioned you|hearted your (?:comment|reply))\b/i.test(String(title || ""))) {
+        return "https://www.youtube.com/feed/history/comment_history";
+    }
     // A notification title is plain text, and the video title in the text keeps every word.
     const channel = postExcerpt(title, false).replace(/^(?:new video from\s+|live on youtube\s*:\s*)/i, "")
         .replace(/\s+(?:uploaded|posted|is live(?: now)?|is premiering(?: now)?|premieres?(?: now)?)\s*:\s*/i, " ").trim();

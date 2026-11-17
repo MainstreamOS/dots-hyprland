@@ -184,7 +184,7 @@ Singleton {
         && (!n.phoneOrigin || NotificationPolicy.panelFor(n) === "notifications")).map(n => ({
         id: "notification:" + n.notificationId, notificationId: n.notificationId,
         summary: n.summary, body: n.body, image: n.image, sourceApp: n.sourceApp, appName: n.appName,
-        appIcon: n.headerIcon, imageRole: n.imageRole,
+        appIcon: n.headerIcon, imageRole: n.imageRole, kdeInternalId: n.kdeInternalId,
         phoneOrigin: n.phoneOrigin, actions: n.actions, time: n.time
     }))).sort((a, b) => b.time - a.time)
     readonly property var call: calls[0] ?? null

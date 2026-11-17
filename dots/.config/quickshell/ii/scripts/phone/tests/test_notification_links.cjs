@@ -117,8 +117,33 @@ test('a YouTube video alert opens the video its phone key names', () => {
     const alert = key => ({...phone('YouTube', 'Channel', 'Video'), kdeInternalId: key});
     assert.equal(resolve(alert('0|com.google.android.youtube|0|wc58LDd96AQ::ece5218b-02f7-46f4-8301-1d167fb3d8b2|10288')),
         'https://www.youtube.com/watch?v=wc58LDd96AQ');
+    assert.equal(resolve({
+        ...phone('YouTube', '\u{1F534} Channel is live now: Stream title', 'Stream title'),
+        kdeInternalId: '0|com.google.android.youtube|0|dQw4w9WgXcQ::ece5218b-02f7-46f4-8301-1d167fb3d8b2|10288',
+    }), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     assert.equal(resolve(alert('0|com.google.android.youtube|0|qof3T-pbe-J3ncWroVopjA::14e9d6c6-3174-47bb-b3e0-cfb19d838768|10288')),
         'https://www.youtube.com/results?search_query=Channel%20Video');
+});
+
+test('a YouTube comment activity alert opens comment history', () => {
+    const commentHistory = 'https://www.youtube.com/feed/history/comment_history';
+    assert.equal(resolve({
+        ...phone('YouTube', '5 likes on your comment', '"Bro found the Darkhold lol"'),
+        kdeInternalId: '0|com.google.android.youtube|0|ACTIVITY_COMMENT_LIKE_AGGREGATED-Ugx7fyYqqjW14ZYjB794AaABAg::f1365934-5341-4012-9850-064b28093301|10253',
+    }), commentHistory);
+    assert.equal(resolve({
+        ...phone('YouTube', 'New comment activity', '"Nice video"'),
+        kdeInternalId: '0|com.google.android.youtube|0|ACTIVITY_COMMENT_REPLY-Ugx7fyYqqjW14ZYjB794AaABAg::f1365934-5341-4012-9850-064b28093301|10253',
+    }), commentHistory);
+    for (const summary of [
+        '1 like on your reply',
+        'Someone replied to your comment',
+        'Someone mentioned you in a comment',
+        'Creator hearted your comment',
+        'Creator hearted your reply',
+    ]) {
+        assert.equal(resolve(phone('YouTube', summary, '"Example comment text"')), commentHistory);
+    }
 });
 
 test('Discord uses its own actions for both mirrored and desktop notifications', () => {
