@@ -918,10 +918,11 @@ ContentPage {
 
         ContentSubsection {
             visible: Config.options.sidebar.media.enable
+            title: Translation.tr("Media")
 
-            // The Media tab has these options too, so after a click here has
-            // set one each switch goes back to following it, and a change
-            // made in the sidebar shows here.
+            // The Media tab also has a Lyrics toggle, so after a click here has
+            // set it the switch goes back to following it and a change made in
+            // the sidebar shows here.
             ConfigSwitch {
                 buttonIcon: "lyrics"
                 text: Translation.tr("Lyrics")
@@ -935,19 +936,13 @@ ContentPage {
                 buttonIcon: "palette"
                 text: Translation.tr("Album colors")
                 checked: Config.options.sidebar.media.artColors
-                onCheckedChanged: {
-                    Config.options.sidebar.media.artColors = checked;
-                    checked = Qt.binding(() => Config.options.sidebar.media.artColors);
-                }
+                onCheckedChanged: Config.options.sidebar.media.artColors = checked
             }
             ConfigSwitch {
                 buttonIcon: "blur_on"
                 text: Translation.tr("Blurred art")
                 checked: Config.options.sidebar.media.blurredBackground
-                onCheckedChanged: {
-                    Config.options.sidebar.media.blurredBackground = checked;
-                    checked = Qt.binding(() => Config.options.sidebar.media.blurredBackground);
-                }
+                onCheckedChanged: Config.options.sidebar.media.blurredBackground = checked
             }
         }
     }

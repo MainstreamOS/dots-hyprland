@@ -43,8 +43,6 @@ Item {
             // With no text field to take the keyboard, the page holds it
             // itself, so Escape and the sidebar's shortcuts still reach it.
             root.forceActiveFocus();
-        } else {
-            artMenu.close();
         }
     }
     onShownChanged: root.showChanged()
@@ -593,45 +591,6 @@ Item {
                     Layout.fillWidth: true
                     spacing: 20
 
-                    RippleButton {
-                        id: playButton
-                        Layout.fillWidth: true
-                        implicitHeight: root.playSize
-                        enabled: MprisController.canTogglePlaying
-                        buttonRadius: root.isPlaying ? Appearance.rounding.verylarge : root.playSize / 2
-                        colBackground: root.isPlaying ? root.blendedColors.colPrimary : root.blendedColors.colSecondaryContainer
-                        colBackgroundHover: root.isPlaying ? root.blendedColors.colPrimaryHover : root.blendedColors.colSecondaryContainerHover
-                        colRipple: root.isPlaying ? root.blendedColors.colPrimaryActive : root.blendedColors.colSecondaryContainerActive
-                        downAction: () => MprisController.togglePlaying()
-                        contentItem: MaterialSymbol {
-                            iconSize: Math.round(root.playSize * 0.62)
-                            fill: 1
-                            horizontalAlignment: Text.AlignHCenter
-                            color: root.isPlaying ? root.blendedColors.colOnPrimary : root.blendedColors.colOnSecondaryContainer
-                            text: root.isPlaying ? "pause" : "play_arrow"
-                            Behavior on color {
-                                animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
-                            }
-                        }
-                        StyledToolTip {
-                            text: root.isPlaying ? Translation.tr("Pause") : Translation.tr("Play")
-                        }
-                    }
-
-                    SkipButton {
-                        iconName: "skip_next"
-                        enabled: MprisController.canGoNext
-                        downAction: () => MprisController.next()
-                        StyledToolTip {
-                            text: Translation.tr("Next track")
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 20
-
                     SkipButton {
                         iconName: "skip_previous"
                         enabled: MprisController.canGoPrevious
@@ -709,17 +668,61 @@ Item {
                             }
                         }
                     }
+
+                    SkipButton {
+                        iconName: "skip_next"
+                        enabled: MprisController.canGoNext
+                        downAction: () => MprisController.next()
+                        StyledToolTip {
+                            text: Translation.tr("Next track")
+                        }
+                    }
+                }
+
+                RippleButton {
+                    id: playButton
+                    Layout.fillWidth: true
+                    implicitHeight: root.playSize
+                    enabled: MprisController.canTogglePlaying
+                    buttonRadius: Math.round(height * 0.35)
+                    buttonRadiusPressed: Math.round(height * 0.25)
+                    colBackground: root.isPlaying ? root.blendedColors.colPrimary : root.blendedColors.colSecondaryContainer
+                    colBackgroundHover: ColorUtils.mix(playButton.colBackground, "white", 0.86)
+                    colRipple: ColorUtils.mix(playButton.colBackground, "white", 0.74)
+                    downAction: () => MprisController.togglePlaying()
+                    Behavior on buttonRadius {
+                        animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
+                    }
+                    contentItem: MaterialSymbol {
+                        iconSize: Math.round(root.playSize * 0.62)
+                        fill: 1
+                        truncatedOpsz: 24
+                        font.weight: Font.Normal
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        color: root.isPlaying ? root.blendedColors.colOnPrimary : root.blendedColors.colOnSecondaryContainer
+                        text: root.isPlaying ? "pause" : "play_arrow"
+                        Behavior on color {
+                            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+                        }
+                    }
+                    StyledToolTip {
+                        text: root.isPlaying ? Translation.tr("Pause") : Translation.tr("Play")
+                    }
                 }
             }
 
-            // ── Lyrics toggle, volume, art options ──
+            // ── Lyrics toggle, volume, mute ──
             RowLayout {
                 id: utilityRow
+                readonly property real buttonInset: (root.skipSize - root.smallSize) / 2
                 Layout.fillWidth: true
                 Layout.topMargin: content.gap
-                spacing: 8
+                spacing: 20
 
                 UtilityButton {
+                    Layout.leftMargin: utilityRow.buttonInset
+                    Layout.rightMargin: utilityRow.buttonInset
                     iconName: "lyrics"
                     iconFill: root.showLyrics ? 1 : 0
                     toggled: root.showLyrics
@@ -728,15 +731,6 @@ Item {
                     }
                     StyledToolTip {
                         text: LyricsService.isYoutube ? Translation.tr("Captions") : Translation.tr("Lyrics")
-                    }
-                }
-
-                UtilityButton {
-                    iconName: root.volume <= 0 ? "volume_off" : root.volume < 0.5 ? "volume_down" : "volume_up"
-                    enabled: root.canChangeVolume
-                    downAction: () => root.toggleMute()
-                    StyledToolTip {
-                        text: root.volume > 0 ? Translation.tr("Click to mute") : Translation.tr("Click to unmute")
                     }
                 }
 
@@ -752,47 +746,13 @@ Item {
                 }
 
                 UtilityButton {
-                    id: moreButton
-                    iconName: "more_vert"
-                    toggled: artMenu.visible
-                    downAction: () => artMenu.visible ? artMenu.close() : artMenu.open()
+                    Layout.leftMargin: utilityRow.buttonInset
+                    Layout.rightMargin: utilityRow.buttonInset
+                    iconName: root.volume <= 0 ? "volume_off" : root.volume < 0.5 ? "volume_down" : "volume_up"
+                    enabled: root.canChangeVolume
+                    downAction: () => root.toggleMute()
                     StyledToolTip {
-                        text: Translation.tr("Album art")
-                        extraVisibleCondition: !artMenu.visible
-                    }
-
-                    Popup {
-                        id: artMenu
-                        width: Math.min(300, root.width - 24)
-                        x: moreButton.width - width
-                        y: -height - 8
-                        padding: 12
-                        modal: true
-                        dim: false
-                        closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
-
-                        background: Rectangle {
-                            color: Appearance.m3colors.m3surfaceContainer
-                            radius: Appearance.rounding.large
-                            border.width: 1
-                            border.color: Appearance.colors.colLayer0Border
-                        }
-
-                        contentItem: ColumnLayout {
-                            spacing: 4
-
-                            OptionSwitch {
-                                buttonIcon: "palette"
-                                text: Translation.tr("Album colors")
-                                option: "artColors"
-                            }
-
-                            OptionSwitch {
-                                buttonIcon: "blur_on"
-                                text: Translation.tr("Blurred art")
-                                option: "blurredBackground"
-                            }
-                        }
+                        text: root.volume > 0 ? Translation.tr("Click to mute") : Translation.tr("Click to unmute")
                     }
                 }
             }
@@ -828,6 +788,14 @@ Item {
         implicitWidth: root.skipSize
         implicitHeight: root.skipSize
         padding: 0
+        topPadding: 0
+        bottomPadding: 0
+        leftPadding: 0
+        rightPadding: 0
+        horizontalPadding: 0
+        verticalPadding: 0
+        opacity: 1
+        pointingHandCursor: enabled
         colBackground: "transparent"
         colBackgroundHover: "transparent"
         colRipple: "transparent"
@@ -836,8 +804,10 @@ Item {
             padding: 0
             iconSize: Math.round(root.skipSize * 0.5)
             fill: 1
+            font.weight: Font.Normal
+            font.variableAxes: ({ "FILL": 1, "opsz": 24 })
             text: skipButton.iconName
-            color: skipButton.hovered ? root.blendedColors.colSecondaryContainerHover
+            color: (skipButton.hovered && skipButton.enabled) ? root.blendedColors.colSecondaryContainerHover
                 : ColorUtils.transparentize(root.blendedColors.colSecondaryContainer, 0.7)
             colSymbol: root.blendedColors.colOnSecondaryContainer
         }
@@ -874,18 +844,6 @@ Item {
                 root.artFailed();
             else if (status === Image.Ready)
                 root.artLoaded();
-        }
-    }
-
-    // Settings has the same options, so after a click here has set one the
-    // switch goes back to following it, and a change made there shows here.
-    component OptionSwitch: ConfigSwitch {
-        id: optionSwitch
-        required property string option
-        checked: Config.options.sidebar.media[optionSwitch.option]
-        onCheckedChanged: {
-            Config.options.sidebar.media[optionSwitch.option] = optionSwitch.checked;
-            optionSwitch.checked = Qt.binding(() => Config.options.sidebar.media[optionSwitch.option]);
         }
     }
 
