@@ -56,14 +56,16 @@ Item {
     // ---- art ----
 
     readonly property string artUrl: root.player?.trackArtUrl ?? ""
+    readonly property string trackUrl: String(root.player?.metadata?.["xesam:url"] ?? "")
     readonly property string directArtUrl: {
-        if (root.artUrl.startsWith("/"))
-            return FileUtils.fileUrl(root.artUrl);
-        if (root.artUrl.startsWith("file:/") || root.artUrl.startsWith("data:image/"))
+        if (root.artUrl.startsWith("data:image/"))
             return root.artUrl;
+        const isLocal = root.artUrl.startsWith("/") || root.artUrl.startsWith("file:/");
+        if (isLocal && !root.artUrl.includes("/firefox-mpris/") && !/(?:youtube\.com|youtu\.be)\//.test(root.trackUrl))
+            return root.artUrl.startsWith("/") ? FileUtils.fileUrl(root.artUrl) : root.artUrl;
         return "";
     }
-    readonly property string artFilePath: `${Directories.coverArt}/${Qt.md5(root.artUrl)}`
+    readonly property string artFilePath: `${Directories.coverArt}/${Qt.md5(root.artUrl.includes("/firefox-mpris/") ? `${root.artUrl}|${root.trackUrl}` : root.artUrl)}`
     // Only ever given art while the page is shown, so a hidden page neither
     // downloads nor decodes anything.
     property string displayedArt: ""
@@ -146,7 +148,7 @@ Item {
         function fetch() {
             artDownloader.target = root.artFilePath;
             artDownloader.stopped = false;
-            artDownloader.command = ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), artDownloader.target, root.artUrl, "http,https,file"];
+            artDownloader.command = ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), artDownloader.target, root.artUrl, "http,https,file", root.trackUrl];
             artDownloader.running = true;
         }
         function stop() {
@@ -905,13 +907,11 @@ Item {
             ArtImage {
                 anchors.fill: parent
                 antialiasing: true
-                // Decoded once at the largest the art is ever shown, rather
-                // than again at every width the page passes through while
-                // the sidebar widens or narrows.
-                sourceSize: {
-                    const dpr = (QsWindow.window as QsWindow)?.devicePixelRatio ?? 1;
-                    return Qt.size(content.widest * dpr, content.widest * dpr);
-                }
+                smooth: true
+                mipmap: true
+                // Clear StyledImage's square sourceSize binding so non-square
+                // art decodes at full resolution before PreserveAspectCrop.
+                sourceSize: undefined
             }
         }
     }
