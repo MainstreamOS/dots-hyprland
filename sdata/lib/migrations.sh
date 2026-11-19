@@ -71,26 +71,66 @@ migrate_rust_connect_session_target() {
 }
 migrate_rust_connect_session_target "${REPO_ROOT:-}"
 
-# Earlier releases set NVIDIA's video decoding and buffer backends on hybrid laptops too, where
-# another GPU drives the display and they black out browser video. Installs are fixed by setup,
-# and this reaches the machines that update instead.
+# Earlier releases exported LIBVA_DRIVER_NAME=nvidia, GBM_BACKEND=nvidia-drm,
+# NVD_BACKEND=direct, and (pre-Jun-2026) __GLX_VENDOR_LIBRARY_NAME=nvidia
+# session-wide in custom/env.lua. Exporting them globally corrupts
+# Chrome/Chromium/Edge video playback (cross-GPU DMA-BUF import on hybrid/MUX
+# laptops and libva-nvidia-driver short-surface Chromium bugs) and breaks
+# XWayland/multi-GPU sessions, while GBM_BACKEND=nvidia-drm is obsolete on
+# modern egl-wayland and Firefox does not use nvidia-vaapi-driver without
+# manual opt-in anyway. Retire those exact Mainstream-written lines on all
+# systems while preserving any custom user values.
 migrate_hybrid_nvidia_env() {
     local repo_root="${1:-}" env_lua="$HOME/.config/hypr/custom/env.lua"
     [[ -f "$env_lua" && -r "$repo_root/sdata/lib/gpu-config.sh" ]] || return 0
-    grep -qE '^[[:space:]]*hl\.env\("(LIBVA_DRIVER_NAME|GBM_BACKEND|NVD_BACKEND)"' "$env_lua" || return 0
+    grep -qE 'LIBVA_DRIVER_NAME|GBM_BACKEND|NVD_BACKEND|__GLX_VENDOR_LIBRARY_NAME' "$env_lua" || return 0
+    local rc=0
     (
         # shellcheck source=/dev/null
         source "$repo_root/sdata/lib/gpu-config.sh" || exit 0
-        nvidia_is_display_gpu && exit 0
+        nvidia_has_offload_env "$HOME" || exit 0
         if [[ "${DRY_RUN:-false}" == true ]]; then
-            echo "[DRY-RUN] Would take NVIDIA's video settings out of custom/env.lua, since another GPU drives the display"
+            echo "[DRY-RUN] Would remove legacy NVIDIA video/GBM/GLX env lines from custom/env.lua"
             exit 0
         fi
-        nvidia_retire_offload_env "$HOME"
-    )
+        nvidia_retire_offload_env "$HOME" || exit 0
+        if ! nvidia_has_offload_env "$HOME"; then
+            exit 10
+        fi
+        exit 0
+    ) || rc=$?
+    if [[ $rc -eq 10 ]] && declare -F exp_note_relogin >/dev/null 2>&1; then
+        exp_note_relogin "The session environment changed"
+    fi
     return 0
 }
 migrate_hybrid_nvidia_env "${REPO_ROOT:-}"
+
+# Earlier versions of mainstream-gaming wrote GBM_BACKEND=nvidia-drm and
+# __GLX_VENDOR_LIBRARY_NAME=nvidia into ~/.config/environment.d/50-mainstream-gaming.conf.
+# systemd --user loads every environment.d/*.conf file into desktop sessions too,
+# leaking both variables into Hyprland, XWayland, and browsers (defeating
+# gpu-config.sh's retirement of both). gamescope drives Vulkan + DRM directly
+# via VULKAN_ADAPTER and modern libgbm auto-selects nvidia-drm_gbm.so, so strip
+# those two exact lines while preserving BACKEND, VULKAN_ADAPTER,
+# HIDE_CURSOR_DELAY_MS, and any user-chosen values.
+migrate_gaming_nvidia_env() {
+    local conf="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/50-mainstream-gaming.conf"
+    [[ -f "$conf" ]] || return 0
+    local re='^[[:space:]]*(GBM_BACKEND=("nvidia-drm"|'\''nvidia-drm'\''|nvidia-drm)|__GLX_VENDOR_LIBRARY_NAME=("nvidia"|'\''nvidia'\''|nvidia))([[:space:]]+#.*)?[[:space:]]*$'
+    grep -qE "$re" "$conf" || return 0
+    if [[ "${DRY_RUN:-false}" == true ]]; then
+        echo "[DRY-RUN] Would remove legacy NVIDIA GBM/GLX env lines from $conf"
+        return 0
+    fi
+    if sed -i --follow-symlinks -E "/${re}/d" "$conf" && ! grep -qE "$re" "$conf"; then
+        if declare -F exp_note_relogin >/dev/null 2>&1; then
+            exp_note_relogin "The session environment changed"
+        fi
+    fi
+    return 0
+}
+migrate_gaming_nvidia_env
 
 # The update that brings the Decorations carry in is run by the exp-update from
 # before it, which read its own script before the pull. That runner sources

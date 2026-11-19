@@ -540,7 +540,7 @@ hypr_config_upsert() {
 hypr_env_retire() {
     local env_lua="$1/.config/hypr/custom/env.lua" key="$2"
     [[ -f "$env_lua" ]] || return 0
-    sed -i "/hl\.env(\"${key}\"/d" "$env_lua"
+    sed -i --follow-symlinks "/hl\.env(\"${key}\"/d" "$env_lua"
 }
 
 # Extra probes/wrappers (overridable for testing).
@@ -565,8 +565,8 @@ _gpu_esp_mib() {
 }
 # Whether a proprietary NVIDIA driver is actually installed. When a legacy card
 # falls back to nouveau (its frozen branch was unavailable), forcing the
-# proprietary nvidia config + GBM_BACKEND=nvidia env black-screens the Wayland
-# session. The nvidia paths consult this and stay on nouveau when it returns 1.
+# proprietary nvidia config (modprobe, modeset, hyprland tweaks) breaks the
+# Wayland session. The nvidia paths consult this and stay on nouveau when it returns 1.
 _gpu_nvidia_has_driver() {
     local pkg
     for pkg in nvidia-utils nvidia-open nvidia-open-dkms nvidia-dkms \
@@ -656,12 +656,14 @@ HINT
 # ── nvidia_is_display_gpu ───────────────────────────────────────────────────
 # 0 when NVIDIA drives the display, 1 when an Intel or AMD GPU does on a hybrid laptop.
 # Reads sysfs rather than lspci, which would wake a suspended NVIDIA GPU.
+# Falls back to connected DRM outputs in ${GPU_DRM_PATH:-/sys/class/drm} as a
+# tiebreaker when boot_vga is ambiguous (both 0 or both 1 on a hybrid system).
 nvidia_is_display_gpu() {
     local pci_dir="${GPU_PCI_DEVICES_PATH:-/sys/bus/pci/devices}"
     [[ -d "$pci_dir" ]] || return 0
 
     local dev boot_vga class vendor
-    local nvidia_boot=0 other_boot=0 has_nvidia=false
+    local nvidia_boot=0 other_boot=0 has_nvidia=false has_other=false
 
     for dev in "$pci_dir"/*; do
         [[ -r "$dev/class" && -r "$dev/vendor" ]] || continue
@@ -681,6 +683,7 @@ nvidia_is_display_gpu() {
                 nvidia_boot=1
             fi
         else
+            has_other=true
             if [[ "$boot_vga" == "1" ]]; then
                 other_boot=1
             fi
@@ -697,44 +700,105 @@ nvidia_is_display_gpu() {
         return 1
     fi
 
+    # When boot_vga is ambiguous on a hybrid system (both 0 or both 1), use connected
+    # DRM outputs as a tiebreaker. Never read host /sys/class/drm when a caller/test
+    # overrode GPU_PCI_DEVICES_PATH without also setting GPU_DRM_PATH.
+    if [[ "$has_other" == true ]] && (( nvidia_boot == other_boot )); then
+        local drm_dir=""
+        if [[ -n "${GPU_DRM_PATH:-}" ]]; then
+            drm_dir="$GPU_DRM_PATH"
+        elif [[ -z "${GPU_PCI_DEVICES_PATH:-}" || "${GPU_PCI_DEVICES_PATH}" == "/sys/bus/pci/devices" ]]; then
+            drm_dir="/sys/class/drm"
+        fi
+        if [[ -n "$drm_dir" && -d "$drm_dir" ]]; then
+            local conn base card card_vendor
+            local nvidia_conn=0 other_conn=0
+            for conn in "$drm_dir"/card*-*; do
+                [[ -r "$conn/status" ]] || continue
+                [[ "$(< "$conn/status")" == "connected" ]] || continue
+                base="${conn##*/}"
+                card="${base%%-*}"
+                [[ -r "$drm_dir/$card/device/vendor" ]] || continue
+                card_vendor="$(< "$drm_dir/$card/device/vendor")"
+                if [[ "$card_vendor" == "0x10de" ]]; then
+                    nvidia_conn=1
+                else
+                    other_conn=1
+                fi
+            done
+            if (( other_conn == 1 && nvidia_conn == 0 )); then
+                return 1
+            fi
+        fi
+    fi
+
     return 0
 }
 
+# Exact Mainstream-written NVIDIA session env lines retired from custom/env.lua.
+# Matches single or double quotes, flexible whitespace around parens and comma,
+# optional Lua statement semicolon, and optional trailing `-- ...` comments,
+# while never matching custom values a user set by hand (e.g. iHD, egl, mesa).
+_NVIDIA_RETIRED_ENV_RE='^[[:space:]]*hl\.env[[:space:]]*\([[:space:]]*(("LIBVA_DRIVER_NAME"|'\''LIBVA_DRIVER_NAME'\'')[[:space:]]*,[[:space:]]*("nvidia"|'\''nvidia'\'')|("GBM_BACKEND"|'\''GBM_BACKEND'\'')[[:space:]]*,[[:space:]]*("nvidia-drm"|'\''nvidia-drm'\'')|("NVD_BACKEND"|'\''NVD_BACKEND'\'')[[:space:]]*,[[:space:]]*("direct"|'\''direct'\'')|("__GLX_VENDOR_LIBRARY_NAME"|'\''__GLX_VENDOR_LIBRARY_NAME'\'')[[:space:]]*,[[:space:]]*("nvidia"|'\''nvidia'\''))[[:space:]]*\)[[:space:]]*;?[[:space:]]*(--.*)?$'
+
 # ── nvidia_write_env <user_home> ────────────────────────────────────────────
-# NVIDIA Wayland env and Hyprland conf; NVD_BACKEND on Turing and Maxwell only. LIBVA/GBM only when
-# NVIDIA drives the display: set on a hybrid laptop's Intel or AMD display, they black out browser video.
-# __GLX_VENDOR_LIBRARY_NAME is NOT set (GLX-only; no effect on the native
-# Wayland/Qt6 path and breaks XWayland windows/screenshare) and is retired from
-# older installs; same for the dead wlroots-era WLR_NO_HARDWARE_CURSORS.
+# NVIDIA Wayland env cleanup and Hyprland conf.
+#
+# LIBVA_DRIVER_NAME=nvidia, GBM_BACKEND=nvidia-drm, NVD_BACKEND=direct, and
+# __GLX_VENDOR_LIBRARY_NAME=nvidia are no longer exported session-wide on any
+# NVIDIA system (desktop, hybrid Optimus, or MUX/G-Sync laptops) and are
+# retired unconditionally from older installs:
+#   - On hybrid/MUX systems where browsers render on Intel/AMD Mesa, exporting
+#     LIBVA_DRIVER_NAME=nvidia (+ NVD_BACKEND=direct) globally causes Chromium,
+#     Chrome, and Edge to decode via nvidia-vaapi-driver and import NVIDIA
+#     DMA-BUFs into Mesa, producing corrupted/flickering video playback.
+#   - libva-nvidia-driver also hits short-surface modifier/sync bugs in Chromium
+#     (corrupting or crashing small video elements/ads) and targets Firefox,
+#     which does not use nvidia-vaapi-driver without manual opt-in anyway
+#     (MOZ_DISABLE_RDD_SANDBOX=1 plus about:config flags).
+#   - GBM_BACKEND=nvidia-drm is obsolete on modern egl-wayland and breaks
+#     multi-GPU/hybrid sessions (Hyprland#4274).
+#   - __GLX_VENDOR_LIBRARY_NAME=nvidia is GLX-only (no effect on native
+#     Wayland/Qt6) and breaks XWayland windows/screenshare.
+# Only the exact Mainstream-written values are retired, so user-chosen values
+# (e.g. LIBVA_DRIVER_NAME=iHD, NVD_BACKEND=egl, __GLX_VENDOR_LIBRARY_NAME=mesa)
+# stay untouched. The dead wlroots-era WLR_NO_HARDWARE_CURSORS is also retired.
+# no_hardware_cursors and nvidia_anti_flicker stay enabled for NVIDIA outputs
+# (including external HDMI/DP outputs wired to the dGPU on hybrid laptops).
 nvidia_write_env() {
     local uh="$1"
-    hypr_env_retire "$uh" __GLX_VENDOR_LIBRARY_NAME
     hypr_env_retire "$uh" WLR_NO_HARDWARE_CURSORS
-
-    if nvidia_is_display_gpu; then
-        hypr_env_upsert "$uh" LIBVA_DRIVER_NAME nvidia
-        hypr_env_upsert "$uh" GBM_BACKEND nvidia-drm
-        case "$NVIDIA_GEN" in
-            turing|maxwell) hypr_env_upsert "$uh" NVD_BACKEND direct ;;
-        esac
-    else
-        nvidia_retire_offload_env "$uh"
-    fi
+    nvidia_retire_offload_env "$uh"
 
     hypr_config_upsert "$uh" no_hardware_cursors 'hl.config({ cursor = { no_hardware_cursors = true } })'
     hypr_config_upsert "$uh" nvidia_anti_flicker 'hl.config({ opengl = { nvidia_anti_flicker = true } })'
-    case "$NVIDIA_GEN" in
+    case "${NVIDIA_GEN:-none}" in
         maxwell) nvidia_write_qs_hint "$uh" ;;
     esac
 }
 
+# ── nvidia_has_offload_env <user_home> ──────────────────────────────────────
+# 0 when custom/env.lua still holds any of the exact Mainstream-written NVIDIA
+# video/GBM/GLX lines (LIBVA_DRIVER_NAME=nvidia, GBM_BACKEND=nvidia-drm,
+# NVD_BACKEND=direct, __GLX_VENDOR_LIBRARY_NAME=nvidia), 1 otherwise.
+nvidia_has_offload_env() {
+    local env_lua="$1/.config/hypr/custom/env.lua"
+    [[ -f "$env_lua" ]] || return 1
+    grep -qE "$_NVIDIA_RETIRED_ENV_RE" "$env_lua"
+}
+
 # ── nvidia_retire_offload_env <user_home> ───────────────────────────────────
-# Takes out the lines nvidia_write_env sets only while NVIDIA drives the display. Just those exact
-# lines, so a value the user set for one of these names is kept.
+# Removes the exact LIBVA_DRIVER_NAME=nvidia, GBM_BACKEND=nvidia-drm,
+# NVD_BACKEND=direct, and __GLX_VENDOR_LIBRARY_NAME=nvidia lines older
+# Mainstream releases wrote into custom/env.lua. Matches only those exact
+# values (with single or double quotes, flexible spaces around parens/comma,
+# or optional trailing `-- ...` comments), so any other value a user set by
+# hand is preserved. Uses --follow-symlinks so symlinked dotfiles stay linked.
 nvidia_retire_offload_env() {
     local env_lua="$1/.config/hypr/custom/env.lua"
     [[ -f "$env_lua" ]] || return 0
-    sed -i -E '/^[[:space:]]*hl\.env\("(LIBVA_DRIVER_NAME", "nvidia|GBM_BACKEND", "nvidia-drm|NVD_BACKEND", "direct)"\)[[:space:]]*$/d' "$env_lua"
+    grep -qE "$_NVIDIA_RETIRED_ENV_RE" "$env_lua" || return 0
+    sed -i --follow-symlinks -E "/${_NVIDIA_RETIRED_ENV_RE}/d" "$env_lua"
 }
 
 # ── nvidia_enable_services <enable_powerd:bool> [enable_sleep:bool] ─────────

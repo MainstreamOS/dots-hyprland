@@ -183,6 +183,10 @@ fi
 
 # 2. Generate a per-GPU session config once; the user can edit it afterwards.
 #    The gamescope-session-plus runtime sources every ~/.config/environment.d/*.conf.
+#    systemd --user also loads environment.d/*.conf into desktop sessions, so never
+#    write desktop-affecting globals (GBM_BACKEND, __GLX_VENDOR_LIBRARY_NAME) here:
+#    gamescope drives Vulkan + DRM directly via VULKAN_ADAPTER, and modern libgbm
+#    auto-selects nvidia-drm_gbm.so for NVIDIA DRM nodes without forcing it globally.
 conf_dir="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d"
 conf="$conf_dir/50-mainstream-gaming.conf"
 if [[ ! -f "$conf" ]]; then
@@ -195,8 +199,6 @@ if [[ ! -f "$conf" ]]; then
         echo "# instead of trying to nest in a (stale) parent Wayland socket and failing."
         echo "BACKEND=drm"
         if grep -qi '\[10de:' <<<"$gpu"; then
-            echo "GBM_BACKEND=nvidia-drm"
-            echo "__GLX_VENDOR_LIBRARY_NAME=nvidia"
             vk=$(grep -oiE '10de:[0-9a-f]{4}' <<<"$gpu" | head -1)
             [[ -n "$vk" ]] && echo "VULKAN_ADAPTER=${vk,,}"
             echo "# Workaround for NVIDIA cursor-hide pageflip black screen (Issue #1252):"
@@ -211,8 +213,14 @@ if [[ ! -f "$conf" ]]; then
     } > "$conf"
 fi
 
-# Ensure existing NVIDIA configs receive the cursor-hide black screen fix if not yet set
+# Maintain existing configs: drop legacy NVIDIA GBM/GLX lines earlier versions wrote
+# into environment.d (which leak into desktop sessions via systemd --user), and ensure
+# NVIDIA configs receive the cursor-hide black screen fix if not yet set.
 if [[ -f "$conf" ]]; then
+    _gm_retired_re='^[[:space:]]*(GBM_BACKEND=("nvidia-drm"|'\''nvidia-drm'\''|nvidia-drm)|__GLX_VENDOR_LIBRARY_NAME=("nvidia"|'\''nvidia'\''|nvidia))([[:space:]]+#.*)?[[:space:]]*$'
+    if grep -qE "$_gm_retired_re" "$conf"; then
+        sed -i --follow-symlinks -E "/${_gm_retired_re}/d" "$conf" 2>/dev/null || true
+    fi
     gpu_check=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
     if grep -qi '\[10de:' <<<"$gpu_check" && ! grep -q "HIDE_CURSOR_DELAY_MS" "$conf"; then
         {

@@ -277,8 +277,9 @@ export GPU_PCI_DEVICES_PATH="$NTMP/no-pci-devices"
 NVIDIA_GEN=turing; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
 GL="$(cat "$NVHOME/.config/hypr/custom/general.lua")"
-chk_str env-turing-nvd "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "direct")'* ]] && echo yes || echo no )" "yes"
-chk_str env-turing-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "nvidia")'* ]] && echo yes || echo no )" "yes"
+chk_str env-turing-no-nvd "$( [[ "$EL" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str env-turing-no-libva "$( [[ "$EL" == *'LIBVA_DRIVER_NAME'* ]] && echo present || echo absent )" "absent"
+chk_str env-turing-no-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
 chk_str env-no-wlr-cursor "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo present || echo absent )" "absent"
 chk_str env-turing-no-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
 chk_str env-turing-no-qs-hint "$( [[ "$EL" == *'QS_DISABLE_DMABUF'* ]] && echo present || echo absent )" "absent"
@@ -287,11 +288,13 @@ chk_str anti-flicker "$( [[ "$GL" == *'nvidia_anti_flicker = true'* ]] && echo y
 NVIDIA_GEN=kepler; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
 chk_str env-kepler-no-nvd "$( [[ "$EL" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str env-kepler-no-libva "$( [[ "$EL" == *'LIBVA_DRIVER_NAME'* ]] && echo present || echo absent )" "absent"
+chk_str env-kepler-no-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
 chk_str env-kepler-no-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
 
 NVIDIA_GEN=maxwell; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
-chk_str env-maxwell-nvd "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "direct")'* ]] && echo yes || echo no )" "yes"
+chk_str env-maxwell-no-nvd "$( [[ "$EL" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
 chk_str env-maxwell-qs-hint "$( [[ "$EL" == *'QS_DISABLE_DMABUF'* ]] && echo yes || echo no )" "yes"
 
 printf 'hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")\nhl.env("WLR_NO_HARDWARE_CURSORS", "1")\n' > "$NVHOME/.config/hypr/custom/env.lua"
@@ -300,7 +303,10 @@ EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
 chk_str retire-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
 chk_str retire-wlr "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo present || echo absent )" "absent"
 
-# Hybrid laptop tests: gate VA-API and GBM behind boot_vga check
+# Desktop, hybrid Optimus, and MUX/G-Sync tests:
+# LIBVA_DRIVER_NAME=nvidia, GBM_BACKEND=nvidia-drm, and NVD_BACKEND=direct are
+# never written and are always retired on every NVIDIA topology, while custom
+# user values (e.g. LIBVA_DRIVER_NAME=iHD, NVD_BACKEND=egl) are preserved.
 MOCK_PCI="$NTMP/pci_devices"; mkdir -p "$MOCK_PCI"
 export GPU_PCI_DEVICES_PATH="$MOCK_PCI"
 
@@ -310,11 +316,13 @@ echo "0x030000" > "$MOCK_PCI/0000:01:00.0/class"
 echo "0x10de" > "$MOCK_PCI/0000:01:00.0/vendor"
 echo "1" > "$MOCK_PCI/0000:01:00.0/boot_vga"
 chk_str dgpu-is-display "$(nvidia_is_display_gpu && echo yes || echo no)" "yes"
-: > "$NVHOME/.config/hypr/custom/env.lua"
+printf 'hl.env("LIBVA_DRIVER_NAME", "nvidia")\nhl.env("GBM_BACKEND", "nvidia-drm")\nhl.env("NVD_BACKEND", "direct")\nhl.env("NVD_BACKEND", "egl")\n' > "$NVHOME/.config/hypr/custom/env.lua"
 NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 2))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
-chk_str dgpu-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "nvidia")'* ]] && echo present || echo absent )" "present"
-chk_str dgpu-gbm "$( [[ "$EL" == *'hl.env("GBM_BACKEND", "nvidia-drm")'* ]] && echo present || echo absent )" "present"
+chk_str dgpu-retire-libva "$( [[ "$EL" == *'LIBVA_DRIVER_NAME'* ]] && echo present || echo absent )" "absent"
+chk_str dgpu-retire-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str dgpu-retire-nvd-direct "$( [[ "$EL" == *'"direct"'* ]] && echo present || echo absent )" "absent"
+chk_str dgpu-keeps-user-nvd "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "egl")'* ]] && echo present || echo absent )" "present"
 
 # Test 2: Hybrid laptop with Intel boot_vga=1 and NVIDIA offload boot_vga=0
 mkdir -p "$MOCK_PCI/0000:00:02.0"
@@ -323,16 +331,272 @@ echo "0x8086" > "$MOCK_PCI/0000:00:02.0/vendor"
 echo "1" > "$MOCK_PCI/0000:00:02.0/boot_vga"
 echo "0" > "$MOCK_PCI/0000:01:00.0/boot_vga"
 chk_str hybrid-not-display "$(nvidia_is_display_gpu && echo yes || echo no)" "no"
-printf 'hl.env("LIBVA_DRIVER_NAME", "nvidia")\nhl.env("GBM_BACKEND", "nvidia-drm")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+printf 'hl.env("LIBVA_DRIVER_NAME", "nvidia")\nhl.env("GBM_BACKEND", "nvidia-drm")\nhl.env("NVD_BACKEND", "direct")\nhl.env("LIBVA_DRIVER_NAME", "iHD")\n' > "$NVHOME/.config/hypr/custom/env.lua"
 NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 2))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
-chk_str hybrid-retire-libva "$( [[ "$EL" == *'LIBVA_DRIVER_NAME'* ]] && echo present || echo absent )" "absent"
-chk_str hybrid-retire-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
-printf 'hl.env("LIBVA_DRIVER_NAME", "iHD")\nhl.env("NVD_BACKEND", "direct")\n' > "$NVHOME/.config/hypr/custom/env.lua"
-nvidia_retire_offload_env "$NVHOME"; CASES=$((CASES + 2))
-EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str hybrid-retire-libva-nv "$( [[ "$EL" == *'"nvidia"'* ]] && echo present || echo absent )" "absent"
 chk_str hybrid-keeps-user-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "iHD")'* ]] && echo present || echo absent )" "present"
+chk_str hybrid-retire-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
 chk_str hybrid-retire-nvd "$( [[ "$EL" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
+
+# Test 3: MUX / G-Sync laptop (Intel boot_vga=0, NVIDIA boot_vga=1 — e.g. Alienware m17 R3)
+echo "0" > "$MOCK_PCI/0000:00:02.0/boot_vga"
+echo "1" > "$MOCK_PCI/0000:01:00.0/boot_vga"
+chk_str mux-is-display "$(nvidia_is_display_gpu && echo yes || echo no)" "yes"
+printf 'hl.env("LIBVA_DRIVER_NAME", "nvidia")\nhl.env("GBM_BACKEND", "nvidia-drm")\nhl.env("NVD_BACKEND", "direct")\nhl.env("LIBVA_DRIVER_NAME", "iHD")\nhl.env("NVD_BACKEND", "egl")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 2))
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str mux-retire-libva-nv "$( [[ "$EL" == *'"nvidia"'* ]] && echo present || echo absent )" "absent"
+chk_str mux-retire-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str mux-retire-nvd-direct "$( [[ "$EL" == *'"direct"'* ]] && echo present || echo absent )" "absent"
+chk_str mux-keeps-user-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "iHD")'* ]] && echo present || echo absent )" "present"
+chk_str mux-keeps-user-nvd "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "egl")'* ]] && echo present || echo absent )" "present"
+
+# Test 4: nvidia_is_display_gpu DRM tiebreaker when boot_vga is ambiguous (both 0 or both 1)
+echo "0" > "$MOCK_PCI/0000:00:02.0/boot_vga"
+echo "0" > "$MOCK_PCI/0000:01:00.0/boot_vga"
+MOCK_DRM="$NTMP/drm-sysfs"; mkdir -p "$MOCK_DRM/card0/device" "$MOCK_DRM/card1/device" "$MOCK_DRM/card0-eDP-1" "$MOCK_DRM/card1-DP-1"
+echo "0x8086" > "$MOCK_DRM/card0/device/vendor"
+echo "0x10de" > "$MOCK_DRM/card1/device/vendor"
+echo "connected" > "$MOCK_DRM/card0-eDP-1/status"
+echo "disconnected" > "$MOCK_DRM/card1-DP-1/status"
+export GPU_DRM_PATH="$MOCK_DRM"
+chk_str drm-tiebreak-both0-igpu "$(nvidia_is_display_gpu && echo yes || echo no)" "no"; CASES=$((CASES + 1))
+echo "1" > "$MOCK_PCI/0000:00:02.0/boot_vga"
+echo "1" > "$MOCK_PCI/0000:01:00.0/boot_vga"
+chk_str drm-tiebreak-both1-igpu "$(nvidia_is_display_gpu && echo yes || echo no)" "no"; CASES=$((CASES + 1))
+echo "connected" > "$MOCK_DRM/card1-DP-1/status"
+chk_str drm-tiebreak-dgpu "$(nvidia_is_display_gpu && echo yes || echo no)" "yes"; CASES=$((CASES + 1))
+unset GPU_DRM_PATH; rm -rf "$MOCK_DRM"
+
+# Test 5: nvidia_retire_offload_env quote, spacing, semicolon, and trailing-comment variants
+cat > "$NVHOME/.config/hypr/custom/env.lua" <<'ENVEOF'
+hl.env("LIBVA_DRIVER_NAME", "nvidia")
+hl.env('LIBVA_DRIVER_NAME', 'nvidia')
+  hl.env ( "LIBVA_DRIVER_NAME" , 'nvidia' )  -- old mainstream line
+hl.env("GBM_BACKEND","nvidia-drm"); -- trailing comment
+	hl.env( 'GBM_BACKEND' , "nvidia-drm" )
+hl.env('NVD_BACKEND', 'direct') -- direct backend
+-- hl.env("LIBVA_DRIVER_NAME", "nvidia")
+hl.env("LIBVA_DRIVER_NAME", "iHD")
+hl.env('LIBVA_DRIVER_NAME', 'i965') -- custom user comment
+hl.env("GBM_BACKEND", "dri")
+hl.env("NVD_BACKEND", "egl")
+hl.env("EDITOR", "vim")
+ENVEOF
+chk_str retire-detect-before "$(nvidia_has_offload_env "$NVHOME" && echo yes || echo no)" "yes"
+nvidia_retire_offload_env "$NVHOME"; CASES=$((CASES + 2))
+chk_str retire-detect-after "$(nvidia_has_offload_env "$NVHOME" && echo yes || echo no)" "no"
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str retire-var-no-nv-libva "$(grep -cE '^[[:space:]]*hl\.env.*LIBVA_DRIVER_NAME.*nvidia' <<<"$EL" || true)" "0"
+chk_str retire-var-no-nv-gbm "$(grep -cE '^[[:space:]]*hl\.env.*GBM_BACKEND.*nvidia-drm' <<<"$EL" || true)" "0"
+chk_str retire-var-no-nv-nvd "$(grep -cE '^[[:space:]]*hl\.env.*NVD_BACKEND.*direct' <<<"$EL" || true)" "0"
+chk_str retire-var-keeps-commented "$( [[ "$EL" == *'-- hl.env("LIBVA_DRIVER_NAME", "nvidia")'* ]] && echo present || echo absent )" "present"
+chk_str retire-var-keeps-ihd "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "iHD")'* ]] && echo present || echo absent )" "present"
+chk_str retire-var-keeps-i965 "$( [[ "$EL" == *"hl.env('LIBVA_DRIVER_NAME', 'i965') -- custom user comment"* ]] && echo present || echo absent )" "present"
+chk_str retire-var-keeps-dri "$( [[ "$EL" == *'hl.env("GBM_BACKEND", "dri")'* ]] && echo present || echo absent )" "present"
+chk_str retire-var-keeps-egl "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "egl")'* ]] && echo present || echo absent )" "present"
+chk_str retire-var-keeps-editor "$( [[ "$EL" == *'hl.env("EDITOR", "vim")'* ]] && echo present || echo absent )" "present"
+
+# Test 6: migrate_hybrid_nvidia_env (DRY_RUN, unconditional removal on MUX/desktop,
+# caller-shell exp_note_relogin on actual change, no relogin when nothing changed)
+MIG_REPO="$(cd "$DIR/../.." && pwd)"
+OLD_HOME="$HOME"; HOME="$NVHOME"
+OLD_XDG_SET="${XDG_CONFIG_HOME+set}"; OLD_XDG="${XDG_CONFIG_HOME-}"
+XDG_CONFIG_HOME="$NVHOME/.config"
+# Simulate MUX/desktop where nvidia_is_display_gpu returns 0 — migration must STILL run.
+echo "0" > "$MOCK_PCI/0000:00:02.0/boot_vga"
+echo "1" > "$MOCK_PCI/0000:01:00.0/boot_vga"
+declare -A EXP_RELOGIN_REASONS=()
+exp_note_relogin() { EXP_RELOGIN_REASONS["$1"]=1; }
+
+# 6a. DRY_RUN=true with only custom values -> silent, untouched, no relogin in caller shell
+printf 'hl.env("LIBVA_DRIVER_NAME", "iHD")\nhl.env("NVD_BACKEND", "egl")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+DRY_RUN=true; REPO_ROOT="$MIG_REPO"
+# shellcheck source=migrations.sh
+source "$DIR/migrations.sh" > "$NTMP/dry.out"
+chk_str mig-dryrun-custom-silent "$(cat "$NTMP/dry.out")" ""
+chk_str mig-dryrun-custom-kept "$(cat "$NVHOME/.config/hypr/custom/env.lua")" $'hl.env("LIBVA_DRIVER_NAME", "iHD")\nhl.env("NVD_BACKEND", "egl")'
+chk_str mig-dryrun-custom-no-relogin "${#EXP_RELOGIN_REASONS[@]}" "0"
+CASES=$((CASES + 1))
+
+# 6b. DRY_RUN=true with Mainstream line -> prints [DRY-RUN], untouched, no relogin in caller shell
+printf "hl.env('LIBVA_DRIVER_NAME', 'nvidia') -- old\nhl.env(\"NVD_BACKEND\", \"egl\")\n" > "$NVHOME/.config/hypr/custom/env.lua"
+DRY_RUN=true
+migrate_hybrid_nvidia_env "$MIG_REPO" > "$NTMP/dry.out"
+MIG_OUT="$(cat "$NTMP/dry.out")"
+chk_str mig-dryrun-hit-msg "$( [[ "$MIG_OUT" == *"[DRY-RUN]"* ]] && echo yes || echo no )" "yes"
+chk_str mig-dryrun-hit-untouched "$(grep -c "'nvidia'" "$NVHOME/.config/hypr/custom/env.lua")" "1"
+chk_str mig-dryrun-no-relogin "${#EXP_RELOGIN_REASONS[@]}" "0"
+CASES=$((CASES + 1))
+
+# 6c. DRY_RUN=false in caller shell (via sourcing migrations.sh) -> removes exact
+# Mainstream lines, preserves custom lines, and triggers exp_note_relogin in caller shell
+DRY_RUN=false
+REPO_ROOT="$MIG_REPO"
+# shellcheck source=migrations.sh
+source "$DIR/migrations.sh"
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str mig-apply-removed "$( [[ "$EL" == *"'nvidia'"* ]] && echo present || echo absent )" "absent"
+chk_str mig-apply-kept-custom "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "egl")'* ]] && echo present || echo absent )" "present"
+chk_str mig-apply-relogin "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}" "1"
+CASES=$((CASES + 1))
+
+# 6d. Re-running when nothing matches -> no relogin triggered
+EXP_RELOGIN_REASONS=()
+migrate_hybrid_nvidia_env "$MIG_REPO"
+chk_str mig-noop-no-relogin "${#EXP_RELOGIN_REASONS[@]}" "0"
+CASES=$((CASES + 1))
+
+# 6e. Strict `set -euo pipefail` (as in exp-update 0.run.sh) with actual change
+printf 'hl.env("GBM_BACKEND", "nvidia-drm")\nhl.env("LIBVA_DRIVER_NAME", "iHD")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+MIG_STRICT="$(set -euo pipefail; declare -A EXP_RELOGIN_REASONS=(); exp_note_relogin() { EXP_RELOGIN_REASONS["$1"]=1; }; DRY_RUN=false; migrate_hybrid_nvidia_env "$MIG_REPO"; printf '%s' "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}")"
+chk_str mig-strict-relogin "$MIG_STRICT" "1"
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str mig-strict-removed "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str mig-strict-kept "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "iHD")'* ]] && echo present || echo absent )" "present"
+CASES=$((CASES + 1))
+
+# 6f. Legacy v3 __GLX_VENDOR_LIBRARY_NAME=nvidia retired via updatems (migrations.sh)
+# while preserving custom user value (__GLX_VENDOR_LIBRARY_NAME=mesa)
+cat > "$NVHOME/.config/hypr/custom/env.lua" <<'GLXEOF'
+hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+hl.env('__GLX_VENDOR_LIBRARY_NAME', 'nvidia') -- legacy v3
+hl.env("__GLX_VENDOR_LIBRARY_NAME", "mesa")
+GLXEOF
+EXP_RELOGIN_REASONS=()
+DRY_RUN=false
+migrate_hybrid_nvidia_env "$MIG_REPO"
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str mig-glx-nv-removed "$( [[ "$EL" == *'nvidia'* ]] && echo present || echo absent )" "absent"
+chk_str mig-glx-mesa-kept "$( [[ "$EL" == *'hl.env("__GLX_VENDOR_LIBRARY_NAME", "mesa")'* ]] && echo present || echo absent )" "present"
+chk_str mig-glx-relogin "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}" "1"
+CASES=$((CASES + 1))
+
+# 6g. Symlinked custom/env.lua stays a symlink while target is cleaned in place
+REAL_ENV="$NTMP/real-env.lua"
+cat > "$REAL_ENV" <<'SYMEOF'
+hl.env("LIBVA_DRIVER_NAME", "nvidia")
+hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+hl.env("WLR_NO_HARDWARE_CURSORS", "1")
+hl.env("LIBVA_DRIVER_NAME", "iHD")
+SYMEOF
+rm -f "$NVHOME/.config/hypr/custom/env.lua"
+ln -s "$REAL_ENV" "$NVHOME/.config/hypr/custom/env.lua"
+NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"
+chk_str symlink-env-write-stays-link "$( [[ -L "$NVHOME/.config/hypr/custom/env.lua" ]] && echo yes || echo no )" "yes"
+chk_str symlink-env-write-cleaned "$(cat "$REAL_ENV")" 'hl.env("LIBVA_DRIVER_NAME", "iHD")'
+printf 'hl.env("NVD_BACKEND", "direct")\nhl.env("NVD_BACKEND", "egl")\n' > "$REAL_ENV"
+EXP_RELOGIN_REASONS=()
+DRY_RUN=false
+migrate_hybrid_nvidia_env "$MIG_REPO"
+chk_str symlink-env-mig-stays-link "$( [[ -L "$NVHOME/.config/hypr/custom/env.lua" ]] && echo yes || echo no )" "yes"
+chk_str symlink-env-mig-cleaned "$(cat "$REAL_ENV")" 'hl.env("NVD_BACKEND", "egl")'
+chk_str symlink-env-mig-relogin "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}" "1"
+rm -f "$NVHOME/.config/hypr/custom/env.lua" "$REAL_ENV"; : > "$NVHOME/.config/hypr/custom/env.lua"
+CASES=$((CASES + 2))
+
+# Test 7: migrate_gaming_nvidia_env (~/.config/environment.d/50-mainstream-gaming.conf)
+GCONF_DIR="$NVHOME/.config/environment.d"; GCONF="$GCONF_DIR/50-mainstream-gaming.conf"
+mkdir -p "$GCONF_DIR"
+
+# 7a. DRY_RUN=true with clean/custom-only config -> silent, untouched, no relogin
+cat > "$GCONF" <<'GCEOF'
+BACKEND=drm
+VULKAN_ADAPTER=10de:1f15
+HIDE_CURSOR_DELAY_MS=86400000
+GBM_BACKEND=dri
+__GLX_VENDOR_LIBRARY_NAME=mesa
+# GBM_BACKEND=nvidia-drm
+GCEOF
+EXP_RELOGIN_REASONS=()
+DRY_RUN=true
+migrate_gaming_nvidia_env > "$NTMP/dry.out"
+chk_str gmig-dryrun-custom-silent "$(cat "$NTMP/dry.out")" ""
+chk_str gmig-dryrun-custom-no-relogin "${#EXP_RELOGIN_REASONS[@]}" "0"
+chk_str gmig-dryrun-custom-kept "$(grep -c '^GBM_BACKEND=dri$' "$GCONF")" "1"
+CASES=$((CASES + 1))
+
+# 7b. DRY_RUN=true with Mainstream GBM/GLX lines -> prints [DRY-RUN], untouched, no relogin
+cat > "$GCONF" <<'GCEOF'
+# Generated by gaming-mode on first run -- edit freely.
+BACKEND=drm
+GBM_BACKEND=nvidia-drm
+__GLX_VENDOR_LIBRARY_NAME=nvidia
+  GBM_BACKEND="nvidia-drm" # old
+__GLX_VENDOR_LIBRARY_NAME='nvidia'
+VULKAN_ADAPTER=10de:1f15
+HIDE_CURSOR_DELAY_MS=86400000
+#ENABLE_GAMESCOPE_WSI=0
+GBM_BACKEND=dri
+__GLX_VENDOR_LIBRARY_NAME=mesa
+# GBM_BACKEND=nvidia-drm
+GCEOF
+EXP_RELOGIN_REASONS=()
+DRY_RUN=true
+migrate_gaming_nvidia_env > "$NTMP/dry.out"
+MIG_OUT="$(cat "$NTMP/dry.out")"
+chk_str gmig-dryrun-hit-msg "$( [[ "$MIG_OUT" == *"[DRY-RUN]"* ]] && echo yes || echo no )" "yes"
+chk_str gmig-dryrun-hit-untouched "$(grep -c '^GBM_BACKEND=nvidia-drm$' "$GCONF")" "1"
+chk_str gmig-dryrun-no-relogin "${#EXP_RELOGIN_REASONS[@]}" "0"
+CASES=$((CASES + 1))
+
+# 7c. DRY_RUN=false (via sourcing migrations.sh) -> removes exact legacy lines, keeps
+# BACKEND/VULKAN_ADAPTER/HIDE_CURSOR_DELAY_MS/comments/custom values, notes relogin
+EXP_RELOGIN_REASONS=()
+DRY_RUN=false; REPO_ROOT="$MIG_REPO"
+# shellcheck source=migrations.sh
+source "$DIR/migrations.sh"
+GC="$(cat "$GCONF")"
+chk_str gmig-removed-gbm-nv "$(grep -cE '^[[:space:]]*GBM_BACKEND=.*nvidia-drm' <<<"$GC" || true)" "0"
+chk_str gmig-removed-glx-nv "$(grep -cE '^[[:space:]]*__GLX_VENDOR_LIBRARY_NAME=.*nvidia' <<<"$GC" || true)" "0"
+chk_str gmig-kept-backend "$( [[ "$GC" == *'BACKEND=drm'* ]] && echo present || echo absent )" "present"
+chk_str gmig-kept-vulkan "$( [[ "$GC" == *'VULKAN_ADAPTER=10de:1f15'* ]] && echo present || echo absent )" "present"
+chk_str gmig-kept-cursor "$( [[ "$GC" == *'HIDE_CURSOR_DELAY_MS=86400000'* ]] && echo present || echo absent )" "present"
+chk_str gmig-kept-wsi-comment "$( [[ "$GC" == *'#ENABLE_GAMESCOPE_WSI=0'* ]] && echo present || echo absent )" "present"
+chk_str gmig-kept-custom-gbm "$( [[ "$GC" == *'GBM_BACKEND=dri'* ]] && echo present || echo absent )" "present"
+chk_str gmig-kept-custom-glx "$( [[ "$GC" == *'__GLX_VENDOR_LIBRARY_NAME=mesa'* ]] && echo present || echo absent )" "present"
+chk_str gmig-kept-commented-gbm "$( [[ "$GC" == *'# GBM_BACKEND=nvidia-drm'* ]] && echo present || echo absent )" "present"
+chk_str gmig-apply-relogin "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}" "1"
+CASES=$((CASES + 1))
+
+# 7d. Re-running when already clean -> no relogin triggered
+EXP_RELOGIN_REASONS=()
+migrate_gaming_nvidia_env
+chk_str gmig-noop-no-relogin "${#EXP_RELOGIN_REASONS[@]}" "0"
+CASES=$((CASES + 1))
+
+# 7e. Strict `set -euo pipefail` run with actual change
+printf 'BACKEND=drm\n__GLX_VENDOR_LIBRARY_NAME=nvidia\n' > "$GCONF"
+MIG_STRICT="$(set -euo pipefail; declare -A EXP_RELOGIN_REASONS=(); exp_note_relogin() { EXP_RELOGIN_REASONS["$1"]=1; }; DRY_RUN=false; migrate_gaming_nvidia_env; printf '%s' "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}")"
+chk_str gmig-strict-relogin "$MIG_STRICT" "1"
+chk_str gmig-strict-body "$(cat "$GCONF")" "BACKEND=drm"
+CASES=$((CASES + 1))
+
+# 7f. Symlinked 50-mainstream-gaming.conf stays a symlink and non-whitespace `#foo` is not treated as comment
+REAL_GCONF="$NTMP/real-50-mainstream-gaming.conf"
+cat > "$REAL_GCONF" <<'GSYMEOF'
+BACKEND=drm
+GBM_BACKEND=nvidia-drm
+__GLX_VENDOR_LIBRARY_NAME=nvidia
+GBM_BACKEND=nvidia-drm#foo
+VULKAN_ADAPTER=10de:1f15
+GSYMEOF
+rm -f "$GCONF"
+ln -s "$REAL_GCONF" "$GCONF"
+EXP_RELOGIN_REASONS=()
+DRY_RUN=false
+migrate_gaming_nvidia_env
+chk_str symlink-gconf-stays-link "$( [[ -L "$GCONF" ]] && echo yes || echo no )" "yes"
+chk_str symlink-gconf-cleaned "$(cat "$REAL_GCONF")" $'BACKEND=drm\nGBM_BACKEND=nvidia-drm#foo\nVULKAN_ADAPTER=10de:1f15'
+chk_str symlink-gconf-relogin "${EXP_RELOGIN_REASONS[The session environment changed]:-missing}" "1"
+rm -f "$GCONF" "$REAL_GCONF"
+CASES=$((CASES + 1))
+
+HOME="$OLD_HOME"
+if [[ "$OLD_XDG_SET" == set ]]; then XDG_CONFIG_HOME="$OLD_XDG"; else unset XDG_CONFIG_HOME; fi
+unset -f exp_note_relogin
+unset EXP_RELOGIN_REASONS DRY_RUN REPO_ROOT MIG_REPO MIG_OUT MIG_STRICT OLD_HOME OLD_XDG OLD_XDG_SET GCONF_DIR GCONF GC REAL_ENV REAL_GCONF
 export GPU_PCI_DEVICES_PATH="$NTMP/no-pci-devices"; rm -rf "$MOCK_PCI"
 
 # AQ_DRM_DEVICES is no longer written: pinning Aquamarine to one card
@@ -431,8 +695,9 @@ chk_str turing-modprobe-bytes "$(wc -c < "$MODPROBE_DIR/nvidia.conf" | tr -d ' '
 chk_str turing-no-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* || "$ENABLED" == *nvidia-hibernate* || "$ENABLED" == *nvidia-resume* ]] && echo present || echo absent )" "absent"
 chk_str turing-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
 chk_str turing-powerd "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"
-chk_str turing-env "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo yes || echo no )" "yes"
+chk_str turing-no-offload-env "$( [[ "$EV" == *'LIBVA_DRIVER_NAME'* || "$EV" == *'GBM_BACKEND'* || "$EV" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
 chk_str turing-cursor "$( [[ "$GV" == *'no_hardware_cursors = true'* ]] && echo yes || echo no )" "yes"
+chk_str turing-anti-flicker "$( [[ "$GV" == *'nvidia_anti_flicker = true'* ]] && echo yes || echo no )" "yes"
 chk_str turing-no-gsp-hook "$( [[ -f "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp" ]] && echo present || echo absent )" "absent"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 710] [10de:128b] (rev a1)"
@@ -511,10 +776,11 @@ oreset; nvidia_module_present() { return 1; }
 FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU106M [GeForce RTX 2060 Mobile] [10de:1f15] (rev a1)"
 GPU_FAILURES=()
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1))
-CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"
+CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"; GV="$(cat "$OHOME/.config/hypr/custom/general.lua")"
 chk_str stranded-no-modeset "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo present || echo absent )" "absent"
 chk_str stranded-no-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo present || echo absent )" "absent"
 chk_str stranded-no-env "$( [[ "$EV" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str stranded-no-cursor "$( [[ "$GV" == *'no_hardware_cursors'* ]] && echo present || echo absent )" "absent"
 chk_str stranded-no-services "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo present || echo absent )" "absent"
 chk_str stranded-recorded "$( [[ "${GPU_FAILURES[*]:-}" == *"no module for kernel"* ]] && echo yes || echo no )" "yes"
 nvidia_module_present() { return 0; }
