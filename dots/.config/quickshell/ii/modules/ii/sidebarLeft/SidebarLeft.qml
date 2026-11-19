@@ -20,6 +20,56 @@ Scope { // Scope
     property Item sidebarContent
     property bool detachedFocusPending: false
 
+    // Keep the focused window truly centered when the active workspace uses
+    // Hyprland's scrolling layout with focus centering enabled: pinned still
+    // keeps the sidebar open on outside clicks, without pushing windows aside.
+    property bool scrollingCentered: false
+    readonly property bool scrollingLayout: {
+        const mon = sidebarLoader.item?.monitorData;
+        const wsId = mon?.activeWorkspace?.id;
+        const ws = (wsId !== undefined && wsId !== null)
+            ? HyprlandData.workspaceById[wsId]
+            : HyprlandData.activeWorkspace;
+        return (ws?.tiledLayout ?? HyprlandData.activeWorkspace?.tiledLayout ?? "") === "scrolling";
+    }
+    readonly property bool reserveSpace: root.pin && !(root.scrollingLayout && root.scrollingCentered)
+
+    FileView {
+        id: scrollingCenterFile
+        path: Quickshell.env("HOME") + "/.config/hypr/custom/scrolling.center"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.scrollingCentered = text().trim() === "1"
+        onLoadFailed: {
+            scrollingCenterProc.running = false;
+            scrollingCenterProc.running = true;
+        }
+    }
+
+    Process {
+        id: scrollingCenterProc
+        command: ["hyprctl", "getoption", "scrolling:focus_fit_method", "-j"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.scrollingCentered = JSON.parse(text).int === 0;
+                } catch (e) {}
+            }
+        }
+    }
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name === "configreloaded") {
+                scrollingCenterFile.reload();
+                scrollingCenterProc.running = false;
+                scrollingCenterProc.running = true;
+            }
+        }
+    }
+
     function focusDetached() {
         if (!root.detachedFocusPending) return;
         if (!root.detach || !GlobalStates.sidebarLeftOpen) {
@@ -119,7 +169,7 @@ Scope { // Scope
     Binding {
         target: GlobalStates
         property: "sidebarLeftZone"
-        value: GlobalStates.sidebarLeftOpen && root.pin && !root.detach
+        value: GlobalStates.sidebarLeftOpen && root.reserveSpace && !root.detach
             ? (sidebarLoader.item?.sidebarWidth ?? 0) : 0
     }
     Binding {
@@ -133,14 +183,14 @@ Scope { // Scope
     Binding {
         target: GlobalStates
         property: "sidebarLeftCover"
-        value: GlobalStates.sidebarLeftOpen && !root.pin && !root.detach
+        value: GlobalStates.sidebarLeftOpen && !root.reserveSpace && !root.detach
             ? (sidebarLoader.item?.sidebarWidth ?? Appearance.sizes.sidebarWidth) : 0
     }
 
     function togglePin() {
         if (root.detach)
             return;
-        if (!root.pin) pinWithFunnyHyprlandWorkaroundProc.doIt()
+        if (!root.pin && !(root.scrollingLayout && root.scrollingCentered)) pinWithFunnyHyprlandWorkaroundProc.doIt()
         else root.pin = !root.pin;
     }
 
@@ -151,8 +201,11 @@ Scope { // Scope
     Connections {
         target: GlobalStates
         function onSidebarLeftOpenChanged() {
-            if (GlobalStates.sidebarLeftOpen)
+            if (GlobalStates.sidebarLeftOpen) {
                 root.applyPinnedByDefault();
+                scrollingCenterProc.running = false;
+                scrollingCenterProc.running = true;
+            }
         }
     }
 
@@ -219,7 +272,7 @@ Scope { // Scope
             }
 
             exclusionMode: ExclusionMode.Normal
-            exclusiveZone: (root.pin && GlobalStates.sidebarLeftOpen) ? sidebarWidth : 0
+            exclusiveZone: (root.reserveSpace && GlobalStates.sidebarLeftOpen) ? sidebarWidth : 0
             // Pinned, the sidebar's reserved space moves every window beside
             // it as it comes and goes, and Hyprland reports no window event
             // for that, so the window list everything else reads would keep
