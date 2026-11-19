@@ -40,8 +40,8 @@ RippleButton {
         contentColors.fill(Appearance.surfaces.raisedHover, contentColors.m3onSurface, Appearance.m3colors.m3onSurface),
         colBackground, Appearance.colors.colOnLayer1, Appearance.surfaces.raisedHover, Appearance.surfaces.raised)
     colRipple: contentColors.flash(Appearance.colors.colLayer2Active, contentColors.m3onSurface, Appearance.m3colors.m3onSurface)
-    buttonRadius: highlighted ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : height / 2
-    buttonRadiusPressed: Appearance?.rounding?.small ?? 12
+    buttonRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+    buttonRadiusPressed: (Appearance?.rounding?.small ?? 12) * Appearance.sizes.islandScale
     Accessible.name: text + ": " + subtitle
 
     Behavior on buttonRadius {
