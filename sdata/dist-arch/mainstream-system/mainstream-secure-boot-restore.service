@@ -1,0 +1,22 @@
+[Unit]
+Description=Set up Secure Boot signing again after a snapshot from before it existed
+# Only when the firmware enforces Secure Boot and this system has no signing keys in
+# sight, which is what a restored snapshot from before the setup looks like. Before
+# the snapshot services, whose first change to the boot menu would go unsigned.
+ConditionSecurity=uefi-secureboot
+ConditionPathExists=!/var/lib/sbctl/keys/db/db.key
+ConditionPathExists=!/usr/share/secureboot/keys/db/db.key
+After=local-fs.target
+Before=limine-snapper-sync.service snapper-boot.service snapper-timeline.service snapper-cleanup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/system-security sb-restore
+# 3: no keys were kept, so there is nothing to put back.
+SuccessExitStatus=3
+# The boot images are rebuilt and signed; a restart must not cut that short.
+KillMode=mixed
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=multi-user.target

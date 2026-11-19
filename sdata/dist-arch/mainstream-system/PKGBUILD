@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=30
+pkgrel=31
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -18,6 +18,12 @@ depends=(
   ipp-usb
   libdrm
   pacman-contrib
+  jq
+  sbctl
+)
+optdepends=(
+  'limine-mkinitcpio-hook: Secure Boot setup in Settings'
+  'btrfs-progs: keeping the Secure Boot signing keys across snapshot restores'
 )
 options=(!debug)
 install=mainstream-system.install
@@ -78,6 +84,10 @@ source=(
   50-mainstream-nvpcr.conf
   paccache-uninstalled.conf
   mainstream-hardware-quirks
+  system-security
+  org.mainstreamos.system-security.policy
+  limine-signed-copies
+  mainstream-secure-boot-restore.service
   limine-remember-installed
   mainstream-limine-remember.service
   efi-old-partition-hook
@@ -87,7 +97,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP
 )
 
@@ -180,8 +190,16 @@ package() {
   done
   install -Dm644 "$srcdir/paccache-uninstalled.conf" \
       "$pkgdir/usr/lib/systemd/system/paccache.service.d/50-mainstream-uninstalled.conf"
+
+  install -Dm755 "$srcdir/system-security"               "$pkgdir/usr/lib/mainstream/system-security"
+  install -Dm755 "$srcdir/limine-signed-copies"          "$pkgdir/usr/lib/mainstream/limine-signed-copies"
+  ln -s /usr/lib/mainstream/limine-signed-copies "$pkgdir/etc/boot/hooks/post.d/95-mainstream-limine-copies"
   install -Dm755 "$srcdir/efi-old-partition-hook"        "$pkgdir/etc/boot/hooks/post.d/96-mainstream-efi-old"
+  install -Dm644 "$srcdir/mainstream-secure-boot-restore.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-secure-boot-restore.service"
   install -Dm755 "$srcdir/limine-remember-installed"     "$pkgdir/usr/lib/mainstream/limine-remember-installed"
   install -Dm644 "$srcdir/mainstream-limine-remember.service" \
       "$pkgdir/usr/lib/systemd/system/mainstream-limine-remember.service"
+  install -Dm644 "$srcdir/org.mainstreamos.system-security.policy" \
+      "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.system-security.policy"
 }

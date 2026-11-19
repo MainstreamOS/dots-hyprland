@@ -1,0 +1,664 @@
+#!/usr/bin/env bash
+# system-security: privileged helper for Secure Boot in Settings > Gaming.
+# Installed at /usr/lib/mainstream/system-security and invoked via pkexec
+# (polkit action org.mainstreamos.system-security).
+#
+# Subcommands:
+#   status-sync
+#   sb-enable
+#   sb-sign
+#   sb-restore                      (signing set up again from the kept keys; run at
+#                                    startup by mainstream-secure-boot-restore.service)
+#   sb-after-restore                (run by limine-restore-auto inside the snapshot
+#                                    session once a snapshot has been restored)
+#
+# No subcommand takes an argument or a secret.
+#
+# Exit codes:
+#   0  success
+#   1  general error (one-line human reason on stderr: "system-security: <reason>")
+#   2  bad usage or argument
+#   3  precondition not met (not UEFI, not Setup Mode, started from a snapshot, or a
+#      boot setup this helper cannot change)
+#   4  package install failed (sbctl)
+#   5  sb-after-restore only: the restored system starts, but only while Secure Boot
+#      is off
+
+set -uo pipefail
+umask 022
+PATH=/usr/bin
+export PATH LC_ALL=C
+
+# Test harness root & mock binary override: strictly ignored when invoked via
+# pkexec (which strips environment variables and sets PKEXEC_UID).
+ROOT=""
+if [[ -z ${PKEXEC_UID:-} && -n ${SYSTEM_SECURITY_TEST_ROOT:-} ]]; then
+    ROOT=${SYSTEM_SECURITY_TEST_ROOT%/}
+    if [[ -n ${SYSTEM_SECURITY_TEST_BIN:-} ]]; then
+        PATH="${SYSTEM_SECURITY_TEST_BIN}:/usr/bin"
+    fi
+fi
+
+ROOT_MOUNT="${ROOT:-/}"
+
+LIMINE_DEFAULT="$ROOT/etc/default/limine"
+FSTAB="$ROOT/etc/fstab"
+STATE_DIR="$ROOT/var/lib/mainstream"
+STATE_FILE="$STATE_DIR/security-state.json"
+LOG_DIR="$ROOT/var/log/mainstream"
+LOG="$LOG_DIR/system-security.log"
+LOCK_DIR="$ROOT/run/lock"
+LOCK_FILE="$LOCK_DIR/mainstream-system-security.lock"
+EFIVARS_DIR="$ROOT/sys/firmware/efi/efivars"
+PROC_MOUNTS="$ROOT/proc/mounts"
+SBCTL_DIR="$ROOT/var/lib/sbctl"
+SBCTL_DB_KEY="$SBCTL_DIR/keys/db/db.key"
+# Kept with the logs, which have their own subvolume: a system restored from before
+# Secure Boot was set up can then still tell that its keys are kept.
+KEYS_KEPT_STAMP="$LOG_DIR/secure-boot-keys"
+COPIES_TOOL=/usr/lib/mainstream/limine-signed-copies
+[[ -n $ROOT ]] && COPIES_TOOL="${BASH_SOURCE[0]%/*}/limine-signed-copies"
+
+VERBS=(status-sync sb-enable sb-sign sb-restore sb-after-restore)
+
+TMP_BTRFS_MNT=""
+TMP_NEW_ROOT=""
+
+ROOT_DEV=""
+ROOT_FSTYPE=""
+ROOT_FS_UUID=""
+ROOT_SUBVOL=""
+ESP=""
+
+cleanup() {
+    if [[ -n $TMP_BTRFS_MNT ]]; then
+        umount "$TMP_BTRFS_MNT" >/dev/null 2>&1 || true
+        rmdir "$TMP_BTRFS_MNT" >/dev/null 2>&1 || true
+        TMP_BTRFS_MNT=""
+    fi
+    if [[ -n $TMP_NEW_ROOT ]]; then
+        umount -R "$TMP_NEW_ROOT" >/dev/null 2>&1 || umount -R -l "$TMP_NEW_ROOT" >/dev/null 2>&1 || true
+        rmdir "$TMP_NEW_ROOT" >/dev/null 2>&1 || true
+        TMP_NEW_ROOT=""
+    fi
+}
+trap cleanup EXIT
+
+log() {
+    local msg=$*
+    [[ -L $LOG ]] && return 0
+    [[ -d $LOG_DIR ]] || mkdir -p -m 755 -- "$LOG_DIR" 2>/dev/null || return 0
+    printf '%s %s\n' "$(date '+%F %T')" "${msg//[[:cntrl:]]/?}" >>"$LOG" 2>/dev/null || true
+}
+
+die() {  # $1 = exit code, $2... = message
+    local code=$1 msg
+    shift
+    msg=$*
+    log "failed ($code): $msg"
+    printf 'system-security: %s\n' "${msg//[[:cntrl:]]/?}" >&2
+    exit "$code"
+}
+
+refuse_symlinks() {
+    local p
+    for p in "$@"; do
+        [[ -L $p ]] && die 1 "refusing to work through symlink $p"
+    done
+    return 0
+}
+
+# Called with its content on stdin from a process substitution, never at the end of a
+# pipe: there it would run in a subshell and a failed write would not stop the helper.
+atomic_write() {  # $1 = target path, $2 = mode
+    local target=$1 mode=$2 dir tmp
+    refuse_symlinks "$target"
+    dir=${target%/*}
+    [[ -d $dir ]] || mkdir -p -m 755 -- "$dir" || die 1 "could not create directory $dir"
+    tmp=$(mktemp "$dir/.${target##*/}.XXXXXX") || die 1 "could not create temporary file in $dir"
+    if ! cat >"$tmp"; then
+        rm -f -- "$tmp"
+        die 1 "could not write temporary file for $target"
+    fi
+    if ! chmod "$mode" -- "$tmp"; then
+        rm -f -- "$tmp"
+        die 1 "could not set permissions on $target"
+    fi
+    sync -- "$tmp" 2>/dev/null || true
+    if ! mv -f -- "$tmp" "$target"; then
+        rm -f -- "$tmp"
+        die 1 "could not replace $target"
+    fi
+}
+
+read_efivar_flag() {
+    local file=$1 val=""
+    [[ -r $file ]] || return 1
+    val=$(od -An -t u1 -j4 -N1 -- "$file" 2>/dev/null | tr -d '[:space:]')
+    [[ $val == "1" ]]
+}
+
+# A snapshot started from the boot menu runs on the read-only snapshot itself or on an
+# overlay above it; nothing changed there lasts, while the firmware and the EFI partition
+# keep the change.
+require_installed_system() {
+    detect_root_info
+    if [[ $ROOT_FSTYPE == overlay || $ROOT_SUBVOL =~ (^|/)(@|@?\.)snapshots/[0-9]+/snapshot$ ]]; then
+        die 3 "started from a snapshot; restart into the installed system first"
+    fi
+}
+
+require_limine_tools() {
+    local tool
+    for tool in limine-update limine-mkinitcpio limine-enroll-config; do
+        command -v "$tool" >/dev/null 2>&1 || \
+            die 3 "this system does not use Mainstream's Limine boot tools ($tool is missing)"
+    done
+}
+
+detect_root_info() {
+    local src="" fstype="" fsuuid=""
+    read -r src fstype fsuuid < <(findmnt -n -o SOURCE,FSTYPE,UUID "$ROOT_MOUNT" 2>/dev/null | head -n1) || true
+    ROOT_DEV="${src%%\[*}"
+    ROOT_SUBVOL=""
+    if [[ $src == *\[*\] ]]; then
+        ROOT_SUBVOL=${src#*\[}
+        ROOT_SUBVOL=${ROOT_SUBVOL%\]}
+    fi
+    ROOT_FSTYPE="$fstype"
+    ROOT_FS_UUID="$fsuuid"
+}
+
+limine_setting() {
+    local key=$1 f line val=""
+    for f in "$ROOT"/usr/share/limine-entry-tool.d/*.conf \
+             "$ROOT/etc/limine-entry-tool.conf" \
+             "$ROOT"/etc/limine-entry-tool.d/*.conf \
+             "$LIMINE_DEFAULT"; do
+        [[ -f $f ]] || continue
+        while IFS= read -r line || [[ -n $line ]]; do
+            [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+            [[ ${BASH_REMATCH[1]} == "$key" ]] || continue
+            val=${BASH_REMATCH[2]}
+            val=${val%\"}
+            val=${val#\"}
+        done <"$f"
+    done
+    printf '%s' "$val"
+}
+
+find_esp() {
+    ESP=""
+    local p cfg
+    cfg=$(limine_setting ESP_PATH)
+    if [[ -n ${cfg// /} ]]; then
+        if [[ -d "$ROOT$cfg" ]]; then
+            ESP="$ROOT$cfg"
+            return 0
+        fi
+    fi
+    for p in /boot/efi /efi /boot /limine; do
+        [[ -d "$ROOT$p" ]] || continue
+        if [[ -z $ROOT ]]; then
+            if [[ $(findmnt -no FSTYPE -M "$p" 2>/dev/null | head -n1) == vfat ]]; then
+                ESP="$p"
+                return 0
+            fi
+        else
+            if [[ -d "$ROOT$p/EFI" || -f "$ROOT$p/limine.conf" ]]; then
+                ESP="$ROOT$p"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+has_sbctl() {
+    if [[ -n $ROOT && -n ${SYSTEM_SECURITY_TEST_NO_SBCTL:-} && -n ${SYSTEM_SECURITY_TEST_BIN:-} ]]; then
+        [[ -x "${SYSTEM_SECURITY_TEST_BIN}/sbctl" ]]
+        return $?
+    fi
+    command -v sbctl >/dev/null 2>&1
+}
+
+sbctl_has_keys() {
+    if [[ -f $SBCTL_DB_KEY || -f "$ROOT/usr/share/secureboot/keys/db/db.key" ]]; then
+        return 0
+    fi
+    if has_sbctl; then
+        local st
+        st=$(sbctl status --json 2>/dev/null || true)
+        if [[ -n $st ]] && jq -e '.installed == true' <<<"$st" >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+is_limine_file() {
+    grep -aq 'Limine [0-9]' -- "$1" 2>/dev/null
+}
+
+# sbctl verify exits 0 for an unsigned or missing file too, so its verdict is read.
+is_signed() {
+    local out line
+    out=$(sbctl verify "$1" 2>&1) || true
+    while IFS= read -r line; do
+        [[ -n $line ]] && log "sbctl verify: $line"
+    done <<<"$out"
+    grep -qF "is signed" <<<"$out" && ! grep -qiF "is not signed" <<<"$out"
+}
+
+# Everything the firmware can start: the Limine file whose config is enrolled, the other
+# copies of Limine, and the images the boot menu names. An image nothing starts, such
+# as one left by another system, is not judged.
+verify_boot_efi_files() {
+    has_sbctl || return 1
+    find_esp || return 1
+    local -a files=()
+    local f conf="$ESP/limine.conf"
+    for f in "$ESP"/EFI/limine/limine_x64.efi "$ESP"/EFI/limine/limine_aa64.efi; do
+        [[ -f $f ]] && files+=("$f")
+    done
+    (( ${#files[@]} > 0 )) || return 1
+    for f in "$ESP"/EFI/BOOT/BOOTX64.EFI "$ESP"/EFI/BOOT/BOOTAA64.EFI \
+             "$ESP"/EFI/limine/BOOTX64.EFI "$ESP"/EFI/limine/BOOTAA64.EFI; do
+        [[ -f $f ]] && is_limine_file "$f" && files+=("$f")
+    done
+    for f in "$ESP"/EFI/Linux/*.efi; do
+        [[ -f $f ]] || continue
+        if [[ ! -r $conf ]] || grep -qF -- "${f##*/}" "$conf"; then
+            files+=("$f")
+        fi
+    done
+    for f in "${files[@]}"; do
+        if ! is_signed "$f"; then
+            log "not signed: $f"
+            return 1
+        fi
+    done
+    return 0
+}
+
+# A signed Limine file with no enrolled config starts an edited boot menu, so the other
+# copies are made the same file as the enrolled one, never signed as they are.
+sync_limine_copies() {
+    find_esp || die 1 "could not find the EFI partition"
+    local -a env=(MAINSTREAM_ESP="$ESP")
+    [[ -n $ROOT ]] && env+=(MAINSTREAM_SBCTL_KEYS="$SBCTL_DB_KEY")
+    env "${env[@]}" "$COPIES_TOOL" >>"$LOG" 2>&1 || \
+        die 1 "could not bring the other copies of Limine in line with the signed one"
+}
+
+check_boot_files() {
+    sync_limine_copies
+    verify_boot_efi_files || die 1 "one or more boot files are not signed; see $LOG"
+}
+
+# Rebuilds and signs what the firmware starts, then checks every file. Nothing here
+# touches the firmware, so a failure leaves the system starting as it did before.
+sign_and_verify() {
+    limine-update >>"$LOG" 2>&1 || die 1 "limine-update failed"
+    check_boot_files
+}
+
+set_limine_default_kv() {  # $1 = KEY, $2 = VALUE
+    local key=$1 val=$2 line found=0 out=""
+    refuse_symlinks "$LIMINE_DEFAULT"
+    if [[ -f $LIMINE_DEFAULT ]]; then
+        while IFS= read -r line || [[ -n $line ]]; do
+            if [[ $line =~ ^[[:space:]]*"${key}"[[:space:]]*= ]]; then
+                if (( ! found )); then
+                    out+="${key}=${val}"$'\n'
+                    found=1
+                fi
+            else
+                out+="${line}"$'\n'
+            fi
+        done <"$LIMINE_DEFAULT"
+    fi
+    if (( ! found )); then
+        out+="${key}=${val}"$'\n'
+    fi
+    atomic_write "$LIMINE_DEFAULT" 644 < <(printf '%s' "$out")
+}
+
+root_fs_spec() {
+    if [[ -n $ROOT_FS_UUID ]]; then
+        printf 'UUID=%s' "$ROOT_FS_UUID"
+    else
+        printf '%s' "$ROOT_DEV"
+    fi
+}
+
+# Both return 1 with TMP_BTRFS_MNT still set when they fail, which the exit trap cleans.
+mount_btrfs_top() {
+    TMP_BTRFS_MNT=$(mktemp -d) || die 1 "could not create temporary mount directory"
+    mount -o subvolid=5 "$ROOT_DEV" "$TMP_BTRFS_MNT" >>"$LOG" 2>&1
+}
+
+unmount_btrfs_top() {
+    umount "$TMP_BTRFS_MNT" >>"$LOG" 2>&1 || return 1
+    rmdir "$TMP_BTRFS_MNT" 2>/dev/null || true
+    TMP_BTRFS_MNT=""
+}
+
+keys_dir_is_mounted() {
+    if [[ -z $ROOT ]]; then
+        mountpoint -q "$SBCTL_DIR" 2>/dev/null
+        return $?
+    fi
+    [[ -r $PROC_MOUNTS ]] && awk -v m="$SBCTL_DIR" '$2 == m { found=1 } END { exit !found }' "$PROC_MOUNTS" 2>/dev/null
+}
+
+fstab_add_keys_mount() {  # $1 = fs_spec (UUID=... or device)
+    local fs_spec=$1 line f2 out="" has_mnt=0
+    refuse_symlinks "$FSTAB"
+    if [[ -f $FSTAB ]]; then
+        while IFS= read -r line || [[ -n $line ]]; do
+            out+="${line}"$'\n'
+            [[ $line =~ ^[[:space:]]*($|#) ]] && continue
+            read -r _ f2 _ <<<"$line"
+            [[ $f2 == "/var/lib/sbctl" ]] && has_mnt=1
+        done <"$FSTAB"
+    fi
+    (( has_mnt )) && return 0
+    # nofail: a system must still start if the subvolume is ever gone.
+    out+="${fs_spec} /var/lib/sbctl btrfs subvol=/@sbctl,noatime,nofail 0 0"$'\n'
+    atomic_write "$FSTAB" 644 < <(printf '%s' "$out")
+}
+
+# The signing keys live on their own subvolume. A snapshot holds only the root, so
+# going back to one from before Secure Boot was set up would otherwise take the keys
+# away while the firmware still refuses anything unsigned.
+# $1 = kept: attach only a subvolume that already holds keys; returns 1 when none does.
+attach_keys_subvolume() {
+    local mode=${1:-create} sub have_kept=0
+    if [[ $ROOT_FSTYPE != btrfs || -z $ROOT_DEV ]]; then
+        [[ $mode == create ]]
+        return
+    fi
+    keys_dir_is_mounted && return 0
+
+    mount_btrfs_top || die 1 "failed to mount Btrfs top-level volume $ROOT_DEV"
+    sub="$TMP_BTRFS_MNT/@sbctl"
+    [[ -f $sub/keys/db/db.key ]] && have_kept=1
+    if (( ! have_kept )) && [[ $mode == kept ]]; then
+        unmount_btrfs_top || true
+        return 1
+    fi
+    if [[ ! -d $sub ]]; then
+        btrfs subvolume create "$sub" >>"$LOG" 2>&1 || die 1 "failed to create @sbctl subvolume"
+    fi
+    # Keys made before the subvolume existed move into it, out of the snapshotted root.
+    if (( ! have_kept )) && [[ -f $SBCTL_DB_KEY ]]; then
+        cp -a -- "$SBCTL_DIR/." "$sub/" >>"$LOG" 2>&1 && diff -r -- "$SBCTL_DIR" "$sub" >/dev/null 2>&1 || \
+            die 1 "could not move the signing keys to their own subvolume"
+        find "$SBCTL_DIR" -mindepth 1 -delete >>"$LOG" 2>&1 || \
+            die 1 "could not clear the old copy of the signing keys"
+    fi
+    unmount_btrfs_top || die 1 "failed to unmount temporary Btrfs root"
+
+    mkdir -p -m 755 -- "$SBCTL_DIR" || die 1 "failed to create $SBCTL_DIR"
+    fstab_add_keys_mount "$(root_fs_spec)"
+    mount -o subvol=/@sbctl,noatime "$ROOT_DEV" "$SBCTL_DIR" >>"$LOG" 2>&1 || \
+        die 1 "failed to mount the signing keys subvolume"
+    return 0
+}
+
+mark_keys_kept() {
+    keys_dir_is_mounted || return 0
+    atomic_write "$KEYS_KEPT_STAMP" 644 <<<"$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+}
+
+# ── Subcommands ──────────────────────────────────────────────────────────────
+
+cmd_status_sync() {
+    (( $# == 0 )) || die 2 "usage: status-sync"
+    refuse_symlinks "$STATE_FILE" "$LOG"
+
+    local sb_keys=false sb_verified=false synced_at
+
+    if has_sbctl; then
+        if sbctl_has_keys; then
+            sb_keys=true
+        fi
+        if [[ $sb_keys == true ]] && verify_boot_efi_files; then
+            sb_verified=true
+        fi
+    fi
+
+    synced_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+    local state
+    state=$(jq -nc \
+        --argjson sbctlKeysExist "$sb_keys" \
+        --argjson sbctlVerified "$sb_verified" \
+        --arg lastSynced "$synced_at" \
+        '{
+            sbctlKeysExist: $sbctlKeysExist,
+            sbctlVerified: $sbctlVerified,
+            lastSynced: $lastSynced
+        }') || die 1 "could not build the security state"
+    atomic_write "$STATE_FILE" 644 <<<"$state"
+
+    log "status-sync: sbctlKeys=$sb_keys sbctlVerified=$sb_verified"
+}
+
+cmd_sb_enable() {
+    (( $# == 0 )) || die 2 "usage: sb-enable"
+    refuse_symlinks "$LIMINE_DEFAULT" "$STATE_FILE" "$LOG"
+
+    [[ -d $EFIVARS_DIR ]] || die 3 "Secure Boot requires UEFI firmware (system is in legacy BIOS mode)"
+    read_efivar_flag "$EFIVARS_DIR/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c" || \
+        die 3 "UEFI is not in Setup Mode; reboot to UEFI firmware setup and clear Secure Boot keys first"
+    require_installed_system
+    require_limine_tools
+
+    if ! has_sbctl; then
+        log "sb-enable: installing sbctl"
+        pacman -S --needed --noconfirm sbctl </dev/null >>"$LOG" 2>&1 || \
+            die 4 "failed to install sbctl package"
+    fi
+
+    refuse_symlinks "$FSTAB"
+    attach_keys_subvolume create
+    if ! sbctl_has_keys; then
+        log "sb-enable: creating Secure Boot keys"
+        sbctl create-keys >>"$LOG" 2>&1 || die 1 "sbctl failed to create Secure Boot keys"
+    fi
+
+    set_limine_default_kv ENABLE_ENROLL_LIMINE_CONFIG yes
+    log "sb-enable: enabled Limine config enrollment in $LIMINE_DEFAULT"
+
+    if command -v limine-install >/dev/null 2>&1; then
+        limine-install >>"$LOG" 2>&1 || die 1 "limine-install failed"
+    fi
+    sign_and_verify
+
+    # Last, once every file the firmware will check is signed: keys enrolled over
+    # unsigned files would leave a system that the firmware refuses to start.
+    log "sb-enable: enrolling Secure Boot keys"
+    if ! sbctl enroll-keys --microsoft --firmware-builtin >>"$LOG" 2>&1; then
+        log "sb-enable: --firmware-builtin enrollment failed; falling back to --microsoft"
+        sbctl enroll-keys --microsoft >>"$LOG" 2>&1 || \
+            die 1 "sbctl failed to enroll Secure Boot keys into firmware"
+    fi
+
+    mark_keys_kept
+    cmd_status_sync
+    log "sb-enable: completed successfully"
+}
+
+# A system restored from before Secure Boot was set up has no keys in sight and signs
+# nothing, so the next change to the boot menu would leave files the firmware refuses.
+# The keys are still on their subvolume; this puts the signing setup back around them.
+cmd_sb_restore() {
+    (( $# == 0 )) || die 2 "usage: sb-restore"
+    refuse_symlinks "$LIMINE_DEFAULT" "$FSTAB" "$STATE_FILE" "$LOG"
+
+    [[ -d $EFIVARS_DIR ]] || die 3 "Secure Boot requires UEFI firmware (system is in legacy BIOS mode)"
+    require_installed_system
+    require_limine_tools
+    has_sbctl || die 3 "sbctl is not installed"
+    if [[ -f $SBCTL_DB_KEY ]]; then
+        die 3 "this system already has its signing keys"
+    fi
+    attach_keys_subvolume kept || die 3 "no kept signing keys were found"
+    sbctl_has_keys || die 1 "the kept signing keys could not be read"
+
+    set_limine_default_kv ENABLE_ENROLL_LIMINE_CONFIG yes
+    sign_and_verify
+    mark_keys_kept
+    cmd_status_sync
+    log "sb-restore: signing set up again from the kept keys"
+}
+
+# Sets signing up in the system a restore has just put in place, from inside that
+# system: its own tools then read its own settings and find the keys where they expect
+# them, which the read-only snapshot this session runs on cannot offer. Returns 1
+# without having changed the firmware when any part of it cannot be done.
+carry_signing_into_restored_root() {
+    local sub new dir esp_rel
+    [[ $ROOT_FSTYPE == btrfs && -n $ROOT_DEV ]] || return 1
+    [[ $ROOT_SUBVOL =~ ^(/.+)/\.snapshots/[0-9]+/snapshot$ ]] || return 1
+    sub=${BASH_REMATCH[1]}
+    esp_rel=${ESP#"$ROOT"}
+
+    TMP_NEW_ROOT=$(mktemp -d) || { TMP_NEW_ROOT=""; return 1; }
+    new=$TMP_NEW_ROOT
+    mount -o "subvol=$sub" "$ROOT_DEV" "$new" >>"$LOG" 2>&1 || return 1
+    for dir in usr/lib/mainstream/system-security usr/bin/sbctl usr/bin/limine-update; do
+        if [[ ! -x $new/$dir ]]; then
+            log "sb-after-restore: the restored system has no /$dir"
+            return 1
+        fi
+    done
+    for dir in proc sys dev run tmp var/log "${esp_rel#/}"; do
+        [[ -d $new/$dir && ! -L $new/$dir ]] || return 1
+    done
+    {
+        mount -t proc proc "$new/proc" &&
+        mount -t sysfs sys "$new/sys" &&
+        mount -t efivarfs efivarfs "$new/sys/firmware/efi/efivars" &&
+        mount -t devtmpfs dev "$new/dev" &&
+        mount -t tmpfs -o mode=755 run "$new/run" &&
+        mount -t tmpfs -o mode=1777 tmp "$new/tmp" &&
+        mount --bind "${LOG_DIR%/*}" "$new/var/log" &&
+        mount --bind "$ESP" "$new$esp_rel"
+    } >>"$LOG" 2>&1 || return 1
+    # Without the device database sbctl does not find the EFI partition and reads
+    # every file as unsigned.
+    if [[ -d $ROOT/run/udev ]]; then
+        { mkdir -p -- "$new/run/udev" && mount --bind "$ROOT/run/udev" "$new/run/udev"; } >>"$LOG" 2>&1 || return 1
+    fi
+    # Where the boot tools keep their spare copies, outside the snapshots.
+    if [[ -d $new/var/cache ]] && mountpoint -q "$ROOT/var/cache" 2>/dev/null; then
+        mount --bind "$ROOT/var/cache" "$new/var/cache" >>"$LOG" 2>&1 || return 1
+    fi
+
+    log "sb-after-restore: setting signing up again inside the restored system ($sub)"
+    chroot "$new" /usr/lib/mainstream/system-security sb-restore >>"$LOG" 2>&1 || return 1
+
+    umount -R "$new" >>"$LOG" 2>&1 || umount -R -l "$new" >>"$LOG" 2>&1 || true
+    rmdir "$new" 2>/dev/null || true
+    TMP_NEW_ROOT=""
+    return 0
+}
+
+# Puts Limine as packaged, with no boot menu checksum in it, on every path that holds
+# Limine. It carries no signature, so it starts only while Secure Boot is off.
+unenroll_limine_copies() {
+    local arch src f done=0
+    for arch in X64 AA64; do
+        src="$ROOT/usr/share/limine/BOOT$arch.EFI"
+        [[ -f $src ]] || continue
+        for f in "$ESP/EFI/limine/limine_${arch,,}.efi" "$ESP/EFI/BOOT/BOOT$arch.EFI" \
+                 "$ESP/EFI/limine/BOOT$arch.EFI"; do
+            [[ -f $f && ! -L $f ]] || continue
+            is_limine_file "$f" || continue
+            if ! { cp -f -- "$src" "$f.new" && sync -f "$f.new" && mv -f -- "$f.new" "$f"; } >>"$LOG" 2>&1; then
+                rm -f -- "$f.new"
+                return 1
+            fi
+            done=1
+        done
+    done
+    sync -f "$ESP" 2>/dev/null || true
+    (( done ))
+}
+
+# A restore rewrites the boot menu and puts the snapshot's boot image back, and enrolls
+# and signs nothing. Limine holds the checksum of the menu it had before, so on a
+# machine with signing set up no copy of it would start what the restore left. This
+# runs in the snapshot session, the one place the other subcommands refuse.
+cmd_sb_after_restore() {
+    (( $# == 0 )) || die 2 "usage: sb-after-restore"
+    refuse_symlinks "$LOG"
+
+    if [[ ! -e $KEYS_KEPT_STAMP ]]; then
+        log "sb-after-restore: signing was never set up on this machine; nothing to do"
+        return 0
+    fi
+    [[ -d $EFIVARS_DIR ]] || die 3 "Secure Boot requires UEFI firmware (system is in legacy BIOS mode)"
+    detect_root_info
+    [[ $ROOT_SUBVOL =~ (^|/)(@|@?\.)snapshots/[0-9]+/snapshot$ ]] || \
+        die 3 "not started from a snapshot; nothing was restored"
+    find_esp || die 1 "could not find the EFI partition"
+
+    if carry_signing_into_restored_root; then
+        log "sb-after-restore: the restored system is signed and its boot menu enrolled"
+        return 0
+    fi
+    cleanup
+
+    log "sb-after-restore: signing could not be set up; removing the boot menu checksum so the restored system starts"
+    unenroll_limine_copies || \
+        die 1 "the boot loader could not be made to accept the restored boot menu; do not restart, restore the snapshot again"
+    die 5 "signing could not be set up in the restored system; turn Secure Boot off in UEFI setup, then set it up again in Settings"
+}
+
+cmd_sb_sign() {
+    (( $# == 0 )) || die 2 "usage: sb-sign"
+    refuse_symlinks "$STATE_FILE" "$LOG"
+
+    require_installed_system
+    require_limine_tools
+    has_sbctl || die 3 "sbctl is not installed"
+    sbctl_has_keys || die 3 "Secure Boot keys do not exist yet"
+
+    sign_and_verify
+    cmd_status_sync
+    log "sb-sign: completed successfully"
+}
+
+main() {
+    local verb=${1:-} v known=0
+    (( $# )) && shift
+
+    if [[ -z $ROOT && $EUID -ne 0 ]]; then
+        die 1 "must be run as root (via pkexec)"
+    fi
+
+    refuse_symlinks "$LOG" "$LOCK_FILE"
+    mkdir -p -m 755 -- "$LOG_DIR" "$LOCK_DIR" 2>/dev/null || true
+    log "invoked: $verb (uid=${PKEXEC_UID:-$EUID})"
+
+    for v in "${VERBS[@]}"; do
+        [[ $v == "$verb" ]] && known=1
+    done
+    (( known )) || die 2 "usage: system-security $(IFS='|'; printf '%s' "${VERBS[*]}")"
+
+    # In braces: a redirection on a bare exec stays for the rest of the run, and every
+    # reason printed after it would be lost.
+    { exec 9>"$LOCK_FILE"; } 2>/dev/null || die 1 "could not open lock file $LOCK_FILE"
+    flock -w 120 9 || die 1 "another security operation is already running"
+
+    "cmd_${verb//-/_}" "$@"
+    exit 0
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
+fi

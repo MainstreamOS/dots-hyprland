@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# limine-signed-copies: keeps every copy of Limine the firmware can start the same file
+# as the one limine-entry-tool enrolls the boot menu's checksum in and signs.
+#
+# Under Secure Boot Limine checks its menu, and what the menu starts, only when that
+# checksum is enrolled in the file that is running. A signed copy without it starts an
+# edited menu, so a plain signed copy on the firmware's default path would undo the
+# protection. Runs after every enrollment (/etc/boot/hooks/post.d) and from
+# system-security, and does nothing until Secure Boot signing keys exist.
+set -uo pipefail
+PATH=/usr/bin
+# system-security's test suite puts its stand-in tools first; pkexec never passes this on.
+[[ -n ${SYSTEM_SECURITY_TEST_BIN:-} && -z ${PKEXEC_UID:-} ]] && PATH="$SYSTEM_SECURITY_TEST_BIN:/usr/bin"
+export LC_ALL=C
+
+KEYS=${MAINSTREAM_SBCTL_KEYS:-/var/lib/sbctl/keys/db/db.key}
+ESP=${MAINSTREAM_ESP-}
+
+log() { printf '[limine-copies] %s\n' "$*"; }
+
+command -v sbctl >/dev/null 2>&1 || exit 0
+[[ -f $KEYS || -f /usr/share/secureboot/keys/db/db.key ]] || exit 0
+
+# The partition limine-entry-tool itself uses.
+[[ -n $ESP ]] || ESP=$(source /usr/lib/limine/limine-common-functions >/dev/null 2>&1 \
+    && load_config >/dev/null 2>&1 && printf '%s' "$ESP_PATH")
+[[ -n $ESP && -d $ESP/EFI/limine ]] || exit 0
+
+rc=0
+for arch in x64:X64 aa64:AA64; do
+    main=$ESP/EFI/limine/limine_${arch%%:*}.efi
+    [[ -f $main ]] || continue
+    # sbctl verify exits 0 for an unsigned file too, so its verdict is read. An unsigned
+    # file copied over the others would leave nothing the firmware accepts.
+    verdict=$(sbctl verify "$main" 2>&1) || true
+    if ! grep -qF "is signed" <<<"$verdict" || grep -qiF "is not signed" <<<"$verdict"; then
+        log "$main is not signed, so the other copies are left as they are."
+        rc=1
+        continue
+    fi
+    for copy in "$ESP/EFI/BOOT/BOOT${arch##*:}.EFI" "$ESP/EFI/limine/BOOT${arch##*:}.EFI"; do
+        [[ -f $copy && ! -L $copy ]] || continue
+        # The default path can hold another system's loader, which is not ours to replace.
+        grep -aq 'Limine [0-9]' -- "$copy" || continue
+        cmp -s -- "$main" "$copy" && continue
+        if cp -f -- "$main" "$copy.new" && sync -f "$copy.new" && mv -f -- "$copy.new" "$copy"; then
+            sync -f "$copy"
+            log "Updated ${copy#"$ESP"/}."
+        else
+            rm -f -- "$copy.new"
+            log "Could not update ${copy#"$ESP"/}."
+            rc=1
+        fi
+    done
+done
+exit "$rc"

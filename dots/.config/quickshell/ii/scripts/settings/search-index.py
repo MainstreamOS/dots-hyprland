@@ -30,6 +30,8 @@ CUSTOM_ROW_LABELS = {
                       "Color Management", "HDR Mode", "Calibrate Monitor for HDR", "Fine Tune", "Import ICC Profile", "Intensity"},
     "InterfaceConfig": {"Layout"},
     "PowerConfig": {"Live wallpaper"},
+    "SecureBootSection": {"Boot verification"},
+    "AntiCheatSection": {"Easy Anti-Cheat"},
 }
 COMMON_ACTIONS = {"Reset", "Apply", "Cancel", "Close", "Save", "Edit", "Remove", "Delete", "Add", "OK", "On", "Off", "Keep", "Revert"}
 SEARCH_TERMS = {
@@ -43,6 +45,10 @@ SEARCH_TERMS = {
     ("DisplayConfig", "UI text size"): ["desktop font size"],
     ("StorageConfig", "EFI Boot Partition"): ["boot partition", "kernel updates", "snapshots"],
     ("DefaultAppsSection", "Web Browser"): ["default browser"],
+    ("SecureBootSection", "Secure Boot"): ["Secure Boot", "BitLocker", "sbctl", "UEFI", "Setup Mode", "Limine", "boot verification", "signing keys"],
+    ("SecureBootSection", "Boot verification"): ["Secure Boot", "BitLocker", "sbctl", "UEFI", "Setup Mode", "Limine"],
+    ("AntiCheatSection", "Anti-Cheat Games"): ["anti-cheat", "Easy Anti-Cheat", "EAC", "Fortnite", "TPM", "IOMMU", "kernel lockdown", "measured boot"],
+    ("AntiCheatSection", "Easy Anti-Cheat"): ["anti-cheat", "EAC", "Fortnite", "TPM", "IOMMU", "kernel lockdown", "measured boot"],
 }
 
 
@@ -142,7 +148,8 @@ def entries_for(file, components, ancestors=(), visited=()):
 
 def main():
     components = {path.stem: path for path in sorted(SETTINGS.glob("*/*.qml"))}
-    for page in sys.argv[1:]:
+    pages = sys.argv[1:] or [f"modules/settings/{path.name}" for path in sorted(SETTINGS.glob("*.qml"))]
+    for page in pages:
         path = SETTINGS / Path(page).name
         if not path.is_file():
             continue

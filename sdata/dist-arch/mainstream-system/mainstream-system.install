@@ -104,6 +104,9 @@ _limine_hash_prompt() {
             limine-enroll-config >/dev/null 2>&1 \
                 || echo "warning: limine-enroll-config failed; run it again before restarting."
         fi
+        # Hooks do not run for this enrollment, so the other copies of Limine follow here.
+        [[ ! -x /usr/lib/mainstream/limine-signed-copies ]] \
+            || /usr/lib/mainstream/limine-signed-copies >/dev/null 2>&1 || true
     ) 9>/run/lock/boot-partition.lock
 }
 
@@ -193,6 +196,11 @@ _migrate() {  # $1 = the version upgraded from, or nothing on an install
         if [ -d /run/systemd/system ]; then
             systemctl start --no-block paccache.timer 2>/dev/null || true
         fi
+    fi
+    # Signing is set up again at startup when a restored snapshot predates Secure Boot.
+    # Enabled once, by the release that brings it, so a disable sticks.
+    if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-31)" -lt 0 ]; then
+        systemctl preset mainstream-secure-boot-restore.service 2>/dev/null || true
     fi
     # A snapshot started from the boot menu must not stay the menu's remembered entry.
     # Enabled once, by the release that brings it, so a disable sticks.

@@ -19,6 +19,8 @@ ContentPage {
     property string outputText: ""
     property bool isRunning: false
     property bool restoreSuccess: false
+    // The restore wrapper's exit code 90: restored, but signing could not be carried over.
+    property bool restoreNeedsSecureBootOff: false
 
     // Held in QML state from the moment the user submits the password
     // until the restore process exits. Cleared from the visible field
@@ -44,6 +46,7 @@ ContentPage {
         }
         outputText = "";
         restoreSuccess = false;
+        restoreNeedsSecureBootOff = false;
         pendingPassword = passwordField.text;
         passwordField.text = "";
         restoreProc.stdinEnabled = true;
@@ -138,7 +141,8 @@ ContentPage {
                 root.outputText += "\n" + Translation.tr("Authentication failed — wrong password. Try again.");
                 return;
             }
-            if (exitCode === 0) {
+            if (exitCode === 0 || exitCode === 90) {
+                root.restoreNeedsSecureBootOff = (exitCode === 90);
                 root.restoreSuccess = true;
             } else {
                 root.outputText += "\n" + Translation.tr("Restore finished with exit code %1.").arg(exitCode);
@@ -415,6 +419,16 @@ ContentPage {
                 text: Translation.tr("Your snapshot has been successfully restored!")
                 font.pixelSize: Appearance.font.pixelSize.large
                 font.weight: Font.DemiBold
+                color: Appearance.colors.colOnLayer1
+            }
+
+            StyledText {
+                visible: root.restoreNeedsSecureBootOff
+                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                text: Translation.tr("Secure Boot signing could not be set up for the restored system, so it starts only with Secure Boot off. Turn Secure Boot off in UEFI setup when you restart, then set it up again in Settings > Gaming.")
                 color: Appearance.colors.colOnLayer1
             }
 

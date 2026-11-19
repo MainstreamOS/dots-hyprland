@@ -318,6 +318,7 @@ ApplicationWindow {
     // start it, and its startup work with it.
     property bool sharingUsed: !!Quickshell.env("QS_SHARING_FOLDER")
     property bool appsUsed: false
+    property bool securityUsed: false
 
     function checkFiles() {
         // A check under way answers this request too.
@@ -385,6 +386,8 @@ ApplicationWindow {
         if (root.sharingUsed && FileSharing.busy)
             return true;
         if (root.appsUsed && (DefaultApps.busyRole !== "" || AutostartApps.busyId !== ""))
+            return true;
+        if (root.securityUsed && SystemSecurity.busy)
             return true;
         const focused = root.activeFocusItem;
         if (focused !== searchField && root.isTextEntry(focused) && focused.text.length > 0)
@@ -499,6 +502,8 @@ ApplicationWindow {
     onActiveChanged: {
         if (active)
             root.checkFiles();
+        if (root.securityUsed)
+            SystemSecurity.paused = !active;
     }
     onCurrentPageChanged: root.restartRefused = false
 
@@ -537,7 +542,20 @@ ApplicationWindow {
     visible: true
     // A successful run's record goes once the Update page has marked it seen and the window
     // closes (not restarts); a run still going, or one that failed, has no mark and stays.
-    onClosing: {
+    onClosing: close => {
+        // Closing now would cut short a change to the boot files.
+        if (root.securityUsed && SystemSecurity.busy) {
+            close.accepted = false;
+            SystemSecurity.closeRefused = true;
+            const gaming = root.pageIndex("GamingConfig.qml");
+            if (gaming === root.currentPage && pageLoader.status === Loader.Ready) {
+                pageLoader.item.scrollToSection("secureBoot");
+            } else {
+                root.pendingSettingsSection = "secureBoot";
+                root.requestPage(gaming);
+            }
+            return;
+        }
         if (!root.restarting) {
             Quickshell.execDetached(["bash", "-c",
                 '[ -f "$0/update.seen" ] && rm -f "$0/update.log" "$0/update.exit" "$0/update.seen"',
@@ -1064,6 +1082,8 @@ ApplicationWindow {
                             root.sharingUsed = true;
                         else if (loadedPage.endsWith("ManageAppsConfig.qml"))
                             root.appsUsed = true;
+                        else if (loadedPage.endsWith("GamingConfig.qml"))
+                            root.securityUsed = true;
                         if (!root.pendingSettingsSection) return;
                         if (!item?.scrollToSection) {
                             root.pendingSettingsSection = "";

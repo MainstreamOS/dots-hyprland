@@ -1,0 +1,8 @@
+module qs.modules.settings.security
+ActionButton 1.0 ActionButton.qml
+AntiCheatSection 1.0 AntiCheatSection.qml
+ConfirmRow 1.0 ConfirmRow.qml
+ScopeMessage 1.0 ScopeMessage.qml
+SecureBootSection 1.0 SecureBootSection.qml
+SecurityCard 1.0 SecurityCard.qml
+StatusPill 1.0 StatusPill.qml

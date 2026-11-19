@@ -463,6 +463,11 @@ repair() {
         log "limine-enroll-config failed after the boot menu was edited; Limine may refuse it."
         return 1
     fi
+    # The other copies of Limine carry the same checksum. As a boot hook the next one
+    # brings them in line; run on its own, this has to.
+    if ((wrote)) && [[ -x /usr/lib/mainstream/limine-signed-copies ]]; then
+        /usr/lib/mainstream/limine-signed-copies >/dev/null || log "The other copies of Limine could not be updated."
+    fi
     bad=$(problems)
     [[ -n $bad ]] && log "Still would not start: $(names "$bad")"
     fatal "$bad" && return 1

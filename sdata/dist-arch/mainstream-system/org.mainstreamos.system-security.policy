@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for Secure Boot in Settings > Gaming.
+    Setting up Secure Boot changes boot images and firmware variables, so it
+    always takes an administrator's password. auth_admin_keep lets a re-sign
+    right after the setup share that prompt; inactive and remote sessions get
+    nothing, and no rules file grants this without a password.
+-->
+<policyconfig>
+  <vendor>Mainstream OS</vendor>
+  <vendor_url>https://mainstreamos.org</vendor_url>
+
+  <action id="org.mainstreamos.system-security">
+    <description>Manage Secure Boot</description>
+    <message>Authentication is required to change Secure Boot settings</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/mainstream/system-security</annotate>
+  </action>
+</policyconfig>

@@ -14,7 +14,9 @@
 # SUDO_ASKPASS must be set in the calling environment when not already root.
 # Exit code is propagated from the spawned process so the QML Process.onExited
 # handler can distinguish success (0) from failure reliably; 124 = timed out
-# waiting for output, 125 = a prompt kept rejecting our answer.
+# waiting for output, 125 = a prompt kept rejecting our answer. After a successful
+# restore: 90 = the restored system starts only with Secure Boot off, 91 = its boot
+# loader could not be prepared.
 
 log_user 1
 set timeout 300
@@ -48,4 +50,23 @@ expect {
 # Without this, expect exits 0 on eof regardless of the child's status.
 catch wait result
 set exit_code [lindex $result 3]
+
+# The restore leaves a changed boot menu with nothing enrolled or signed for it. On a
+# machine with Secure Boot signing set up the helper carries that into the restored
+# system. 90: it starts only with Secure Boot off. 91: it may not start at all.
+set helper /usr/lib/mainstream/system-security
+if {$exit_code == 0 && [file executable $helper]} {
+    set timeout 900
+    spawn sudo -A $helper sb-after-restore
+    expect {
+        timeout { exit 91 }
+        eof
+    }
+    catch wait result
+    switch -- [lindex $result 3] {
+        0 - 3   { }
+        5       { exit 90 }
+        default { exit 91 }
+    }
+}
 exit $exit_code
