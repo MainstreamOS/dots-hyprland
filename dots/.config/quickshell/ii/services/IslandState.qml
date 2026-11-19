@@ -31,8 +31,12 @@ Singleton {
             const remaining = Object.assign({}, root.messageRequests);
             delete remaining[request];
             root.messageRequests = remaining;
-            if (success && root.messageDrafts[pending.key] === pending.text) {
-                root.messageDrafts = Object.assign({}, root.messageDrafts, {[pending.key]: ""});
+            if (!success && pending.text && !(root.messageDrafts[pending.key] || "").trim()) {
+                root.messageDrafts = Object.assign({}, root.messageDrafts, {[pending.key]: pending.text});
+            } else if (success && pending.text && (root.messageDrafts[pending.key] || "").trim() === pending.text) {
+                const drafts = Object.assign({}, root.messageDrafts);
+                delete drafts[pending.key];
+                root.messageDrafts = drafts;
             }
             root.messageReplyFinished(pending.key, success, pending.text);
         }

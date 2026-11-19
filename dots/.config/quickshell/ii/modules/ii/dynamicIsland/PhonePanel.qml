@@ -45,7 +45,7 @@ ColumnLayout {
     property bool replying: false
     property bool replySent: false
 
-    readonly property bool busy: callbackPending || !!pendingRequest || replying || recordingVoice || (canReply && quickReplyInput.text.trim().length > 0)
+    readonly property bool busy: callbackPending || !!pendingRequest || replying || replySent || recordingVoice || (canReply && quickReplyInput.text.trim().length > 0)
     readonly property bool needsKeyboardFocus: canReply && (replying || recordingVoice || quickReplyInput.focus || quickReplyInput.activeFocus)
 
     function resetSendFeedback(): void {
@@ -492,12 +492,21 @@ ColumnLayout {
         function onMessageReplyFinished(key, success, text) {
             if (key !== root.draftKey) return;
             if (success) {
-                root.replySent = true;
-                sendSuccess.restart();
-                if (quickReplyInput.text === text) quickReplyInput.text = "";
-                quickReplyInput.focus = false;
-                root.replying = false;
-            } else IslandState.phoneError = Translation.tr("Your reply could not be sent. Check the connection and try again.");
+                if (quickReplyInput.text.length === 0) {
+                    root.replySent = true;
+                    sendSuccess.restart();
+                    quickReplyInput.focus = false;
+                    root.replying = false;
+                }
+            } else {
+                IslandState.phoneError = Translation.tr("Your reply could not be sent. Check the connection and try again.");
+                if (text && quickReplyInput.text.trim().length === 0) {
+                    root.restoringDraft = true;
+                    quickReplyInput.text = text;
+                    quickReplyInput.cursorPosition = quickReplyInput.text.length;
+                    root.restoringDraft = false;
+                }
+            }
         }
     }
     StyledText {
@@ -524,11 +533,23 @@ ColumnLayout {
             const number = root.entry?.number || root.entry?.address || "";
             if (!text || !number || !root.canReply || root.pendingRequest) return;
             root.resetSendFeedback();
-            IslandState.messageDrafts = Object.assign({}, IslandState.messageDrafts, {[root.draftKey]: text});
             IslandState.phoneError = "";
             if (Phone.sendNew([number], text, [])) {
-                IslandState.messageRequests = Object.assign({}, IslandState.messageRequests, {[Phone.lastSendRequest]: {key: root.draftKey, text}});
-            } else IslandState.phoneError = Translation.tr("Your reply could not be sent. Check the connection and try again.");
+                const key = root.draftKey;
+                IslandState.messageRequests = Object.assign({}, IslandState.messageRequests, {
+                    [Phone.lastSendRequest]: { key, text }
+                });
+                if (key in IslandState.messageDrafts) {
+                    const drafts = Object.assign({}, IslandState.messageDrafts);
+                    delete drafts[key];
+                    IslandState.messageDrafts = drafts;
+                }
+                root.restoringDraft = true;
+                quickReplyInput.text = "";
+                root.restoringDraft = false;
+            } else {
+                IslandState.phoneError = Translation.tr("Your reply could not be sent. Check the connection and try again.");
+            }
         }
 
         TapHandler {

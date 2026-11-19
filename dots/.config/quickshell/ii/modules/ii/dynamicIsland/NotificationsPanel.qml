@@ -191,7 +191,7 @@ ColumnLayout {
         function onNewestIdChanged() { root.cancelReply(); }
         function onEntryChanged() {
             if (!root.entry) root.cancelReply();
-            else if (root.liveNotif?.replyDraft) {
+            else if (root.liveNotif?.replyDraft && !root.liveNotif?.actionPending) {
                 replyInput.text = root.liveNotif.replyDraft;
                 root.replying = true;
             }
@@ -210,7 +210,12 @@ ColumnLayout {
     Connections {
         target: Notifications
         function onPhoneActionFinished(id, success) {
-            if (id === root.entry?.notificationId && success) root.cancelReply();
+            if (id !== root.entry?.notificationId) return;
+            if (success) root.cancelReply();
+            else if (replyInput.text.trim().length === 0 && root.liveNotif?.replyDraft) {
+                replyInput.text = root.liveNotif.replyDraft;
+                replyInput.cursorPosition = replyInput.text.length;
+            }
         }
     }
     StyledText {
@@ -232,7 +237,9 @@ ColumnLayout {
         const text = (replyInput.text || "").trim();
         if (!text || !entry || entry.notificationId === undefined) return;
         const targetId = entry.notificationId;
-        Notifications.sendReply(targetId, text);
+        if (Notifications.sendReply(targetId, text)) {
+            replyInput.text = "";
+        }
     }
 
     function actionSymbol(text, id) {
