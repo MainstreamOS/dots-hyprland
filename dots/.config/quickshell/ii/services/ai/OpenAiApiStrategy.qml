@@ -14,10 +14,10 @@ ApiStrategy {
         return Helpers.isImage(path);
     }
 
-    function reasoningEffort(level: string, local: bool): string {
+    function reasoningEffort(level: string, local: bool, modelId: string): string {
         if (local) return ["low", "medium", "high"].includes(level) ? level : "";
         switch (level) {
-        case "none": return "none";
+        case "none": return String(modelId ?? "").toLowerCase().startsWith("gpt-6") ? "low" : "none";
         case "minimal": return "low";
         case "low":
         case "medium":
@@ -60,7 +60,7 @@ ApiStrategy {
         if (model.sendTemperature) {
             baseData.temperature = ctx.temperature;
         }
-        const effort = root.reasoningEffort(ctx.thinkingLevel, (model.endpoint ?? "").includes("localhost"));
+        const effort = root.reasoningEffort(ctx.thinkingLevel, (model.endpoint ?? "").includes("localhost"), model.model ?? "");
         if (effort.length > 0) baseData.reasoning_effort = effort;
         const body = model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
 

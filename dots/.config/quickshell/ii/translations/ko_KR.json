@@ -3458,5 +3458,13 @@
   "App font size": "앱 글꼴 크기",
   "UI text size": "UI 텍스트 크기",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "데스크톱의 사이드바, 메뉴, 알림 및 설정에 표시되는 텍스트입니다. 바와 아일랜드는 각각의 크기 설정을 따릅니다.",
-  "Daily forecast unavailable": "일별 예보를 사용할 수 없습니다"
+  "Daily forecast unavailable": "일별 예보를 사용할 수 없습니다",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "온라인 | Messages API를 통해 Anthropic의 Claude Fable 5.2 이용",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "온라인 | Google Gemini 4 모델\n복잡한 코딩, 추론, 에이전트 작업을 위한 균형 잡힌 Gemini 4 최첨단 모델입니다.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "온라인 | Google Gemini 4 모델\n일상 코딩과 에이전트 작업을 위한 빠르고 효율적인 Gemini 4 모델이며 무료 등급이 있습니다.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "온라인 | Google 최첨단 모델\n장기 코딩, 연구, 복잡한 분석을 위한 Google의 가장 깊은 Gemini 4 추론 모델입니다.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "온라인 | Google 모델\n무료 등급이 있는 Google의 Gemini 모델: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "온라인 | Chat Completions API를 통해 OpenAI의 GPT-6.2 Sol 이용",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "로그인했습니다. 이제 Gemini 4 Neon, Hydrogen, Carbon, Argon, Gemini 3.8 Flash를 선택할 수 있습니다. /think로 생각 수준을 조절하세요.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "로그인했습니다. 이제 구독 모델을 선택할 수 있습니다. /model로 Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5를 선택하세요."
 }

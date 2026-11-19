@@ -3458,5 +3458,13 @@
   "App font size": "اندازهٔ قلم برنامه‌ها",
   "UI text size": "اندازهٔ متن رابط",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "متن نوارهای کناری، منوها، اعلان‌ها و تنظیمات میزکار. نوار و جزیره از تنظیم اندازهٔ خودشان پیروی می‌کنند.",
-  "Daily forecast unavailable": "پیش‌بینی روزانه در دسترس نیست"
+  "Daily forecast unavailable": "پیش‌بینی روزانه در دسترس نیست",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "برخط | Claude Fable 5.2 از Anthropic با Messages API",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "برخط | مدل Gemini 4 از Google\nمدل پیشرو و متعادل Gemini 4 برای کدنویسی پیچیده، استدلال و گردش‌کار عامل‌ها.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "برخط | مدل Gemini 4 از Google\nمدل سریع و کارآمد Gemini 4 برای کدنویسی روزمره و گردش‌کار عامل‌ها، با ردهٔ رایگان.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "برخط | مدل پیشرو Google\nعمیق‌ترین مدل استدلال Gemini 4 از Google برای کدنویسی بلندمدت، پژوهش و تحلیل‌های پیچیده.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "برخط | مدل Google\nمدل‌های Gemini از Google با ردهٔ رایگان: Gemini 4 Hydrogen، Neon، Carbon، Argon، Flash و Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "برخط | GPT-6.2 Sol از OpenAI با Chat Completions API",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "وارد شدید. Gemini 4 Neon، Hydrogen، Carbon، Argon و Gemini 3.8 Flash آماده‌اند. با /think سطح تفکر را عوض کنید.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "وارد شدید. مدل‌های اشتراک آماده‌اند: برای انتخاب Fable 5.2، Opus 5.5، Sonnet 5.5 و Haiku 5.5، /model بنویسید."
 }

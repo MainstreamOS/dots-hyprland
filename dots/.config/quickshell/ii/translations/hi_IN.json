@@ -3458,5 +3458,13 @@
   "App font size": "ऐप का फ़ॉन्ट आकार",
   "UI text size": "इंटरफ़ेस टेक्स्ट का आकार",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "डेस्कटॉप की साइडबार, मेनू, सूचनाओं और सेटिंग्स में टेक्स्ट। बार और आइलैंड अपने आकार की सेटिंग इस्तेमाल करते हैं।",
-  "Daily forecast unavailable": "दैनिक पूर्वानुमान उपलब्ध नहीं"
+  "Daily forecast unavailable": "दैनिक पूर्वानुमान उपलब्ध नहीं",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "ऑनलाइन | Messages API से Anthropic का Claude Fable 5.2",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "ऑनलाइन | Google का Gemini 4 मॉडल\nजटिल कोडिंग, तर्क और एजेंट वर्कफ़्लो के लिए संतुलित Gemini 4 अग्रणी मॉडल।",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "ऑनलाइन | Google का Gemini 4 मॉडल\nमुफ़्त स्तर के साथ दैनिक कोडिंग और एजेंट वर्कफ़्लो के लिए तेज़, कुशल Gemini 4 मॉडल।",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "ऑनलाइन | Google का अग्रणी मॉडल\nलंबी अवधि की कोडिंग, शोध और जटिल विश्लेषण के लिए Google का सबसे गहरा Gemini 4 तर्क मॉडल।",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "ऑनलाइन | Google का मॉडल\nमुफ़्त स्तर वाले Google के Gemini मॉडल: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash और Pro।",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "ऑनलाइन | Chat Completions API से OpenAI का GPT-6.2 Sol",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "साइन इन हो गया। Gemini 4 Neon, Hydrogen, Carbon, Argon और Gemini 3.8 Flash चयनकर्ता में हैं। /think से सोच का स्तर बदलें।",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "साइन इन हो गया। सदस्यता के मॉडल अब चयनकर्ता में हैं: Fable 5.2, Opus 5.5, Sonnet 5.5 और Haiku 5.5 चुनने के लिए /model लिखें।"
 }

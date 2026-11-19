@@ -12,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-USER_AGENT = "antigravity/1.3.1 linux/amd64"
+USER_AGENT = "antigravity/1.5.12 linux/amd64"
 MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 # Antigravity's own OAuth client, read from the installed CLI rather than kept
@@ -203,29 +203,55 @@ def usage(target_model):
 
     # Priority lookup based on active model if requested
     target_lower = target_model.lower()
-    if "argon" in target_lower:
+    general_fallback = ["gemini-4-hydrogen-sonar", "gemini-3.8-flash-tiered", "gemini-3.1-pro-low", "gemini-3.6-flash-high", "gemini-pro-agent"]
+    if "carbon" in target_lower:
+        preferred = ["gemini-4-carbon", "gemini-4-carbon-high", "gemini-4-carbon-medium", "gemini-4-carbon-low"]
+        substr_key = "carbon"
+    elif "argon" in target_lower:
         preferred = ["gemini-4-argon", "gemini-4.0-argon", "gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-argon-low"]
+        substr_key = "argon"
+    elif "neon" in target_lower:
+        preferred = ["gemini-4-neon", "gemini-4-neon-high", "gemini-4-neon-xhigh", "gemini-4-neon-medium", "gemini-4-neon-low"]
+        substr_key = "neon"
+    elif "hydrogen" in target_lower:
+        preferred = ["gemini-4-hydrogen", "gemini-4-hydrogen-sonar", "gemini-4-hydrogen-high", "gemini-4-hydrogen-xhigh", "gemini-4-hydrogen-medium", "gemini-4-hydrogen-low"]
+        substr_key = "hydrogen"
     elif "pro" in target_lower:
         preferred = ["gemini-3.1-pro-low", "gemini-3.1-pro-high", "gemini-pro-agent", "gemini-2.5-pro"]
+        substr_key = None
     elif "flash" in target_lower:
         preferred = ["gemini-3.8-flash-tiered", "gemini-3.8-flash-medium", "gemini-3.6-flash-high", "gemini-3.1-flash-lite"]
+        substr_key = None
     else:
-        preferred = ["gemini-3.8-flash-tiered", "gemini-3.1-pro-low", "gemini-3.6-flash-high", "gemini-pro-agent"]
+        preferred = general_fallback
+        substr_key = None
 
     for k in preferred:
         if isinstance(models.get(k), dict) and models[k].get("quotaInfo"):
             quota = models[k]["quotaInfo"]
             break
 
-    if not quota:
-        # No quota entry for Argon means this account has none, rather than another model's.
-        if target_model and "argon" in target_lower:
-            return {"planType": "google_account", "session": {"utilization": 100.0, "resets_at": None}, "weekly": None}
-        for m in models.values():
-            qi = m.get("quotaInfo") if isinstance(m, dict) else None
-            if qi and qi.get("remainingFraction") is not None:
-                quota = qi
+    if not quota and substr_key:
+        for k in sorted(models):
+            if substr_key in k.lower() and isinstance(models[k], dict) and models[k].get("quotaInfo"):
+                quota = models[k]["quotaInfo"]
                 break
+
+    if not quota:
+        # No quota entry for Argon or Carbon means this account has none, rather than another model's.
+        if target_model and ("argon" in target_lower or "carbon" in target_lower):
+            return {"planType": "google_account", "session": {"utilization": 100.0, "resets_at": None}, "weekly": None}
+        # daily-cloudcode-pa omits dedicated Neon keys even when Neon is usable; try general Flash/tier fallbacks.
+        for k in general_fallback:
+            if isinstance(models.get(k), dict) and models[k].get("quotaInfo"):
+                quota = models[k]["quotaInfo"]
+                break
+        if not quota:
+            for m in models.values():
+                qi = m.get("quotaInfo") if isinstance(m, dict) else None
+                if qi and qi.get("remainingFraction") is not None:
+                    quota = qi
+                    break
 
     session = None
     weekly = None

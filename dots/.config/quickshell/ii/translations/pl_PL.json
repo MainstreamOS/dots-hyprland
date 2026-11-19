@@ -3458,5 +3458,13 @@
   "App font size": "Rozmiar czcionki w aplikacjach",
   "UI text size": "Rozmiar tekstu interfejsu",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "Tekst w panelach bocznych, menu, powiadomieniach i ustawieniach pulpitu. Pasek i wyspa korzystają z własnych ustawień rozmiaru.",
-  "Daily forecast unavailable": "Prognoza dzienna niedostępna"
+  "Daily forecast unavailable": "Prognoza dzienna niedostępna",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "Online | Claude Fable 5.2 od Anthropic przez Messages API",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "Online | Model Gemini 4 od Google\nZrównoważony, zaawansowany model Gemini 4 do złożonego programowania, rozumowania i zadań agentowych.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "Online | Model Gemini 4 od Google\nSzybki i wydajny model Gemini 4 do codziennego programowania i zadań agentowych, z bezpłatnym poziomem dostępu.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "Online | Najbardziej zaawansowany model Google\nNajgłębszy model rozumowania Gemini 4 od Google do długofalowego programowania, badań i złożonych analiz.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Online | Model Google\nModele Gemini od Google z bezpłatnym poziomem dostępu: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash i Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Online | GPT-6.2 Sol od OpenAI przez Chat Completions API",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Zalogowano. Gemini 4 Neon, Hydrogen, Carbon, Argon i Gemini 3.8 Flash są teraz na liście wyboru. Zmień poziom rozumowania za pomocą /think.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Zalogowano. Modele subskrypcji są już na liście: wpisz /model, aby wybrać Fable 5.2, Opus 5.5, Sonnet 5.5 lub Haiku 5.5."
 }

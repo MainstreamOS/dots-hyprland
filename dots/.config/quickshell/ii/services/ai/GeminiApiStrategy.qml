@@ -77,18 +77,19 @@ ApiStrategy {
         // and thinking_budget in favor of thinking_level ("minimal", "low", "medium", "high").
         let generationConfig = {};
         const chosenThinkingLevel = ctx.thinkingLevel;
+        const supportsXhigh = model.model.includes("neon") || model.model.includes("hydrogen");
         if (Ai.thinkingLevels.includes(chosenThinkingLevel)) {
             let geminiLevel = chosenThinkingLevel;
             if (geminiLevel === "extra" || geminiLevel === "max" || geminiLevel === "ultracode") {
-                geminiLevel = "high";
+                geminiLevel = supportsXhigh ? "xhigh" : "high";
             } else if (geminiLevel === "none") {
                 geminiLevel = "minimal";
             }
-            // Models like Pro, Argon, and latest series support low, medium, high. Clamp minimal to low.
-            if (geminiLevel === "minimal" && (model.model.includes("pro") || model.model.includes("3.8") || model.model.includes("argon") || model.model.endsWith("-latest"))) {
+            // Gemini 4, Pro, 3.8, and -latest series do not support minimal; clamp minimal to low.
+            if (geminiLevel === "minimal" && (model.model.startsWith("gemini-4") || model.model.includes("pro") || model.model.includes("3.8") || model.model.endsWith("-latest"))) {
                 geminiLevel = "low";
             }
-            if (["minimal", "low", "medium", "high"].includes(geminiLevel)) {
+            if (["minimal", "low", "medium", "high", "xhigh"].includes(geminiLevel)) {
                 generationConfig.thinkingConfig = {
                     thinkingLevel: geminiLevel,
                     includeThoughts: true

@@ -3458,5 +3458,13 @@
   "App font size": "גודל הגופן ביישומים",
   "UI text size": "גודל הטקסט בממשק",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "הטקסט בסרגלי הצד, בתפריטים, בהתראות ובהגדרות של שולחן העבודה. הסרגל והאי משתמשים בהגדרות הגודל שלהם.",
-  "Daily forecast unavailable": "תחזית יומית אינה זמינה"
+  "Daily forecast unavailable": "תחזית יומית אינה זמינה",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "מקוון | Claude Fable 5.2 של Anthropic דרך Messages API",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "מקוון | מודל Gemini 4 של Google\nמודל Gemini 4 מתקדם ומאוזן לתכנות מורכב, היסק ותהליכי סוכן.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "מקוון | מודל Gemini 4 של Google\nמודל Gemini 4 מהיר ויעיל לתכנות יומיומי ותהליכי סוכן, עם מסלול חינמי.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "מקוון | המודל המתקדם של Google\nמודל ההיסק העמוק ביותר Gemini 4 של Google לתכנות ארוך־טווח, מחקר וניתוח מורכב.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "מקוון | מודל של Google\nמודלי Gemini של Google עם מסלול חינמי: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash ו-Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "מקוון | GPT-6.2 Sol של OpenAI דרך Chat Completions API",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "הכניסה הצליחה. Gemini 4 Neon, Hydrogen, Carbon, Argon ו-Gemini 3.8 Flash זמינים כעת בבורר. ניתן להתאים את רמת החשיבה באמצעות /think.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "הכניסה הצליחה. המודלים שבמנוי זמינים כעת בבורר: יש להקליד /model כדי לבחור בין Fable 5.2, Opus 5.5, Sonnet 5.5 ו-Haiku 5.5."
 }

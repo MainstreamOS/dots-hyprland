@@ -28,7 +28,7 @@ content=$(cat "${TRANSLATIONS_DIR}/en_US.json")
 prompt_json=$(jq -n --arg prompt_text "$instruction" --arg content "$content" '$prompt_text + "\n```\n" + $content + "\n```\n"')
 
 # Prepare request data using jq
-# Gemini 3 cannot turn thinking off; low leaves room in its output cap for the whole file.
+# Gemini 3 and 4 cannot turn thinking off; low leaves room in their output cap for the whole file.
 payload=$(jq -n \
     --arg prompt "$prompt_json" \
     --arg model "$MODEL" \
@@ -39,7 +39,7 @@ payload=$(jq -n \
             ]
         }],
         generationConfig: ({ responseMimeType: "application/json" }
-            + (if ($model | startswith("gemini-3")) then { thinkingConfig: { thinkingLevel: "low" } } else {} end))
+            + (if ($model | startswith("gemini-3") or startswith("gemini-4")) then { thinkingConfig: { thinkingLevel: "low" } } else {} end))
     }'
 )
 # echo "$payload" | jq

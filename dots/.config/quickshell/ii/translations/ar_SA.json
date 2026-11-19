@@ -3458,5 +3458,13 @@
   "App font size": "حجم خط التطبيقات",
   "UI text size": "حجم نص الواجهة",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "النص في أشرطة سطح المكتب الجانبية وقوائمه وإشعاراته والإعدادات. يتبع الشريط والجزيرة إعدادات الحجم الخاصة بهما.",
-  "Daily forecast unavailable": "التوقعات اليومية غير متاحة"
+  "Daily forecast unavailable": "التوقعات اليومية غير متاحة",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "عبر الإنترنت | Claude Fable 5.2 من Anthropic عبر Messages API",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "عبر الإنترنت | نموذج Gemini 4 من Google\nنموذج Gemini 4 متقدم متوازن للبرمجة المعقدة والاستنتاج وسير عمل الوكلاء.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "عبر الإنترنت | نموذج Gemini 4 من Google\nنموذج Gemini 4 سريع وفعّال للبرمجة اليومية وسير عمل الوكلاء، مع فئة مجانية.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "عبر الإنترنت | نموذج Google المتقدم\nأعمق نموذج استنتاج Gemini 4 من Google للبرمجة طويلة المدى والبحث والتحليل المعقد.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "عبر الإنترنت | نموذج Google\nنماذج Gemini من Google بفئة مجانية: Gemini 4 Hydrogen وNeon وCarbon وArgon وFlash وPro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "عبر الإنترنت | GPT-6.2 Sol من OpenAI عبر Chat Completions API",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "تم الدخول. Gemini 4 Neon وHydrogen وCarbon وArgon وGemini 3.8 Flash متاحة الآن. اضبط مستوى التفكير باستخدام /think.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "تم تسجيل الدخول. نماذج الاشتراك متاحة الآن؛ اكتب /model للاختيار بين Fable 5.2 وOpus 5.5 وSonnet 5.5 وHaiku 5.5."
 }

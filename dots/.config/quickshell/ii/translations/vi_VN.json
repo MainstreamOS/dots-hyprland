@@ -3458,5 +3458,13 @@
   "App font size": "Cỡ phông chữ ứng dụng",
   "UI text size": "Cỡ chữ giao diện",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "Chữ trong thanh bên, trình đơn, thông báo và Cài đặt của màn hình nền. Thanh và đảo dùng thiết lập kích thước riêng.",
-  "Daily forecast unavailable": "Không có dự báo theo ngày"
+  "Daily forecast unavailable": "Không có dự báo theo ngày",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "Trực tuyến | Claude Fable 5.2 của Anthropic qua Messages API",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "Trực tuyến | Model Gemini 4 của Google\nModel Gemini 4 tiên tiến cân bằng cho lập trình phức tạp, suy luận và quy trình làm việc tác tử.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "Trực tuyến | Model Gemini 4 của Google\nModel Gemini 4 nhanh và hiệu quả cho lập trình hằng ngày và quy trình làm việc tác tử, có gói miễn phí.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "Trực tuyến | Model tiên tiến của Google\nModel suy luận Gemini 4 sâu nhất của Google cho lập trình dài hạn, nghiên cứu và phân tích phức tạp.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Trực tuyến | Model của Google\nCác model Gemini của Google có gói miễn phí: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash và Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Trực tuyến | GPT-6.2 Sol của OpenAI qua Chat Completions API",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Đã đăng nhập. Gemini 4 Neon, Hydrogen, Carbon, Argon và Gemini 3.8 Flash đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng /think.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Đã đăng nhập. Các model theo gói đã có trong bộ chọn: gõ /model để chọn Fable 5.2, Opus 5.5, Sonnet 5.5 hoặc Haiku 5.5."
 }

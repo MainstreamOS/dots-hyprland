@@ -3458,5 +3458,13 @@
   "App font size": "应用字体大小",
   "UI text size": "界面文字大小",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "调整桌面侧边栏、菜单、通知和设置中的文字。状态栏和灵动岛使用各自的大小设置。",
-  "Daily forecast unavailable": "每日预报不可用"
+  "Daily forecast unavailable": "每日预报不可用",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "在线 | 通过 Messages API 使用 Anthropic 的 Claude Fable 5.2",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "在线 | Google 的 Gemini 4 模型\n兼顾性能与效率的 Gemini 4 前沿模型，适合复杂编程、推理与智能体工作流。",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "在线 | Google 的 Gemini 4 模型\n快速高效的 Gemini 4 模型，适合日常编程与智能体工作流，提供免费层级。",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "在线 | Google 前沿模型\nGoogle 深度最高的 Gemini 4 推理模型，适用于长程编程、研究和复杂分析。",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "在线 | Google 模型\n提供免费额度的 Google Gemini 模型：Gemini 4 Hydrogen、Neon、Carbon、Argon、Flash 和 Pro。",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "在线 | 通过 Chat Completions API 使用 OpenAI 的 GPT-6.2 Sol",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "已登录。Gemini 4 Neon、Hydrogen、Carbon、Argon 和 Gemini 3.8 Flash 现已加入选择器。可通过 /think 调整思考级别。",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "已登录。订阅模型已加入选择器：输入 /model 可选择 Fable 5.2、Opus 5.5、Sonnet 5.5 或 Haiku 5.5。"
 }

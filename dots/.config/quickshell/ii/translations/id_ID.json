@@ -3458,5 +3458,13 @@
   "App font size": "Ukuran font aplikasi",
   "UI text size": "Ukuran teks antarmuka",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "Teks di sidebar, menu, notifikasi, dan Pengaturan desktop. Bilah dan Pulau mengikuti pengaturan ukuran masing-masing.",
-  "Daily forecast unavailable": "Prakiraan harian tidak tersedia"
+  "Daily forecast unavailable": "Prakiraan harian tidak tersedia",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "Online | Claude Fable 5.2 dari Anthropic melalui Messages API",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "Online | Model Gemini 4 Google\nModel terdepan Gemini 4 yang seimbang untuk coding kompleks, penalaran, dan alur kerja agen.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "Online | Model Gemini 4 Google\nModel Gemini 4 yang cepat dan efisien untuk coding harian dan alur kerja agen, dengan paket gratis.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "Online | Model terdepan Google\nModel penalaran Gemini 4 terdalam Google untuk coding jangka panjang, riset, dan analisis kompleks.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Online | Model Google\nModel Gemini Google dengan paket gratis: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, dan Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Online | GPT-6.2 Sol dari OpenAI melalui Chat Completions API",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Sudah masuk. Gemini 4 Neon, Hydrogen, Carbon, Argon, dan Gemini 3.8 Flash kini ada di pemilih. Sesuaikan tingkat pemikiran dengan /think.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Sudah masuk. Model langganan kini tersedia di pemilih: ketik /model untuk memilih Fable 5.2, Opus 5.5, Sonnet 5.5, atau Haiku 5.5."
 }

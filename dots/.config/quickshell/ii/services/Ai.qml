@@ -303,6 +303,66 @@ Singleton {
     // - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
     readonly property var geminiApiCatalog: ({
+        "gemini-4-hydrogen": {
+            "name": "Gemini 4 Hydrogen",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:streamGenerateContent",
+            "model": "gemini-4-hydrogen",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+            "thinkingLevel": "",
+        },
+        "gemini-4-neon": {
+            "name": "Gemini 4 Neon",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent",
+            "model": "gemini-4-neon",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+            "thinkingLevel": "",
+        },
+        "gemini-4-carbon": {
+            "name": "Gemini 4 Carbon",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-carbon:streamGenerateContent",
+            "model": "gemini-4-carbon",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+            "thinkingLevel": "",
+        },
+        "gemini-4-argon": {
+            "name": "Gemini 4 Argon",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's frontier model\nGoogle's flagship frontier reasoning model: complex coding, mathematics, and research."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+            "model": "gemini-4-argon",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+            "thinkingLevel": "",
+        },
         "gemini-flash-latest": {
             "name": "Gemini Flash",
             "icon": "google-gemini-symbolic",
@@ -332,21 +392,6 @@ Singleton {
             "api_format": "gemini",
             "sendTemperature": false,
             "thinkingLevel": "",
-        },
-        "gemini-4-argon": {
-            "name": "Gemini 4 Argon",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's frontier model\nGoogle's flagship frontier reasoning model: complex coding, mathematics, and research."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
-            "model": "gemini-4-argon",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
         }
     })
     function isGeminiApiModel(id) {
@@ -359,7 +404,7 @@ Singleton {
         "gemini": aiModelComponent.createObject(root, {
             "name": "Gemini",
             "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash, Gemini Pro, and Gemini 4 Argon."),
+            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro."),
             "homepage": "https://aistudio.google.com",
             "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
             "model": "gemini-flash-latest",
@@ -387,10 +432,10 @@ Singleton {
         "claude": aiModelComponent.createObject(root, {
             "name": "Claude",
             "icon": "claude-symbolic",
-            "description": Translation.tr("Online | Anthropic's Claude Opus 5.5 over the Messages API"),
+            "description": Translation.tr("Online | Anthropic's Claude Fable 5.2 over the Messages API"),
             "homepage": "https://www.anthropic.com/claude",
             "endpoint": "https://api.anthropic.com/v1/messages",
-            "model": "claude-opus-5-5",
+            "model": "claude-fable-5-2",
             "requires_key": true,
             "key_id": "anthropic",
             "key_get_link": "https://console.anthropic.com/settings/keys",
@@ -402,10 +447,10 @@ Singleton {
         "codex": aiModelComponent.createObject(root, {
             "name": "Codex",
             "icon": "openai-symbolic",
-            "description": Translation.tr("Online | OpenAI's GPT-5.6 over the Chat Completions API"),
+            "description": Translation.tr("Online | OpenAI's GPT-6.2 Sol over the Chat Completions API"),
             "homepage": "https://platform.openai.com",
             "endpoint": "https://api.openai.com/v1/chat/completions",
-            "model": "gpt-5.6",
+            "model": "gpt-6.2-sol",
             "sendTemperature": false,
             "requires_key": true,
             "key_id": "openai",
@@ -442,6 +487,11 @@ Singleton {
     readonly property var modelList: Object.keys(root.models)
     readonly property var retiredModels: ({
         "claude-opus-4-8": "claude",
+        "claude-opus-5-5": "claude",
+        "claude-fable-5-1": "claude",
+        "claude-fable-5-2": "claude",
+        "claude-opus-1m": "claude-opus",
+        "gpt-5.6": "codex",
         "mistral-medium-3": "mistral-4",
         "mistral-3": "mistral-4",
         "mistral-medium": "mistral-4",
@@ -455,17 +505,27 @@ Singleton {
         "gemini-pro": "gemini-pro-latest",
         "gemini-3.1-pro": "gemini-pro-latest",
         "gemini-3.1-pro-preview": "gemini-pro-latest",
+        "hydrogen": "gemini-4-hydrogen",
+        "gemini-hydrogen": "gemini-4-hydrogen",
+        "neon": "gemini-4-neon",
+        "gemini-neon": "gemini-4-neon",
+        "carbon": "gemini-4-carbon",
+        "gemini-carbon": "gemini-4-carbon",
         "argon": "gemini-4-argon",
         "gemini-argon": "gemini-4-argon",
-        "gemini-4": "gemini-4-argon",
-        "gemini-plan-default": "gemini-plan-3-8-flash",
+        "gemini-4": "gemini-4-neon",
+        "gemini-plan-default": "gemini-plan-4-neon",
         "gemini-plan-3-8-flash-high": "gemini-plan-3-8-flash",
         "gemini-plan-3-8-flash-medium": "gemini-plan-3-8-flash",
         "gemini-plan-3-8-flash-low": "gemini-plan-3-8-flash",
-        "gemini-plan-3-1-pro-high": "gemini-plan-3-1-pro",
-        "gemini-plan-3-1-pro-low": "gemini-plan-3-1-pro",
+        "gemini-plan-3-1-pro": "gemini-plan-4-neon",
+        "gemini-plan-3-1-pro-high": "gemini-plan-4-neon",
+        "gemini-plan-3-1-pro-low": "gemini-plan-4-neon",
+        "gemini-plan-neon": "gemini-plan-4-neon",
+        "gemini-plan-hydrogen": "gemini-plan-4-hydrogen",
+        "gemini-plan-carbon": "gemini-plan-4-carbon",
         "gemini-plan-argon": "gemini-plan-4-argon",
-        "gemini-plan-4": "gemini-plan-4-argon",
+        "gemini-plan-4": "gemini-plan-4-neon",
     })
     // The user's choice as saved in Persistent. Everything that talks to a
     // model reads currentModelId instead.
@@ -609,9 +669,9 @@ Singleton {
     // ── Codex plan models, from the CLI's own catalog ─────────────
     // What the plan offers when the catalog cannot be read.
     readonly property var _codexFallbackCatalog: [
-        { slug: "gpt-6.1-sol", name: "GPT-6.1-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low" },
-        { slug: "gpt-6-astra", name: "GPT-6-Astra", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low" },
-        { slug: "gpt-6-sol", name: "GPT-6-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium" },
+        { slug: "gpt-6.2-astra", name: "GPT-6.2-Astra", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium" },
+        { slug: "gpt-6.2-sol", name: "GPT-6.2-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium" },
+        { slug: "gpt-6.1-terra", name: "GPT-6.1-Terra", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium" },
         { slug: "gpt-6-luna", name: "GPT-6-Luna", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium" },
     ]
     // The last catalog the CLI answered with: { listed, upgrades }. A read
@@ -698,18 +758,19 @@ Singleton {
     }
 
     readonly property var _antigravityPlanModels: ({
-        "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini Flash", thinkingLevel: "" },
-        "gemini-plan-3-1-pro": { alias: "gemini-3.1-pro", name: "Gemini Pro", thinkingLevel: "" },
+        "gemini-plan-4-neon": { alias: "gemini-4-neon", name: "Gemini 4 Neon", thinkingLevel: "" },
+        "gemini-plan-4-hydrogen": { alias: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen", thinkingLevel: "" },
+        "gemini-plan-4-carbon": { alias: "gemini-4-carbon", name: "Gemini 4 Carbon", thinkingLevel: "" },
         "gemini-plan-4-argon": { alias: "gemini-4-argon", name: "Gemini 4 Argon", thinkingLevel: "" },
+        "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini 3.8 Flash", thinkingLevel: "" },
     })
 
     readonly property var cliPlanModels: ({
         "claude-code": {
-            "claude-fable": { alias: "fable", name: "Claude Fable" },
-            "claude-opus": { alias: "opus", name: "Claude Opus" },
-            "claude-opus-1m": { alias: "opus[1m]", name: "Claude Opus 1M" },
-            "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet" },
-            "claude-haiku": { alias: "haiku", name: "Claude Haiku" },
+            "claude-fable": { alias: "fable", name: "Claude Fable 5.2" },
+            "claude-opus": { alias: "opus", name: "Claude Opus 5.5" },
+            "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet 5.5" },
+            "claude-haiku": { alias: "haiku", name: "Claude Haiku 5.5" },
         },
         "codex-cli": root._codexPlanModels,
         // Google serves personal accounts through Antigravity; supports Gemini 3
@@ -724,7 +785,7 @@ Singleton {
             readyDescription: Translation.tr("Plan | Your Claude subscription. Pick it to use its models"),
             setupHomepage: "https://docs.anthropic.com/en/docs/claude-code",
             modelDescription: Translation.tr("Plan | %1 through your Claude subscription. No API key needed"),
-            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku."),
+            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5."),
             icon: "claude-symbolic",
             endpoint: "https://api.anthropic.com",
             homepage: "https://www.anthropic.com/claude",
@@ -755,11 +816,11 @@ Singleton {
             readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
             setupHomepage: "https://antigravity.google/product/antigravity-cli",
             modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
-            signedIn: Translation.tr("Signed in. Gemini Flash, Gemini Pro, and Gemini 4 Argon are in the picker now. Adjust thinking level with /think."),
+            signedIn: Translation.tr("Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think."),
             icon: "antigravity-symbolic",
             endpoint: "https://antigravity.google",
             homepage: "https://antigravity.google",
-            firstPick: "gemini-plan-3-8-flash",
+            firstPick: "gemini-plan-4-neon",
             idPrefix: "gemini-plan",
         }
     })
@@ -819,7 +880,7 @@ Singleton {
                 next["gemini"] = aiModelComponent.createObject(root, {
                     "name": "Gemini",
                     "icon": "google-gemini-symbolic",
-                    "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash, Gemini Pro, and Gemini 4 Argon."),
+                    "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro."),
                     "homepage": "https://aistudio.google.com",
                     "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
                     "model": "gemini-flash-latest",
@@ -2239,7 +2300,17 @@ Singleton {
         }
 
         // Codex (Codex CLI or OpenAI reasoning models)
-        if (fmt === "codex-cli" || fmt === "openai" || mid.includes("codex") || mid.startsWith("o1") || mid.startsWith("o3") || mid.startsWith("gpt-5")) {
+        if (fmt === "codex-cli" || fmt === "openai" || mid.includes("codex") || mid.startsWith("o1") || mid.startsWith("o3") || mid.startsWith("o4") || mid.startsWith("gpt-5") || mid.startsWith("gpt-6")) {
+            if (mid.startsWith("gpt-6")) {
+                return [
+                    { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") },
+                    { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning with high throughput") },
+                    { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning effort") },
+                    { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex math and architecture") },
+                    { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
+                    { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
+                ];
+            }
             return [
                 { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") },
                 { id: "none", name: Translation.tr("None"), desc: Translation.tr("Disable reasoning for instantaneous output") },
@@ -2252,6 +2323,23 @@ Singleton {
 
         // Gemini (Gemini API or Antigravity CLI)
         if (fmt === "gemini" || fmt === "antigravity-cli" || mid.includes("gemini")) {
+            if (mid.includes("neon") || mid.includes("hydrogen")) {
+                return [
+                    { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
+                    { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Standard reasoning effort") },
+                    { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for coding and analysis") },
+                    { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep thinking and complex mathematics") },
+                    { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
+                ];
+            }
+            if (mid.includes("gemini-4") || mid.includes("carbon") || mid.includes("argon")) {
+                return [
+                    { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
+                    { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Standard reasoning effort") },
+                    { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for coding and analysis") },
+                    { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep thinking and complex mathematics") },
+                ];
+            }
             return [
                 { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
                 { id: "minimal", name: Translation.tr("Minimal"), desc: Translation.tr("Minimal thinking for lowest latency") },

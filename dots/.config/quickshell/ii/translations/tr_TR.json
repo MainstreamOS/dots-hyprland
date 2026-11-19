@@ -3458,5 +3458,13 @@
   "App font size": "Uygulama yazı tipi boyutu",
   "UI text size": "Arayüz metin boyutu",
   "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "Masaüstünün kenar çubukları, menüleri, bildirimleri ve Ayarlar’daki metin. Çubuk ve ada kendi boyut ayarlarını kullanır.",
-  "Daily forecast unavailable": "Günlük tahmin kullanılamıyor"
+  "Daily forecast unavailable": "Günlük tahmin kullanılamıyor",
+  "Online | Anthropic's Claude Fable 5.2 over the Messages API": "Çevrimiçi | Messages API üzerinden Anthropic Claude Fable 5.2",
+  "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.": "Çevrimiçi | Google'ın Gemini 4 modeli\nKarmaşık kodlama, akıl yürütme ve ajan iş akışları için dengeli, en gelişmiş Gemini 4 modeli.",
+  "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.": "Çevrimiçi | Google'ın Gemini 4 modeli\nGünlük kodlama ve ajan iş akışları için ücretsiz katmana sahip hızlı, verimli Gemini 4 modeli.",
+  "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.": "Çevrimiçi | Google'ın en gelişmiş modeli\nGoogle'ın uzun soluklu kodlama, araştırma ve karmaşık analiz için en derin Gemini 4 akıl yürütme modeli.",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Çevrimiçi | Google'ın modeli\nÜcretsiz katmanı olan Google Gemini modelleri: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash ve Pro.",
+  "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Çevrimiçi | Chat Completions API üzerinden OpenAI GPT-6.2 Sol",
+  "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Oturum açıldı. Gemini 4 Neon, Hydrogen, Carbon, Argon ve Gemini 3.8 Flash artık seçicide. Akıl yürütme düzeyini /think ile ayarlayın.",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Oturum açıldı. Abonelik modelleri artık seçicide: Fable 5.2, Opus 5.5, Sonnet 5.5 ve Haiku 5.5 arasından seçim yapmak için /model yazın."
 }

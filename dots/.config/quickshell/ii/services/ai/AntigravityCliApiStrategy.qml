@@ -42,12 +42,17 @@ ApiStrategy {
         if (model.model && model.model !== "gemini-plan") {
             argv.push("--model=" + model.model);
             if (model.model.startsWith("gemini-")) {
-                let effort = ctx.thinkingLevel || "medium";
-                if (effort === "extra") effort = "xhigh";
-                else if (effort === "ultracode") effort = "max";
-                else if (effort === "minimal" || effort === "none") effort = "low";
-                if (!["low", "medium", "high", "xhigh", "max"].includes(effort)) effort = "medium";
-                if ((model.model.includes("3.1-pro") || model.model.includes("argon")) && effort === "medium") effort = "high";
+                const supportsXhigh = model.model.includes("neon") || model.model.includes("hydrogen");
+                const defaultEffort = (supportsXhigh || model.model.includes("argon")) ? "high" : "medium";
+                let effort = ctx.thinkingLevel || defaultEffort;
+                if (effort === "extra" || effort === "max" || effort === "ultracode") {
+                    effort = supportsXhigh ? "xhigh" : "high";
+                } else if (effort === "minimal" || effort === "none") {
+                    effort = "low";
+                }
+                if (!["low", "medium", "high", "xhigh"].includes(effort)) effort = defaultEffort;
+                if (!supportsXhigh && effort === "xhigh") effort = "high";
+                if (model.model.includes("3.1-pro") && effort === "medium") effort = "high";
                 argv.push("--effort=" + effort);
             }
         }
@@ -87,7 +92,7 @@ ApiStrategy {
             sink.loginLapsed();
             sink.error(Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting."));
         } else if (/quota reached|resource_exhausted/i.test(detail)) {
-            const tip = /Argon|Pro/.test(root._requestInfo.modelName ?? "");
+            const tip = /Argon|Carbon|Neon|Pro/.test(root._requestInfo.modelName ?? "");
             sink.error(tip ? detail + "\n\n" + Translation.tr("Tip: Switch to another model in the picker to keep going.") : detail);
         } else {
             sink.error(detail);
