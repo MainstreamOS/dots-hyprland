@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=29
+pkgrel=30
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -66,6 +66,7 @@ source=(
   org.mainstreamos.file-sharing.policy
   sharing.sysusers
   sharing.tmpfiles
+  update-sudoers.tmpfiles
   smb.conf
   MainstreamHome.xml
   mainstream-lan4.xml
@@ -86,7 +87,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP
 )
 
@@ -160,6 +161,7 @@ package() {
       "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.file-sharing.policy"
   install -Dm644 "$srcdir/sharing.sysusers"              "$pkgdir/usr/lib/sysusers.d/mainstream-sharing.conf"
   install -Dm644 "$srcdir/sharing.tmpfiles"              "$pkgdir/usr/lib/tmpfiles.d/mainstream-sharing.conf"
+  install -Dm644 "$srcdir/update-sudoers.tmpfiles"       "$pkgdir/usr/lib/tmpfiles.d/mainstream-update.conf"
   install -Dm644 "$srcdir/smb.conf"                      "$pkgdir/usr/share/mainstream/samba/smb.conf"
   install -Dm644 "$srcdir/MainstreamHome.xml"            "$pkgdir/usr/lib/firewalld/zones/MainstreamHome.xml"
   install -Dm644 "$srcdir/mainstream-lan4.xml"           "$pkgdir/usr/lib/firewalld/ipsets/mainstream-lan4.xml"

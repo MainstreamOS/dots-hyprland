@@ -1,0 +1,4 @@
+# An update cut short by a crash or power loss leaves its temporary sudo rule
+# behind, and nothing else removes it before the next update.
+r! /etc/sudoers.d/99-mainstream-update-active
+r! /etc/sudoers.d/00-mainstream-update-active
