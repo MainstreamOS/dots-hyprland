@@ -516,5 +516,25 @@
         "4767ea0c9759b8f277ca6289aca00581bca27a18"
       ]
     }
+  },
+  "4.1.2": {
+    "date": "2026-11-21",
+    "kind": "patch",
+    "summary": "A fix release for Settings → Update: restarting while an update is still running no longer leaves the page stuck on Reboot required. If yours is stuck, click Clear output on that page, then run the update again",
+    "changes": [
+      "If Settings → Update shows Reboot required and \"The update did not finish\" even after you restarted, click Clear output. The password box and Start update come back, and running the update again finishes it",
+      "Restarting or shutting down while an update is still running no longer locks the Update page. It now shows that the update was stopped and lets you start it again",
+      "A reboot notice on the Update page no longer hides Start update and Clear output. Reboot Now sits beside them",
+      "Videos in Chrome, Chromium and Edge no longer show corruption on NVIDIA graphics cards and hybrid laptops",
+      "The assistant models have now been updated to the latest models, and its model list now arrives with system updates",
+      "Replies you type in the Dynamic Island clear as soon as you send them and come back if sending fails"
+    ],
+    "otherCommits": {
+      "MainstreamOS/packages": [
+        "68f833f9b8ef09447f0f21b0cb914effb007a41b",
+        "d5cb8dafb0913062fdf33572553ffb44a236e13d",
+        "cefa89f1842df6579e8c133e0d2389cc38dcd996"
+      ]
+    }
   }
 }
