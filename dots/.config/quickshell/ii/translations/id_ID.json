@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Online | Model Google\nModel Gemini Google dengan paket gratis: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, dan Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Online | GPT-6.2 Sol dari OpenAI melalui Chat Completions API",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Sudah masuk. Gemini 4 Neon, Hydrogen, Carbon, Argon, dan Gemini 3.8 Flash kini ada di pemilih. Sesuaikan tingkat pemikiran dengan /think.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Sudah masuk. Model langganan kini tersedia di pemilih: ketik /model untuk memilih Fable 5.2, Opus 5.5, Sonnet 5.5, atau Haiku 5.5."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Sudah masuk. Model langganan kini tersedia di pemilih: ketik /model untuk memilih Fable 5.2, Opus 5.5, Sonnet 5.5, atau Haiku 5.5.",
+  "Online | Anthropic's %1 over the Messages API": "Online | %1 dari Anthropic melalui Messages API",
+  "Online | OpenAI's %1 over the Chat Completions API": "Online | %1 dari OpenAI melalui Chat Completions API",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Online | Model Google\nModel Gemini Google dengan paket gratis: %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Sudah masuk. Model langganan kini tersedia di pemilih: ketik /model untuk memilih di antara %1.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Sudah masuk. %1 kini ada di pemilih. Sesuaikan tingkat pemikiran dengan /think.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Pencarian web dengan model Gemini ini memerlukan proyek Google AI Studio dengan penagihan yang diaktifkan. Tanyakan lagi tanpa pencarian, atau beralih model dengan %1."
 }

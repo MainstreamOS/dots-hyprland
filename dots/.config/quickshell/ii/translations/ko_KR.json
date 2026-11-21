@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "온라인 | Google 모델\n무료 등급이 있는 Google의 Gemini 모델: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "온라인 | Chat Completions API를 통해 OpenAI의 GPT-6.2 Sol 이용",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "로그인했습니다. 이제 Gemini 4 Neon, Hydrogen, Carbon, Argon, Gemini 3.8 Flash를 선택할 수 있습니다. /think로 생각 수준을 조절하세요.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "로그인했습니다. 이제 구독 모델을 선택할 수 있습니다. /model로 Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5를 선택하세요."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "로그인했습니다. 이제 구독 모델을 선택할 수 있습니다. /model로 Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5를 선택하세요.",
+  "Online | Anthropic's %1 over the Messages API": "온라인 | Messages API를 통해 Anthropic의 %1 이용",
+  "Online | OpenAI's %1 over the Chat Completions API": "온라인 | Chat Completions API를 통해 OpenAI의 %1 이용",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "온라인 | Google 모델\n무료 등급이 있는 Google의 Gemini 모델: %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "로그인했습니다. 이제 구독 모델을 선택할 수 있습니다. /model로 %1 중에서 선택하세요.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "로그인했습니다. 이제 %1을(를) 선택할 수 있습니다. /think로 생각 수준을 조절하세요.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "이 Gemini 모델로 웹 검색을 하려면 결제를 켠 Google AI Studio 프로젝트가 필요합니다. 검색 없이 다시 요청하거나 %1(으)로 모델을 바꾸세요."
 }

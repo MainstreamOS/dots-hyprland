@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "מקוון | מודל של Google\nמודלי Gemini של Google עם מסלול חינמי: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash ו-Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "מקוון | GPT-6.2 Sol של OpenAI דרך Chat Completions API",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "הכניסה הצליחה. Gemini 4 Neon, Hydrogen, Carbon, Argon ו-Gemini 3.8 Flash זמינים כעת בבורר. ניתן להתאים את רמת החשיבה באמצעות /think.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "הכניסה הצליחה. המודלים שבמנוי זמינים כעת בבורר: יש להקליד /model כדי לבחור בין Fable 5.2, Opus 5.5, Sonnet 5.5 ו-Haiku 5.5."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "הכניסה הצליחה. המודלים שבמנוי זמינים כעת בבורר: יש להקליד /model כדי לבחור בין Fable 5.2, Opus 5.5, Sonnet 5.5 ו-Haiku 5.5.",
+  "Online | Anthropic's %1 over the Messages API": "מקוון | %1 של Anthropic דרך Messages API",
+  "Online | OpenAI's %1 over the Chat Completions API": "מקוון | %1 של OpenAI דרך Chat Completions API",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "מקוון | מודל של Google\nמודלי Gemini של Google עם מסלול חינמי: %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "הכניסה הצליחה. המודלים שבמנוי זמינים כעת בבורר: יש להקליד /model כדי לבחור בין %1.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "הכניסה הצליחה. %1 זמינים כעת בבורר. ניתן להתאים את רמת החשיבה באמצעות /think.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "חיפוש באינטרנט עם מודל Gemini זה דורש פרויקט Google AI Studio עם חיוב מופעל. שאל שוב בלי חיפוש, או החלף מודל עם %1."
 }

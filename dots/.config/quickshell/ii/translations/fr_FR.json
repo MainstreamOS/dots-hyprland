@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "En ligne | Modèle de Google\nLes modèles Gemini de Google avec une offre gratuite : Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash et Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "En ligne | GPT-6.2 Sol d'OpenAI via la Chat Completions API",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Connecté. Gemini 4 Neon, Hydrogen, Carbon, Argon et Gemini 3.8 Flash sont disponibles dans le sélecteur. Ajustez le niveau de réflexion avec /think.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Connecté. Les modèles de l'abonnement sont disponibles : tapez /model pour choisir entre Fable 5.2, Opus 5.5, Sonnet 5.5 et Haiku 5.5."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Connecté. Les modèles de l'abonnement sont disponibles : tapez /model pour choisir entre Fable 5.2, Opus 5.5, Sonnet 5.5 et Haiku 5.5.",
+  "Online | Anthropic's %1 over the Messages API": "En ligne | %1 d'Anthropic via la Messages API",
+  "Online | OpenAI's %1 over the Chat Completions API": "En ligne | %1 d'OpenAI via la Chat Completions API",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "En ligne | Modèle de Google\nLes modèles Gemini de Google avec une offre gratuite : %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Connecté. Les modèles de l'abonnement sont disponibles : tapez /model pour choisir entre %1.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Connecté. %1 sont disponibles dans le sélecteur. Ajustez le niveau de réflexion avec /think.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "La recherche web avec ce modèle Gemini nécessite un projet Google AI Studio avec la facturation activée. Reposez la question sans recherche, ou changez de modèle avec %1."
 }

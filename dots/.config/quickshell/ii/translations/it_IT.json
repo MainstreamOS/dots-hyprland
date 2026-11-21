@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Online | Modello di Google\nModelli Gemini di Google con un livello gratuito: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash e Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Online | GPT-6.2 Sol di OpenAI tramite la Chat Completions API",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Accesso effettuato. Gemini 4 Neon, Hydrogen, Carbon, Argon e Gemini 3.8 Flash sono nel selettore. Regola il livello di ragionamento con /think.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Accesso effettuato. I modelli dell'abbonamento sono nel selettore: digita /model per scegliere tra Fable 5.2, Opus 5.5, Sonnet 5.5 e Haiku 5.5."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Accesso effettuato. I modelli dell'abbonamento sono nel selettore: digita /model per scegliere tra Fable 5.2, Opus 5.5, Sonnet 5.5 e Haiku 5.5.",
+  "Online | Anthropic's %1 over the Messages API": "Online | %1 di Anthropic tramite la Messages API",
+  "Online | OpenAI's %1 over the Chat Completions API": "Online | %1 di OpenAI tramite la Chat Completions API",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Online | Modello di Google\nModelli Gemini di Google con un livello gratuito: %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Accesso effettuato. I modelli dell'abbonamento sono nel selettore: digita /model per scegliere tra %1.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Accesso effettuato. %1 sono nel selettore. Regola il livello di ragionamento con /think.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "La ricerca web con questo modello Gemini richiede un progetto Google AI Studio con fatturazione attiva. Chiedi di nuovo senza ricerca, oppure cambia modello con %1."
 }

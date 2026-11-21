@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "ऑनलाइन | Google का मॉडल\nमुफ़्त स्तर वाले Google के Gemini मॉडल: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash और Pro।",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "ऑनलाइन | Chat Completions API से OpenAI का GPT-6.2 Sol",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "साइन इन हो गया। Gemini 4 Neon, Hydrogen, Carbon, Argon और Gemini 3.8 Flash चयनकर्ता में हैं। /think से सोच का स्तर बदलें।",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "साइन इन हो गया। सदस्यता के मॉडल अब चयनकर्ता में हैं: Fable 5.2, Opus 5.5, Sonnet 5.5 और Haiku 5.5 चुनने के लिए /model लिखें।"
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "साइन इन हो गया। सदस्यता के मॉडल अब चयनकर्ता में हैं: Fable 5.2, Opus 5.5, Sonnet 5.5 और Haiku 5.5 चुनने के लिए /model लिखें।",
+  "Online | Anthropic's %1 over the Messages API": "ऑनलाइन | Messages API से Anthropic का %1",
+  "Online | OpenAI's %1 over the Chat Completions API": "ऑनलाइन | Chat Completions API से OpenAI का %1",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "ऑनलाइन | Google का मॉडल\nमुफ़्त स्तर वाले Google के Gemini मॉडल: %1।",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "साइन इन हो गया। सदस्यता के मॉडल अब चयनकर्ता में हैं: %1 में से चुनने के लिए /model लिखें।",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "साइन इन हो गया। %1 चयनकर्ता में हैं। /think से सोच का स्तर बदलें।",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "इस Gemini मॉडल से वेब खोज के लिए बिलिंग चालू वाला Google AI Studio प्रोजेक्ट चाहिए। बिना खोजे फिर पूछें, या %1 से मॉडल बदलें।"
 }

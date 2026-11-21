@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "線上 | Google 的模型\n提供免費方案的 Google Gemini 模型：Gemini 4 Hydrogen、Neon、Carbon、Argon、Flash 與 Pro。",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "線上 | 透過 Chat Completions API 使用 OpenAI 的 GPT-6.2 Sol",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "已登入。Gemini 4 Neon、Hydrogen、Carbon、Argon 與 Gemini 3.8 Flash 已顯示在選擇器中。使用 /think 調整思考等級。",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "已登入。方案模型已顯示在選擇器中，輸入 /model 可選擇 Fable 5.2、Opus 5.5、Sonnet 5.5 或 Haiku 5.5。"
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "已登入。方案模型已顯示在選擇器中，輸入 /model 可選擇 Fable 5.2、Opus 5.5、Sonnet 5.5 或 Haiku 5.5。",
+  "Online | Anthropic's %1 over the Messages API": "線上 | 透過 Messages API 使用 Anthropic 的 %1",
+  "Online | OpenAI's %1 over the Chat Completions API": "線上 | 透過 Chat Completions API 使用 OpenAI 的 %1",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "線上 | Google 的模型\n提供免費方案的 Google Gemini 模型：%1。",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "已登入。方案模型已顯示在選擇器中，輸入 /model 可選擇 %1。",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "已登入。%1 已顯示在選擇器中。使用 /think 調整思考等級。",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "使用此 Gemini 模型進行網頁搜尋需要啟用計費的 Google AI Studio 專案。請不使用搜尋再問一次，或透過 %1 切換模型。"
 }

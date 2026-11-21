@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Çevrimiçi | Google'ın modeli\nÜcretsiz katmanı olan Google Gemini modelleri: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash ve Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Çevrimiçi | Chat Completions API üzerinden OpenAI GPT-6.2 Sol",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Oturum açıldı. Gemini 4 Neon, Hydrogen, Carbon, Argon ve Gemini 3.8 Flash artık seçicide. Akıl yürütme düzeyini /think ile ayarlayın.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Oturum açıldı. Abonelik modelleri artık seçicide: Fable 5.2, Opus 5.5, Sonnet 5.5 ve Haiku 5.5 arasından seçim yapmak için /model yazın."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Oturum açıldı. Abonelik modelleri artık seçicide: Fable 5.2, Opus 5.5, Sonnet 5.5 ve Haiku 5.5 arasından seçim yapmak için /model yazın.",
+  "Online | Anthropic's %1 over the Messages API": "Çevrimiçi | Messages API üzerinden Anthropic %1",
+  "Online | OpenAI's %1 over the Chat Completions API": "Çevrimiçi | Chat Completions API üzerinden OpenAI %1",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Çevrimiçi | Google'ın modeli\nÜcretsiz katmanı olan Google Gemini modelleri: %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Oturum açıldı. Abonelik modelleri artık seçicide: %1 arasından seçim yapmak için /model yazın.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Oturum açıldı. %1 artık seçicide. Akıl yürütme düzeyini /think ile ayarlayın.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Bu Gemini modeliyle web araması, faturalandırması etkin bir Google AI Studio projesi gerektirir. Arama yapmadan tekrar sorun ya da %1 ile modeli değiştirin."
 }

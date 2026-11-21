@@ -3466,5 +3466,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro.": "Онлайн | Модель Google\nМоделі Google Gemini з безкоштовним тарифом: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash та Pro.",
   "Online | OpenAI's GPT-6.2 Sol over the Chat Completions API": "Онлайн | GPT-6.2 Sol від OpenAI через Chat Completions API",
   "Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think.": "Вхід виконано. Gemini 4 Neon, Hydrogen, Carbon, Argon і Gemini 3.8 Flash тепер доступні у виборі. Налаштуйте рівень міркувань через /think.",
-  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Вхід виконано. Моделі за підпискою тепер доступні: введіть /model, щоб вибрати Fable 5.2, Opus 5.5, Sonnet 5.5 або Haiku 5.5."
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.": "Вхід виконано. Моделі за підпискою тепер доступні: введіть /model, щоб вибрати Fable 5.2, Opus 5.5, Sonnet 5.5 або Haiku 5.5.",
+  "Online | Anthropic's %1 over the Messages API": "Онлайн | %1 від Anthropic через Messages API",
+  "Online | OpenAI's %1 over the Chat Completions API": "Онлайн | %1 від OpenAI через Chat Completions API",
+  "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Онлайн | Модель Google\nМоделі Google Gemini з безкоштовним тарифом: %1.",
+  "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Вхід виконано. Моделі за підпискою тепер доступні: введіть /model, щоб вибрати серед %1.",
+  "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Вхід виконано. %1 тепер доступні у виборі. Налаштуйте рівень міркувань через /think.",
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Для пошуку в інтернеті з цією моделлю Gemini потрібен проект Google AI Studio з увімкненою оплатою. Запитайте ще раз без пошуку або змініть модель командою %1."
 }
