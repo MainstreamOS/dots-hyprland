@@ -14,8 +14,15 @@ import QtQuick;
  * - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
  * - extraParams: Extra parameters to be passed to the model. This is a JSON object.
  * - sendTemperature: Whether to send temperature sampling parameter (deprecated on Gemini 3)
- * - thinkingLevel: Thinking/reasoning level ("minimal", "low", "medium", "high")
+ * - thinkingLevel: Default thinking/reasoning level ("minimal", "low", "medium", "high", etc.)
  * - supportsSessions: Whether the model supports saving and loading chat sessions
+ * - thinkingProfile: Named thinking profile from models.json (e.g. "gemini-xhigh")
+ * - descProfile: Thinking-level description family ("gemini", "claude", "openai", "generic")
+ * - thinkingLevels: Explicit ordered list of UI thinking level IDs (or null to use fallback heuristics)
+ * - effortMap: Explicit map of UI thinking level ID -> provider wire effort string (or null)
+ * - defaultEffort: Default wire effort string when thinkingLevel is Auto/empty (e.g. Antigravity CLI)
+ * - capabilities: Provider-specific model capability flags (searchRequiresBilling, quotaSwitchTip, thinkingMode, maxTokens, ...)
+ * - isSetupEntry: True for CLI plan sign-in/setup placeholder entries
  */
 
 QtObject {
@@ -35,4 +42,11 @@ QtObject {
     property bool sendTemperature: true
     property string thinkingLevel: ""
     property bool supportsSessions: true
+    property string thinkingProfile: ""
+    property string descProfile: ""
+    property var thinkingLevels: null
+    property var effortMap: null
+    property string defaultEffort: ""
+    property var capabilities: ({})
+    property bool isSetupEntry: false
 }

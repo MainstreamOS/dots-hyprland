@@ -7,8 +7,8 @@ if [[ -z "$1" ]]; then
 fi
 
 # Variables
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_IMG_PATH="$1"
-MODEL="${2:-${GEMINI_WALLPAPER_MODEL:-gemini-3.5-flash-lite}}"
 WALLPAPER_NAME="$(basename "$SOURCE_IMG_PATH")"
 PROMPT="${3:-${GEMINI_WALLPAPER_PROMPT:-Categorize the wallpaper. Its file name is $WALLPAPER_NAME}}"
 RESIZED_IMG_PATH="/tmp/quickshell/ai/wallpaper.jpg"
@@ -16,6 +16,13 @@ RESIZED_IMG_PATH="/tmp/quickshell/ai/wallpaper.jpg"
 # Without a key nothing is sent; nothing is cached either, so it asks again once one is set.
 API_KEY=$(secret-tool lookup 'application' 'illogical-impulse' | jq -r '.apiKeys.gemini // empty')
 [[ -n "$API_KEY" ]] || exit 0
+
+# The model catalog names the model, unless one was passed in.
+catalog_model() {
+    python3 "${SCRIPT_DIR}/catalog_loader.py" get scripts.wallpaperCategorize.model gemini-3.5-flash-lite 2>/dev/null \
+        || echo gemini-3.5-flash-lite
+}
+MODEL="${2:-${GEMINI_WALLPAPER_MODEL:-$(catalog_model)}}"
 
 # Resize image for speed
 mkdir -p "$(dirname "$RESIZED_IMG_PATH")"

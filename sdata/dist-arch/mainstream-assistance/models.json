@@ -1,0 +1,550 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026.11.19",
+  "defaults": {
+    "geminiDefaultModel": "gemini-flash-latest",
+    "ollamaSuggestedModel": "llama3.2:3b",
+    "fallbackOnlineModel": "gemini"
+  },
+  "thinkingProfiles": {
+    "gemini-xhigh": {
+      "levels": ["auto", "low", "medium", "high", "extra"],
+      "descProfile": "gemini",
+      "defaultEffort": "high",
+      "effortMap": {
+        "none": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "xhigh",
+        "max": "xhigh",
+        "ultracode": "xhigh"
+      }
+    },
+    "gemini-4": {
+      "levels": ["auto", "low", "medium", "high"],
+      "descProfile": "gemini",
+      "defaultEffort": "medium",
+      "effortMap": {
+        "none": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "high",
+        "max": "high",
+        "ultracode": "high"
+      }
+    },
+    "gemini-3": {
+      "levels": ["auto", "minimal", "low", "medium", "high"],
+      "descProfile": "gemini",
+      "defaultEffort": "medium",
+      "effortMap": {
+        "none": "minimal",
+        "minimal": "minimal",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "high",
+        "max": "high",
+        "ultracode": "high"
+      }
+    },
+    "claude-adaptive": {
+      "levels": ["auto", "low", "medium", "high", "extra", "max", "ultracode"],
+      "descProfile": "claude",
+      "effortMap": {
+        "none": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "xhigh",
+        "max": "max",
+        "ultracode": "max"
+      }
+    },
+    "openai-gpt6": {
+      "levels": ["auto", "low", "medium", "high", "extra", "max"],
+      "descProfile": "openai",
+      "effortMap": {
+        "none": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "xhigh",
+        "max": "max",
+        "ultracode": "max"
+      }
+    },
+    "generic": {
+      "levels": ["auto", "low", "medium", "high"],
+      "descProfile": "generic"
+    }
+  },
+  "geminiGroup": {
+    "id": "gemini",
+    "name": "Gemini",
+    "icon": "google-gemini-symbolic",
+    "homepage": "https://aistudio.google.com",
+    "key_id": "gemini",
+    "key_get_link": "https://aistudio.google.com/app/apikey",
+    "keyInstructionKey": "gemini-free"
+  },
+  "geminiApiCatalog": {
+    "gemini-4-hydrogen": {
+      "name": "Gemini 4 Hydrogen",
+      "icon": "google-gemini-symbolic",
+      "description": "Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier.",
+      "homepage": "https://aistudio.google.com",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:streamGenerateContent",
+      "model": "gemini-4-hydrogen",
+      "requires_key": true,
+      "key_id": "gemini",
+      "key_get_link": "https://aistudio.google.com/app/apikey",
+      "keyInstructionKey": "gemini-free",
+      "api_format": "gemini",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "gemini-xhigh",
+      "capabilities": {
+        "searchRequiresBilling": true
+      }
+    },
+    "gemini-4-neon": {
+      "name": "Gemini 4 Neon",
+      "icon": "google-gemini-symbolic",
+      "description": "Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows.",
+      "homepage": "https://aistudio.google.com",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent",
+      "model": "gemini-4-neon",
+      "requires_key": true,
+      "key_id": "gemini",
+      "key_get_link": "https://aistudio.google.com/app/apikey",
+      "keyInstructionKey": "gemini-paid",
+      "api_format": "gemini",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "gemini-xhigh",
+      "capabilities": {
+        "searchRequiresBilling": true
+      }
+    },
+    "gemini-4-carbon": {
+      "name": "Gemini 4 Carbon",
+      "icon": "google-gemini-symbolic",
+      "description": "Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis.",
+      "homepage": "https://aistudio.google.com",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-carbon:streamGenerateContent",
+      "model": "gemini-4-carbon",
+      "requires_key": true,
+      "key_id": "gemini",
+      "key_get_link": "https://aistudio.google.com/app/apikey",
+      "keyInstructionKey": "gemini-paid",
+      "api_format": "gemini",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "gemini-4",
+      "capabilities": {
+        "searchRequiresBilling": true
+      }
+    },
+    "gemini-4-argon": {
+      "name": "Gemini 4 Argon",
+      "icon": "google-gemini-symbolic",
+      "description": "Online | Google's frontier model\nGoogle's flagship frontier reasoning model: complex coding, mathematics, and research.",
+      "homepage": "https://aistudio.google.com",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+      "model": "gemini-4-argon",
+      "requires_key": true,
+      "key_id": "gemini",
+      "key_get_link": "https://aistudio.google.com/app/apikey",
+      "keyInstructionKey": "gemini-paid",
+      "api_format": "gemini",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "gemini-4",
+      "capabilities": {
+        "searchRequiresBilling": true
+      }
+    },
+    "gemini-flash-latest": {
+      "name": "Gemini Flash",
+      "icon": "google-gemini-symbolic",
+      "description": "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.",
+      "homepage": "https://aistudio.google.com",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
+      "model": "gemini-flash-latest",
+      "requires_key": true,
+      "key_id": "gemini",
+      "key_get_link": "https://aistudio.google.com/app/apikey",
+      "keyInstructionKey": "gemini-free",
+      "api_format": "gemini",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "gemini-3",
+      "effortMap": {
+        "none": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "high",
+        "max": "high",
+        "ultracode": "high"
+      },
+      "capabilities": {
+        "searchRequiresBilling": true
+      }
+    },
+    "gemini-pro-latest": {
+      "name": "Gemini Pro",
+      "icon": "google-gemini-symbolic",
+      "description": "Online | Google's model\nGoogle's flagship Pro reasoning model: complex coding, mathematics, and research.",
+      "homepage": "https://aistudio.google.com",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:streamGenerateContent",
+      "model": "gemini-pro-latest",
+      "requires_key": true,
+      "key_id": "gemini",
+      "key_get_link": "https://aistudio.google.com/app/apikey",
+      "keyInstructionKey": "gemini-free",
+      "api_format": "gemini",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "gemini-3",
+      "effortMap": {
+        "none": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "extra": "high",
+        "max": "high",
+        "ultracode": "high"
+      },
+      "capabilities": {
+        "searchRequiresBilling": true
+      }
+    }
+  },
+  "apiModels": {
+    "mistral-4": {
+      "name": "Mistral 4",
+      "icon": "mistral-symbolic",
+      "description": "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose",
+      "descriptionModelName": "Mistral",
+      "homepage": "https://mistral.ai/news/mistral-large-4",
+      "endpoint": "https://api.mistral.ai/v1/chat/completions",
+      "model": "mistral-large-latest",
+      "requires_key": true,
+      "key_id": "mistral",
+      "key_get_link": "https://console.mistral.ai/api-keys",
+      "keyInstructionKey": "mistral",
+      "api_format": "mistral",
+      "sendTemperature": true,
+      "thinkingProfile": "generic"
+    },
+    "claude": {
+      "name": "Claude",
+      "icon": "claude-symbolic",
+      "descriptionTemplate": "anthropic-api",
+      "descriptionModelName": "Claude Fable 5.2",
+      "homepage": "https://www.anthropic.com/claude",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "model": "claude-fable-5-2",
+      "requires_key": true,
+      "key_id": "anthropic",
+      "key_get_link": "https://console.anthropic.com/settings/keys",
+      "keyInstructionKey": "anthropic",
+      "api_format": "anthropic",
+      "sendTemperature": false,
+      "thinkingLevel": "",
+      "thinkingProfile": "claude-adaptive",
+      "capabilities": {
+        "thinkingMode": "adaptive",
+        "maxTokens": 64000
+      }
+    },
+    "codex": {
+      "name": "Codex",
+      "icon": "openai-symbolic",
+      "descriptionTemplate": "openai-api",
+      "descriptionModelName": "GPT-6.2 Sol",
+      "homepage": "https://platform.openai.com",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-6.2-sol",
+      "requires_key": true,
+      "key_id": "openai",
+      "key_get_link": "https://platform.openai.com/api-keys",
+      "keyInstructionKey": "openai",
+      "api_format": "openai",
+      "sendTemperature": false,
+      "thinkingProfile": "openai-gpt6"
+    }
+  },
+  "cliPlans": {
+    "claude-code": {
+      "firstPick": "claude-fable",
+      "models": {
+        "claude-fable": {
+          "alias": "fable",
+          "name": "Claude Fable 5.2",
+          "thinkingProfile": "claude-adaptive"
+        },
+        "claude-opus": {
+          "alias": "opus",
+          "name": "Claude Opus 5.5",
+          "thinkingProfile": "claude-adaptive"
+        },
+        "claude-sonnet": {
+          "alias": "sonnet",
+          "name": "Claude Sonnet 5.5",
+          "thinkingProfile": "claude-adaptive"
+        },
+        "claude-haiku": {
+          "alias": "haiku",
+          "name": "Claude Haiku 5.5",
+          "thinkingProfile": "claude-adaptive"
+        }
+      }
+    },
+    "codex-cli": {
+      "legacyIds": {
+        "gpt-5.6-terra": "codex-terra",
+        "gpt-5.6-luna": "codex-luna"
+      },
+      "fallbackCatalog": [
+        {
+          "slug": "gpt-6.2-astra",
+          "name": "GPT-6.2-Astra",
+          "efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+          "defaultEffort": "medium"
+        },
+        {
+          "slug": "gpt-6.2-sol",
+          "name": "GPT-6.2-Sol",
+          "efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+          "defaultEffort": "medium"
+        },
+        {
+          "slug": "gpt-6.1-terra",
+          "name": "GPT-6.1-Terra",
+          "efforts": ["low", "medium", "high", "xhigh", "max"],
+          "defaultEffort": "medium"
+        },
+        {
+          "slug": "gpt-6-luna",
+          "name": "GPT-6-Luna",
+          "efforts": ["low", "medium", "high", "xhigh", "max"],
+          "defaultEffort": "medium"
+        }
+      ]
+    },
+    "antigravity-cli": {
+      "firstPick": "gemini-plan-4-neon",
+      "models": {
+        "gemini-plan-4-neon": {
+          "alias": "gemini-4-neon",
+          "name": "Gemini 4 Neon",
+          "thinkingLevel": "",
+          "thinkingProfile": "gemini-xhigh",
+          "defaultEffort": "high",
+          "capabilities": {
+            "quotaSwitchTip": true
+          }
+        },
+        "gemini-plan-4-hydrogen": {
+          "alias": "gemini-4-hydrogen",
+          "name": "Gemini 4 Hydrogen",
+          "thinkingLevel": "",
+          "thinkingProfile": "gemini-xhigh",
+          "defaultEffort": "high",
+          "capabilities": {
+            "quotaSwitchTip": false
+          }
+        },
+        "gemini-plan-4-carbon": {
+          "alias": "gemini-4-carbon",
+          "name": "Gemini 4 Carbon",
+          "thinkingLevel": "",
+          "thinkingProfile": "gemini-4",
+          "defaultEffort": "medium",
+          "capabilities": {
+            "quotaSwitchTip": true
+          }
+        },
+        "gemini-plan-4-argon": {
+          "alias": "gemini-4-argon",
+          "name": "Gemini 4 Argon",
+          "thinkingLevel": "",
+          "thinkingProfile": "gemini-4",
+          "defaultEffort": "high",
+          "capabilities": {
+            "quotaSwitchTip": true
+          }
+        },
+        "gemini-plan-3-8-flash": {
+          "alias": "gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "thinkingLevel": "",
+          "thinkingProfile": "gemini-3",
+          "defaultEffort": "medium",
+          "effortMap": {
+            "none": "low",
+            "minimal": "low",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "extra": "high",
+            "max": "high",
+            "ultracode": "high"
+          },
+          "capabilities": {
+            "quotaSwitchTip": false
+          }
+        }
+      }
+    }
+  },
+  "retiredModels": {
+    "claude-opus-4-8": "claude",
+    "claude-opus-5-5": "claude",
+    "claude-fable-5-1": "claude",
+    "claude-fable-5-2": "claude",
+    "claude-opus-1m": "claude-opus",
+    "gpt-5.6": "codex",
+    "mistral-medium-3": "mistral-4",
+    "mistral-3": "mistral-4",
+    "mistral-medium": "mistral-4",
+    "mistral": "mistral-4",
+    "gemini-3-flash": "gemini-flash-latest",
+    "gemini-2.5-flash": "gemini-flash-latest",
+    "gemini-3.5-flash-lite": "gemini-flash-latest",
+    "gemini-3.8-flash": "gemini-flash-latest",
+    "gemini": "gemini-flash-latest",
+    "gemini-flash": "gemini-flash-latest",
+    "gemini-pro": "gemini-pro-latest",
+    "gemini-3.1-pro": "gemini-pro-latest",
+    "gemini-3.1-pro-preview": "gemini-pro-latest",
+    "hydrogen": "gemini-4-hydrogen",
+    "gemini-hydrogen": "gemini-4-hydrogen",
+    "neon": "gemini-4-neon",
+    "gemini-neon": "gemini-4-neon",
+    "carbon": "gemini-4-carbon",
+    "gemini-carbon": "gemini-4-carbon",
+    "argon": "gemini-4-argon",
+    "gemini-argon": "gemini-4-argon",
+    "gemini-4": "gemini-4-neon",
+    "gemini-plan-default": "gemini-plan-4-neon",
+    "gemini-plan-3-8-flash-high": "gemini-plan-3-8-flash",
+    "gemini-plan-3-8-flash-medium": "gemini-plan-3-8-flash",
+    "gemini-plan-3-8-flash-low": "gemini-plan-3-8-flash",
+    "gemini-plan-3-1-pro": "gemini-plan-4-neon",
+    "gemini-plan-3-1-pro-high": "gemini-plan-4-neon",
+    "gemini-plan-3-1-pro-low": "gemini-plan-4-neon",
+    "gemini-plan-neon": "gemini-plan-4-neon",
+    "gemini-plan-hydrogen": "gemini-plan-4-hydrogen",
+    "gemini-plan-carbon": "gemini-plan-4-carbon",
+    "gemini-plan-argon": "gemini-plan-4-argon",
+    "gemini-plan-4": "gemini-plan-4-neon"
+  },
+  "scripts": {
+    "geminiUsage": {
+      "userAgent": "antigravity/1.5.12 linux/amd64",
+      "generalFallback": [
+        "gemini-4-hydrogen-sonar",
+        "gemini-3.8-flash-tiered",
+        "gemini-3.1-pro-low",
+        "gemini-3.6-flash-high",
+        "gemini-pro-agent"
+      ],
+      "buckets": [
+        {
+          "match": "carbon",
+          "preferred": [
+            "gemini-4-carbon",
+            "gemini-4-carbon-high",
+            "gemini-4-carbon-medium",
+            "gemini-4-carbon-low"
+          ],
+          "substrKey": "carbon",
+          "missingMeansExhausted": true
+        },
+        {
+          "match": "argon",
+          "preferred": [
+            "gemini-4-argon",
+            "gemini-4.0-argon",
+            "gemini-4-argon-high",
+            "gemini-4-argon-medium",
+            "gemini-4-argon-low"
+          ],
+          "substrKey": "argon",
+          "missingMeansExhausted": true
+        },
+        {
+          "match": "neon",
+          "preferred": [
+            "gemini-4-neon",
+            "gemini-4-neon-high",
+            "gemini-4-neon-xhigh",
+            "gemini-4-neon-medium",
+            "gemini-4-neon-low"
+          ],
+          "substrKey": "neon",
+          "missingMeansExhausted": false
+        },
+        {
+          "match": "hydrogen",
+          "preferred": [
+            "gemini-4-hydrogen",
+            "gemini-4-hydrogen-sonar",
+            "gemini-4-hydrogen-high",
+            "gemini-4-hydrogen-xhigh",
+            "gemini-4-hydrogen-medium",
+            "gemini-4-hydrogen-low"
+          ],
+          "substrKey": "hydrogen",
+          "missingMeansExhausted": false
+        },
+        {
+          "match": "pro",
+          "preferred": [
+            "gemini-3.1-pro-low",
+            "gemini-3.1-pro-high",
+            "gemini-pro-agent",
+            "gemini-2.5-pro"
+          ],
+          "substrKey": null,
+          "missingMeansExhausted": false
+        },
+        {
+          "match": "flash",
+          "preferred": [
+            "gemini-3.8-flash-tiered",
+            "gemini-3.8-flash-medium",
+            "gemini-3.6-flash-high",
+            "gemini-3.1-flash-lite"
+          ],
+          "substrKey": null,
+          "missingMeansExhausted": false
+        }
+      ]
+    },
+    "translate": {
+      "model": "gemini-3.8-flash",
+      "thinkingLevel": "low"
+    },
+    "wallpaperCategorize": {
+      "model": "gemini-3.5-flash-lite"
+    },
+    "liveTranscribe": {
+      "model": "models/gemini-3.5-transcribe-live",
+      "apiVersion": "v1alpha"
+    }
+  },
+  "translations": {}
+}

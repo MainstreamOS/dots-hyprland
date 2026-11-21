@@ -12,6 +12,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import catalog_loader
+
 USER_AGENT = "antigravity/1.5.12 linux/amd64"
 MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -142,24 +145,38 @@ def refresh_token(rf):
         pairs, stamp, cached = client_pairs(use_cache=False)
 
 
-def fetch_models(access_token):
+# Which quota entries answer for which model comes from the model catalog, so a
+# new model family needs no new script.
+def load_usage_config():
+    cfg = catalog_loader.load_script_config("geminiUsage")
+    listed = lambda value: value if isinstance(value, list) else []
+    return {
+        "userAgent": cfg.get("userAgent") or USER_AGENT,
+        "generalFallback": listed(cfg.get("generalFallback")),
+        # One entry the catalog got wrong is left out; the rest still answer.
+        "buckets": [b for b in listed(cfg.get("buckets")) if isinstance(b, dict)
+                    and isinstance(b.get("match"), str) and b["match"] and isinstance(b.get("preferred"), list)],
+    }
+
+
+def fetch_models(access_token, user_agent):
     req = urllib.request.Request(
         MODELS_URL,
         data=b"{}",
         headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
-            "User-Agent": USER_AGENT,
+            "User-Agent": user_agent,
         },
     )
     with urllib.request.urlopen(req, timeout=10) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def fetch_with_refresh(tok, rf):
+def fetch_with_refresh(tok, rf, user_agent):
     if tok:
         try:
-            return fetch_models(tok)
+            return fetch_models(tok, user_agent)
         except urllib.error.HTTPError as e:
             if e.code != 401:
                 raise Failure("network")
@@ -168,7 +185,7 @@ def fetch_with_refresh(tok, rf):
     if not rf:
         raise Failure("auth")
     try:
-        return fetch_models(refresh_token(rf))
+        return fetch_models(refresh_token(rf), user_agent)
     except urllib.error.HTTPError as e:
         raise Failure("auth" if e.code == 401 else "network")
     except (urllib.error.URLError, OSError):
@@ -190,41 +207,17 @@ def weekly_window(quota):
     return None
 
 
-def usage(target_model):
-    tok, rf = get_credentials()
-    if not tok and not rf:
-        raise Failure("no-login")
-    res = fetch_with_refresh(tok, rf)
-
-    models = res.get("models", {}) if isinstance(res, dict) else {}
+def select_quota(models, target_model, config):
     if not isinstance(models, dict):
         models = {}
     quota = None
 
     # Priority lookup based on active model if requested
     target_lower = target_model.lower()
-    general_fallback = ["gemini-4-hydrogen-sonar", "gemini-3.8-flash-tiered", "gemini-3.1-pro-low", "gemini-3.6-flash-high", "gemini-pro-agent"]
-    if "carbon" in target_lower:
-        preferred = ["gemini-4-carbon", "gemini-4-carbon-high", "gemini-4-carbon-medium", "gemini-4-carbon-low"]
-        substr_key = "carbon"
-    elif "argon" in target_lower:
-        preferred = ["gemini-4-argon", "gemini-4.0-argon", "gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-argon-low"]
-        substr_key = "argon"
-    elif "neon" in target_lower:
-        preferred = ["gemini-4-neon", "gemini-4-neon-high", "gemini-4-neon-xhigh", "gemini-4-neon-medium", "gemini-4-neon-low"]
-        substr_key = "neon"
-    elif "hydrogen" in target_lower:
-        preferred = ["gemini-4-hydrogen", "gemini-4-hydrogen-sonar", "gemini-4-hydrogen-high", "gemini-4-hydrogen-xhigh", "gemini-4-hydrogen-medium", "gemini-4-hydrogen-low"]
-        substr_key = "hydrogen"
-    elif "pro" in target_lower:
-        preferred = ["gemini-3.1-pro-low", "gemini-3.1-pro-high", "gemini-pro-agent", "gemini-2.5-pro"]
-        substr_key = None
-    elif "flash" in target_lower:
-        preferred = ["gemini-3.8-flash-tiered", "gemini-3.8-flash-medium", "gemini-3.6-flash-high", "gemini-3.1-flash-lite"]
-        substr_key = None
-    else:
-        preferred = general_fallback
-        substr_key = None
+    general_fallback = config["generalFallback"]
+    bucket = next((b for b in config["buckets"] if b["match"].lower() in target_lower), {}) if target_lower else {}
+    preferred = bucket.get("preferred", general_fallback)
+    substr_key = bucket.get("substrKey")
 
     for k in preferred:
         if isinstance(models.get(k), dict) and models[k].get("quotaInfo"):
@@ -238,8 +231,8 @@ def usage(target_model):
                 break
 
     if not quota:
-        # No quota entry for Argon or Carbon means this account has none, rather than another model's.
-        if target_model and ("argon" in target_lower or "carbon" in target_lower):
+        # No quota entry for a model such as Argon or Carbon means this account has none, rather than another model's.
+        if bucket.get("missingMeansExhausted"):
             return {"planType": "google_account", "session": {"utilization": 100.0, "resets_at": None}, "weekly": None}
         # daily-cloudcode-pa omits dedicated Neon keys even when Neon is usable; try general Flash/tier fallbacks.
         for k in general_fallback:
@@ -262,6 +255,15 @@ def usage(target_model):
         weekly = weekly_window(quota)
 
     return {"planType": "google_account", "session": session, "weekly": weekly}
+
+
+def usage(target_model):
+    tok, rf = get_credentials()
+    if not tok and not rf:
+        raise Failure("no-login")
+    config = load_usage_config()
+    res = fetch_with_refresh(tok, rf, config["userAgent"])
+    return select_quota(res.get("models", {}) if isinstance(res, dict) else {}, target_model, config)
 
 
 def main():

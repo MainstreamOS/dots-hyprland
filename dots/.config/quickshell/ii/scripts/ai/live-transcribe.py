@@ -10,15 +10,30 @@ import base64
 import ctypes
 import json
 import os
+import re
 import shutil
 import signal
 import sys
 
-ENDPOINT = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
-# Checked against the Live API docs before release; keep them in this one place.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import catalog_loader
+
+_CATALOG = catalog_loader.load_script_config("liveTranscribe")
+
+
+def catalog_text(key, default, pattern=r".+"):
+    value = _CATALOG.get(key)
+    return value if isinstance(value, str) and re.fullmatch(pattern, value) else default
+
+
+# Checked against the Live API docs before release. The model catalog can name
+# a newer model or API version; these answer when it does not.
+ENDPOINT = ("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage."
+            + catalog_text("apiVersion", "v1alpha", r"[A-Za-z0-9_]+")
+            + ".GenerativeService.BidiGenerateContent")
 SETUP = {
     "setup": {
-        "model": "models/gemini-3.5-transcribe-live",
+        "model": catalog_text("model", "models/gemini-3.5-transcribe-live"),
         "generationConfig": {"responseModalities": ["TEXT"]},
         "inputAudioTranscription": {"mode": "smart"},
     }

@@ -31,7 +31,8 @@ ApiStrategy {
         const sessionId = ctx.regenerate ? "" : root.sessionId;
 
         const argv = ["claude"];
-        if (model.model && model.model !== "claude-code") argv.push("--model", model.model);
+        const setupId = Ai.cliPlans["claude-code"]?.setupId ?? "claude-code";
+        if (model.model && !model.isSetupEntry && model.model !== setupId) argv.push("--model", model.model);
         if (sessionId.length > 0) {
             argv.push("--resume", sessionId);
         } else if ((ctx.systemPrompt ?? "").length > 0) {
@@ -39,11 +40,21 @@ ApiStrategy {
         }
         // No positional prompt: -p reads it from stdin.
         argv.push("-p");
-        let effort = ctx.thinkingLevel;
-        if (effort === "extra") effort = "xhigh";
-        else if (effort === "ultracode") effort = "max";
-        else if (effort === "minimal") effort = "low";
-        if (["low", "medium", "high", "xhigh", "max"].includes(effort)) argv.push("--effort", effort);
+        let effort = "";
+        const chosen = ctx.thinkingLevel;
+        if (chosen) {
+            const effortMap = model.effortMap;
+            if (effortMap && typeof effortMap === "object" && Object.prototype.hasOwnProperty.call(effortMap, chosen)) {
+                effort = String(effortMap[chosen] ?? "");
+            } else {
+                effort = chosen;
+                if (effort === "extra") effort = "xhigh";
+                else if (effort === "ultracode") effort = "max";
+                else if (effort === "minimal") effort = "low";
+                if (!["low", "medium", "high", "xhigh", "max"].includes(effort)) effort = "";
+            }
+        }
+        if (effort.length > 0) argv.push("--effort", effort);
         if (Ai.cliPlanState["claude-code"]?.features?.includes("thinking-display")) argv.push("--thinking-display", "summarized");
 
         // An approval covers the whole next reply, as one approval should

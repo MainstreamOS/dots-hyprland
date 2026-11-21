@@ -14,7 +14,11 @@ ApiStrategy {
         const tools = ctx.tools ?? [];
         const usingSearch = tools[0]?.google_search !== undefined;
         // 2.5 searches on the free tier, so only a Gemini 3 or 4 refusal is about billing.
-        root._usedSearch = usingSearch && (model.model.startsWith("gemini-3") || model.model.startsWith("gemini-4") || model.model.endsWith("-latest"));
+        // The catalog says so for its own models; the user's own are judged by name.
+        const searchRequiresBilling = model.capabilities?.searchRequiresBilling !== undefined
+            ? Boolean(model.capabilities.searchRequiresBilling)
+            : (model.model.startsWith("gemini-3") || model.model.startsWith("gemini-4") || model.model.endsWith("-latest"));
+        root._usedSearch = usingSearch && searchRequiresBilling;
         const unanswered = ctx.unansweredCalls ?? {};
         // Gemini 3 answers a functionResponse only when it carries its call's id.
         let lastCallId = "";
@@ -73,23 +77,33 @@ ApiStrategy {
                 }
             });
         }
-        // Gemini 3 series deprecates sampling parameters (temperature, top_p, top_k)
-        // and thinking_budget in favor of thinking_level ("minimal", "low", "medium", "high").
+        // Gemini 3+ series deprecates sampling parameters (temperature, top_p, top_k)
+        // and thinking_budget in favor of thinking_level.
         let generationConfig = {};
         const chosenThinkingLevel = ctx.thinkingLevel;
-        const supportsXhigh = model.model.includes("neon") || model.model.includes("hydrogen");
-        if (Ai.thinkingLevels.includes(chosenThinkingLevel)) {
-            let geminiLevel = chosenThinkingLevel;
-            if (geminiLevel === "extra" || geminiLevel === "max" || geminiLevel === "ultracode") {
-                geminiLevel = supportsXhigh ? "xhigh" : "high";
-            } else if (geminiLevel === "none") {
-                geminiLevel = "minimal";
+        if (chosenThinkingLevel && Ai.thinkingLevels.includes(chosenThinkingLevel)) {
+            let geminiLevel = "";
+            const effortMap = model.effortMap;
+            if (effortMap && typeof effortMap === "object" && Object.prototype.hasOwnProperty.call(effortMap, chosenThinkingLevel)) {
+                geminiLevel = String(effortMap[chosenThinkingLevel] ?? "");
+            } else {
+                // The user's own models have no effort map and are judged by name.
+                const supportsXhigh = model.model.includes("neon") || model.model.includes("hydrogen");
+                geminiLevel = chosenThinkingLevel;
+                if (geminiLevel === "extra" || geminiLevel === "max" || geminiLevel === "ultracode") {
+                    geminiLevel = supportsXhigh ? "xhigh" : "high";
+                } else if (geminiLevel === "none") {
+                    geminiLevel = "minimal";
+                }
+                // Gemini 4, Pro, 3.8, and -latest series do not support minimal; clamp minimal to low.
+                if (geminiLevel === "minimal" && (model.model.startsWith("gemini-4") || model.model.includes("pro") || model.model.includes("3.8") || model.model.endsWith("-latest"))) {
+                    geminiLevel = "low";
+                }
+                if (!["minimal", "low", "medium", "high", "xhigh"].includes(geminiLevel)) {
+                    geminiLevel = "";
+                }
             }
-            // Gemini 4, Pro, 3.8, and -latest series do not support minimal; clamp minimal to low.
-            if (geminiLevel === "minimal" && (model.model.startsWith("gemini-4") || model.model.includes("pro") || model.model.includes("3.8") || model.model.endsWith("-latest"))) {
-                geminiLevel = "low";
-            }
-            if (["minimal", "low", "medium", "high", "xhigh"].includes(geminiLevel)) {
+            if (geminiLevel.length > 0) {
                 generationConfig.thinkingConfig = {
                     thinkingLevel: geminiLevel,
                     includeThoughts: true

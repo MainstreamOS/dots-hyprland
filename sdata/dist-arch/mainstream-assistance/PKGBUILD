@@ -1,0 +1,15 @@
+# Maintainer: mainstreamos <https://github.com/MainstreamOS>
+groups=(mainstream)
+pkgname=mainstream-assistance
+pkgver=2026.11.19
+pkgrel=1
+pkgdesc='Mainstream OS AI Assistant Model Catalog'
+arch=(any)
+license=(MIT)
+source=(models.json)
+sha256sums=(SKIP)
+
+package() {
+  install -Dm644 "$srcdir/models.json" \
+                 "$pkgdir/usr/share/mainstream/assistance/models.json"
+}

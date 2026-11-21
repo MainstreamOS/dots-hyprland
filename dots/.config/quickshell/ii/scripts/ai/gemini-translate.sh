@@ -15,7 +15,22 @@ TRANSLATIONS_TARGET_DIR="${SHELL_CONFIG_DIR}/translations"
 SOURCE_LOCALE="en_US"
 NOTIFICATION_APP_NAME="Shell"
 TARGET_LOCALE="$1"
-MODEL="${2:-${GEMINI_MODEL:-gemini-3.8-flash}}"
+
+# A value from the model catalog, or the default given last when it cannot be read.
+catalog_value() {
+    python3 "${SCRIPT_DIR}/catalog_loader.py" get "$@" 2>/dev/null || printf '%s\n' "${@: -1}"
+}
+CATALOG_MODEL="$(catalog_value scripts.translate.model gemini-3.8-flash)"
+MODEL="${2:-${GEMINI_MODEL:-$CATALOG_MODEL}}"
+# Gemini 3 and 4 cannot turn thinking off; low leaves room in their output cap for the whole file.
+# The catalog names the level for its own model.
+if [[ "$MODEL" == "$CATALOG_MODEL" ]]; then
+    THINKING_LEVEL="$(catalog_value --allow-empty scripts.translate.thinkingLevel low)"
+elif [[ "$MODEL" == gemini-3* || "$MODEL" == gemini-4* ]]; then
+    THINKING_LEVEL="low"
+else
+    THINKING_LEVEL=""
+fi
 
 # Check source coverage without rewriting shipped catalogs. Stop before any API
 # request if new source strings still need to be added to en_US.json.
@@ -28,10 +43,9 @@ content=$(cat "${TRANSLATIONS_DIR}/en_US.json")
 prompt_json=$(jq -n --arg prompt_text "$instruction" --arg content "$content" '$prompt_text + "\n```\n" + $content + "\n```\n"')
 
 # Prepare request data using jq
-# Gemini 3 and 4 cannot turn thinking off; low leaves room in their output cap for the whole file.
 payload=$(jq -n \
     --arg prompt "$prompt_json" \
-    --arg model "$MODEL" \
+    --arg thinking_level "$THINKING_LEVEL" \
     '{
         contents: [{
             parts: [
@@ -39,7 +53,7 @@ payload=$(jq -n \
             ]
         }],
         generationConfig: ({ responseMimeType: "application/json" }
-            + (if ($model | startswith("gemini-3") or startswith("gemini-4")) then { thinkingConfig: { thinkingLevel: "low" } } else {} end))
+            + (if $thinking_level != "" then { thinkingConfig: { thinkingLevel: $thinking_level } } else {} end))
     }'
 )
 # echo "$payload" | jq

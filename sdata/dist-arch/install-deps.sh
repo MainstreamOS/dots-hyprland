@@ -483,7 +483,7 @@ install-prebuilt() {
 }
 
 # Install core dependencies from the meta-packages
-metapkgs=(./sdata/dist-arch/mainstream-{audio,backlight,basic,fonts-themes,gnome,portal,python,screencapture,toolkit,widgets})
+metapkgs=(./sdata/dist-arch/mainstream-{assistance,audio,backlight,basic,fonts-themes,gnome,portal,python,screencapture,toolkit,widgets})
 metapkgs+=(./sdata/dist-arch/mainstream-hyprland)
 metapkgs+=(./sdata/dist-arch/mainstream-microtex-git)
 metapkgs+=(./sdata/dist-arch/mainstream-quickshell-git)

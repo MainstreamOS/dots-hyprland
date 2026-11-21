@@ -54,8 +54,10 @@ ApiStrategy {
                 ...history,
             ],
             "stream": true,
-            "temperature": ctx.temperature,
         };
+        if (model.sendTemperature !== false) {
+            baseData.temperature = ctx.temperature;
+        }
         const tools = ctx.tools ?? [];
         if (tools.length > 0) {
             baseData.tools = tools;

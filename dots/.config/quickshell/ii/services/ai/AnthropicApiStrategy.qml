@@ -12,11 +12,21 @@ ApiStrategy {
 
     // Models that take adaptive thinking and output_config.effort; budget_tokens
     // and sampling parameters are rejected by most of them.
-    function isCurrentModel(id: string): bool {
+    // The catalog says so for its own models; the user's own are judged by name.
+    function isCurrentModel(model: var): bool {
+        const mode = model?.capabilities?.thinkingMode;
+        if (typeof mode === "string" && mode.length > 0) return mode === "adaptive";
+        const id = typeof model === "string" ? model : String(model?.model ?? "");
         return /^claude-(opus|fable|sonnet|haiku)-5/.test(id) || /^claude-opus-4-[6-9]/.test(id) || id.startsWith("claude-sonnet-4-6");
     }
 
-    function effortFor(level: string, id: string): string {
+    function effortFor(level: string, model: var): string {
+        if (!level) return "";
+        const effortMap = model?.effortMap;
+        if (effortMap && typeof effortMap === "object" && Object.prototype.hasOwnProperty.call(effortMap, level)) {
+            return String(effortMap[level] ?? "");
+        }
+        const id = typeof model === "string" ? model : String(model?.model ?? "");
         // xhigh arrived with Opus 4.7.
         const noXhigh = id.startsWith("claude-opus-4-6") || id.startsWith("claude-sonnet-4-6");
         switch (level) {
@@ -61,10 +71,12 @@ ApiStrategy {
         };
         if ((ctx.systemPrompt ?? "").length > 0) req.system = ctx.systemPrompt;
         const level = ctx.thinkingLevel;
-        if (root.isCurrentModel(model.model)) {
-            req.max_tokens = 64000;
+        const capMaxTokens = Number(model.capabilities?.maxTokens);
+        const hasCapMax = Number.isInteger(capMaxTokens) && capMaxTokens > 0;
+        if (root.isCurrentModel(model)) {
+            req.max_tokens = hasCapMax ? capMaxTokens : 64000;
             req.thinking = { "type": "adaptive", "display": "summarized" };
-            const effort = root.effortFor(level, model.model);
+            const effort = root.effortFor(level, model);
             if (effort.length > 0) req.output_config = { "effort": effort };
         } else if (level && level !== "default" && level !== "off") {
             const budgets = {
@@ -80,9 +92,12 @@ ApiStrategy {
                 "type": "enabled",
                 "budget_tokens": budget
             };
-            req.max_tokens = Math.max(8192, budget + 4096);
-        } else if (model.sendTemperature) {
-            req.temperature = Math.min(ctx.temperature, 1.0);
+            req.max_tokens = Math.max(hasCapMax ? capMaxTokens : 8192, budget + 4096);
+        } else {
+            if (hasCapMax) req.max_tokens = capMaxTokens;
+            if (model.sendTemperature) {
+                req.temperature = Math.min(ctx.temperature, 1.0);
+            }
         }
 
         const options = ["--report-exit", "--body", "--secret-header", "x-api-key", "", "API_KEY"];

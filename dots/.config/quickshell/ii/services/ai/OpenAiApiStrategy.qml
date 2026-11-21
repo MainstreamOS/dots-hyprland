@@ -14,10 +14,16 @@ ApiStrategy {
         return Helpers.isImage(path);
     }
 
-    function reasoningEffort(level: string, local: bool, modelId: string): string {
+    function reasoningEffort(level: string, local: bool, model: var): string {
+        if (!level) return "";
+        const effortMap = model?.effortMap;
+        if (effortMap && typeof effortMap === "object" && Object.prototype.hasOwnProperty.call(effortMap, level)) {
+            return String(effortMap[level] ?? "");
+        }
         if (local) return ["low", "medium", "high"].includes(level) ? level : "";
+        const modelId = typeof model === "string" ? model : (model?.model ?? "");
         switch (level) {
-        case "none": return String(modelId ?? "").toLowerCase().startsWith("gpt-6") ? "low" : "none";
+        case "none": return String(modelId).toLowerCase().startsWith("gpt-6") ? "low" : "none";
         case "minimal": return "low";
         case "low":
         case "medium":
@@ -60,7 +66,7 @@ ApiStrategy {
         if (model.sendTemperature) {
             baseData.temperature = ctx.temperature;
         }
-        const effort = root.reasoningEffort(ctx.thinkingLevel, (model.endpoint ?? "").includes("localhost"), model.model ?? "");
+        const effort = root.reasoningEffort(ctx.thinkingLevel, (model.endpoint ?? "").includes("localhost"), model);
         if (effort.length > 0) baseData.reasoning_effort = effort;
         const body = model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
 

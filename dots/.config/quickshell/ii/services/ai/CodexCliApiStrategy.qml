@@ -25,7 +25,9 @@ ApiStrategy {
         const image = attachment.length > 0 && Helpers.isImage(attachment);
         // A regenerate starts a fresh thread; its thread.started event replaces the id.
         const sessionId = ctx.regenerate ? "" : root.sessionId;
-        const effort = root.effortFor(ctx.thinkingLevel, Ai.codexEfforts(model.model ?? ""));
+        const setupId = Ai.cliPlans["codex-cli"]?.setupId ?? "codex-plan";
+        const modelSlug = (model.model && !model.isSetupEntry && model.model !== setupId) ? model.model : "";
+        const effort = root.effortFor(ctx.thinkingLevel, Ai.codexEfforts(modelSlug), model.effortMap);
         const attachedLine = (attachment.length > 0 && !image) ? Translation.tr("Attached file: %1").arg(attachment) : "";
         const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine, sessionId);
         const options = ["--workdir", ctx.dirs.codex, "--stdin", "--filter", "codex", "--report-exit"];
@@ -40,7 +42,7 @@ ApiStrategy {
             root._requestInfo.turn = {
                 threadId: sessionId,
                 cwd: ctx.dirs.codex,
-                model: (model.model && model.model !== "codex-plan") ? model.model : "",
+                model: modelSlug,
                 effort: effort,
                 input: input
             };
@@ -60,7 +62,7 @@ ApiStrategy {
         // -c rather than --sandbox, which resume does not take.
         if (mode === "auto" || granted) argv.push("--dangerously-bypass-approvals-and-sandbox");
         else argv.push("-c", 'sandbox_mode="read-only"');
-        if (model.model && model.model !== "codex-plan") argv.push("-m", model.model);
+        if (modelSlug.length > 0) argv.push("-m", modelSlug);
         if (effort.length > 0) argv.push("-c", `model_reasoning_effort="${effort}"`);
         if (image) argv.push("-i", attachment);
         // -i takes several files; the lone - after -- reads the prompt from stdin.
@@ -79,10 +81,16 @@ ApiStrategy {
 
     // The Codex effort for one of the tab's levels, or "" to leave it to the
     // CLI. A model the catalog lists takes only the efforts listed for it.
-    function effortFor(level: string, supported: var): string {
+    function effortFor(level: string, supported: var, effortMap: var): string {
+        if (!level) return "";
+        const list = Array.isArray(supported) ? supported
+            : (supported && typeof supported === "object" && typeof supported.length === "number" ? Array.from(supported) : []);
+        if (list.length === 0 && effortMap && typeof effortMap === "object" && Object.prototype.hasOwnProperty.call(effortMap, level)) {
+            return String(effortMap[level] ?? "");
+        }
         let effort = Object.keys(Ai.codexEffortLevels).find(key => Ai.codexEffortLevels[key] === level) ?? "";
-        if (effort === "minimal" && !supported.includes("minimal")) effort = "low";
-        if (supported.length > 0) return supported.includes(effort) ? effort : "";
+        if (effort === "minimal" && !list.includes("minimal")) effort = "low";
+        if (list.length > 0) return list.includes(effort) ? effort : "";
         return ["none", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort) ? effort : "";
     }
 

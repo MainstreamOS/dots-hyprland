@@ -11,6 +11,7 @@ import QtQuick
 import qs.services.ai
 import "ai/sink.js" as Sink
 import "ai/sessions.js" as Sessions
+import "ai/catalog.js" as Catalog
 
 /**
  * Basic service to handle LLM chats. Supports Google's and OpenAI's API formats.
@@ -290,6 +291,357 @@ Singleton {
         "none": Translation.tr("Disable tools")
     }
 
+    // ── Model catalog ─────────────────────────────────────────────
+    // The mainstream-assistance package ships the model list, so it can change
+    // without a new shell. The copy bundled here answers when the package is
+    // missing or its file is not one this shell can read.
+    readonly property string systemCatalogPath: Quickshell.env("MAINSTREAM_AI_CATALOG_PATH") || "/usr/share/mainstream/assistance/models.json"
+    readonly property string bundledCatalogPath: CF.FileUtils.trimFileProtocol(Quickshell.shellPath("defaults/ai/models.json"))
+
+    property var _bundledCatalog: null
+    property var _activeCatalog: null
+    property var _pendingCatalog: null
+    property bool _systemCatalogLoaded: false
+    property string _lastSystemCatalogText: ""
+    property int _systemReloadRetries: 0
+    property var _catalogOwnedIds: []
+
+    readonly property string geminiGroupId: root._activeCatalog?.geminiGroup?.id || "gemini"
+    readonly property string geminiDefaultModel: root._activeCatalog?.defaults?.geminiDefaultModel || "gemini-flash-latest"
+
+    function trCatalog(text): string {
+        return Catalog.trCatalog(text, Translation.languageCode, root._activeCatalog?.translations, key => Translation.tr(key));
+    }
+
+    function _keyInstructionFor(entry): string {
+        switch (entry?.keyInstructionKey ?? "") {
+        case "gemini-free":
+            return Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key");
+        case "gemini-paid":
+            return Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key");
+        case "gemini-mixed":
+        case "gemini-free-paid":
+            return Translation.tr("**Pricing**: free tier and pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key");
+        case "mistral":
+            return Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key");
+        case "anthropic":
+            return Translation.tr("**Instructions**: Log into your Anthropic account, go to API Keys, click Create Key");
+        case "openai":
+            return Translation.tr("**Instructions**: Log into your OpenAI account, open the API keys page, click Create new secret key");
+        default:
+            return root.trCatalog(entry?.key_get_description ?? "");
+        }
+    }
+
+    function _descriptionFor(entry): string {
+        const tpl = entry?.descriptionTemplate ?? "";
+        const modelName = entry?.descriptionModelName || entry?.name || "";
+        switch (tpl) {
+        case "anthropic-api":
+            return Translation.tr("Online | Anthropic's %1 over the Messages API").arg(modelName);
+        case "openai-api":
+            return Translation.tr("Online | OpenAI's %1 over the Chat Completions API").arg(modelName);
+        default: {
+            const raw = root.trCatalog(entry?.description ?? "");
+            if (raw.includes("%1") && modelName.length > 0) return raw.arg(modelName);
+            return raw;
+        }
+        }
+    }
+
+    function _modelPropsFromCatalogEntry(entry) {
+        return {
+            "name": entry.name,
+            "icon": entry.icon,
+            "description": root._descriptionFor(entry),
+            "homepage": entry.homepage,
+            "endpoint": entry.endpoint,
+            "model": entry.model,
+            "requires_key": entry.requires_key,
+            "key_id": entry.key_id,
+            "key_get_link": entry.key_get_link,
+            "key_get_description": root._keyInstructionFor(entry),
+            "api_format": entry.api_format,
+            "extraParams": entry.extraParams ?? ({}),
+            "sendTemperature": entry.sendTemperature,
+            "thinkingLevel": entry.thinkingLevel ?? "",
+            "supportsSessions": entry.supportsSessions !== false,
+            "thinkingProfile": entry.thinkingProfile ?? "",
+            "descProfile": entry.descProfile ?? "",
+            "thinkingLevels": entry.thinkingLevels ?? null,
+            "effortMap": entry.effortMap ?? null,
+            "defaultEffort": entry.defaultEffort ?? "",
+            "capabilities": entry.capabilities ?? ({}),
+            "isSetupEntry": false,
+        };
+    }
+
+    function _geminiGroupModelProps() {
+        const g = root._activeCatalog?.geminiGroup ?? {};
+        const defId = root.geminiDefaultModel;
+        const defEntry = root._activeCatalog?.geminiApiCatalog?.[defId];
+        const names = Object.values(root._activeCatalog?.geminiApiCatalog ?? {}).map(m => m.name);
+        const listText = names.length > 0 ? names.join(", ") : "Gemini";
+        return {
+            "name": g.name || "Gemini",
+            "icon": g.icon || "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: %1.").arg(listText),
+            "homepage": g.homepage || "https://aistudio.google.com",
+            "endpoint": defEntry?.endpoint || `https://generativelanguage.googleapis.com/v1beta/models/${defId}:streamGenerateContent`,
+            "model": defEntry?.model || defId,
+            "requires_key": true,
+            "key_id": g.key_id || "gemini",
+            "key_get_link": g.key_get_link || "https://aistudio.google.com/app/apikey",
+            "key_get_description": root._keyInstructionFor(g),
+            "api_format": "gemini",
+            "extraParams": defEntry?.extraParams ?? ({}),
+            "sendTemperature": defEntry ? defEntry.sendTemperature : false,
+            "thinkingLevel": defEntry?.thinkingLevel ?? "",
+            "supportsSessions": true,
+            "thinkingProfile": defEntry?.thinkingProfile ?? "",
+            "descProfile": defEntry?.descProfile ?? "",
+            "thinkingLevels": defEntry?.thinkingLevels ?? null,
+            "effortMap": defEntry?.effortMap ?? null,
+            "defaultEffort": defEntry?.defaultEffort ?? "",
+            "capabilities": defEntry?.capabilities ?? ({}),
+            "isSetupEntry": false,
+        };
+    }
+
+    FileView {
+        id: bundledCatalogView
+        path: root.bundledCatalogPath
+        blockLoading: true
+        watchChanges: false
+        printErrors: false
+    }
+
+    FileView {
+        id: systemCatalogView
+        path: root.systemCatalogPath
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: {
+            if (!root._startupDone) return;
+            catalogReloadTimer.restart();
+        }
+        onLoaded: {
+            if (!root._startupDone) return;
+            root._onSystemCatalogLoaded(systemCatalogView.text());
+        }
+        onLoadFailed: error => {
+            if (!root._startupDone) return;
+            root._onSystemCatalogLoadFailed(error);
+        }
+    }
+
+    // pacman replaces the file with a new one, which the watch does not
+    // follow, so each change sets the watch up again.
+    Timer {
+        id: catalogReloadTimer
+        interval: 250
+        repeat: false
+        onTriggered: root._rearmSystemCatalog()
+    }
+
+    // The file is gone for a moment during an upgrade. Only when it stays
+    // gone was the package removed.
+    Timer {
+        id: catalogRetryTimer
+        interval: 500
+        repeat: false
+        onTriggered: root._rearmSystemCatalog()
+    }
+
+    function _rearmSystemCatalog() {
+        catalogReloadTimer.stop();
+        systemCatalogView.path = "";
+        systemCatalogView.path = root.systemCatalogPath;
+        systemCatalogView.reload();
+    }
+
+    function _parseCatalog(text, origin) {
+        const result = Catalog.parseCatalog(text);
+        if (!result.ok) {
+            if (text.trim().length > 0) console.warn(`[Ai] The ${origin} model catalog was rejected:`, result.error, result.detail ?? "");
+            return null;
+        }
+        for (const warning of result.warnings) console.warn(`[Ai] ${origin} model catalog:`, warning);
+        return result.catalog;
+    }
+
+    function _initCatalog() {
+        root._bundledCatalog = root._parseCatalog(bundledCatalogView.text() || "", "bundled");
+        const systemText = systemCatalogView.text() || "";
+        const systemCatalog = root._parseCatalog(systemText, "system");
+        if (systemCatalog) {
+            root._systemCatalogLoaded = true;
+            root._lastSystemCatalogText = systemText;
+        }
+        // Later reads happen while the shell is in use and must not block it.
+        systemCatalogView.blockLoading = false;
+        root._applyCatalog(systemCatalog ?? root._bundledCatalog, false);
+        if (!root._activeCatalog) console.warn("[Ai] No model catalog could be read, so only local models are offered.");
+    }
+
+    function _onSystemCatalogLoaded(text) {
+        catalogRetryTimer.stop();
+        root._systemReloadRetries = 0;
+        const body = String(text ?? "");
+        if (root._systemCatalogLoaded && body === root._lastSystemCatalogText) return;
+        const catalog = root._parseCatalog(body, "system");
+        if (!catalog) return;
+        root._lastSystemCatalogText = body;
+        root._systemCatalogLoaded = true;
+        root._queueOrApplyCatalog(catalog);
+    }
+
+    function _onSystemCatalogLoadFailed(error) {
+        if (error === FileViewError.FileNotFound && root._systemCatalogLoaded) {
+            if (root._systemReloadRetries < 2) {
+                root._systemReloadRetries++;
+                catalogRetryTimer.restart();
+                return;
+            }
+            root._systemReloadRetries = 0;
+            root._systemCatalogLoaded = false;
+            root._lastSystemCatalogText = "";
+            root._queueOrApplyCatalog(root._bundledCatalog);
+        }
+    }
+
+    // A reply in progress keeps the model it started with; the new catalog
+    // waits until it is done.
+    function _queueOrApplyCatalog(catalog) {
+        if (!catalog) return;
+        root._pendingCatalog = catalog;
+        root._flushPendingCatalog();
+    }
+
+    function _flushPendingCatalog() {
+        if (!root._pendingCatalog || root.isGenerating || root.pendingConfirmation !== null) return;
+        const next = root._pendingCatalog;
+        root._pendingCatalog = null;
+        root._applyCatalog(next, true);
+    }
+
+    // Later, not inside the change: a reply that goes on to a tool call or an
+    // approval is busy again by then and keeps its model.
+    onRequestStateChanged: Qt.callLater(root._flushPendingCatalog)
+    onPendingConfirmationChanged: Qt.callLater(root._flushPendingCatalog)
+
+    function _applyCatalog(catalog, isReload) {
+        if (!catalog) return;
+        const prevCatalog = root._activeCatalog;
+        const prevModelId = root.currentModelId;
+        const prevModelSlug = root.models[prevModelId]?.model ?? "";
+        const prevWasGeminiApi = root.isGeminiApiModel(prevModelId);
+        const prevPlanFormat = root.planFormatFor(prevModelId);
+        const prevOwned = new Set(Catalog.toArray(root._catalogOwnedIds) ?? []);
+        if (prevCatalog?.geminiGroup?.id) prevOwned.add(prevCatalog.geminiGroup.id);
+        for (const id of Object.keys(prevCatalog?.geminiApiCatalog ?? {})) prevOwned.add(id);
+        for (const id of Object.keys(prevCatalog?.apiModels ?? {})) prevOwned.add(id);
+
+        root._activeCatalog = catalog;
+
+        const next = Object.assign({}, root._registry);
+        const dead = [];
+        for (const id of prevOwned) {
+            if (next[id] !== undefined) {
+                dead.push(next[id]);
+                delete next[id];
+            }
+        }
+
+        const owned = [];
+        const groupId = root.geminiGroupId;
+        if (Object.keys(catalog.geminiApiCatalog ?? {}).length > 0) {
+            next[groupId] = aiModelComponent.createObject(root, root._geminiGroupModelProps());
+            owned.push(groupId);
+        }
+        const apiModels = catalog.apiModels ?? {};
+        for (const id of Object.keys(apiModels)) {
+            if (next[id] !== undefined) dead.push(next[id]);
+            next[id] = aiModelComponent.createObject(root, root._modelPropsFromCatalogEntry(apiModels[id]));
+            owned.push(id);
+        }
+
+        root._catalogOwnedIds = owned;
+        root._registry = next;
+        root._buryAll(dead);
+
+        if (!isReload) return;
+
+        // The user's own models stand over catalog entries of the same id.
+        if (Config.ready) root.addUserModels();
+
+        root._reconcileSelectionAfterReload(prevModelId, prevModelSlug, prevWasGeminiApi, prevPlanFormat);
+
+        root.syncGeminiApiModels();
+        for (const fmt of Object.keys(root.cliSetup)) root.syncCliPlanModels(fmt);
+        root.syncOllamaSetupEntry();
+
+        const newModelId = root.currentModelId;
+        const newModelSlug = root.models[newModelId]?.model ?? "";
+        if (newModelId !== prevModelId || (prevModelSlug.length > 0 && newModelSlug.length > 0 && newModelSlug !== prevModelSlug)) {
+            root._resetCliSessions();
+        }
+        root.restoreThinkingLevelForModel(newModelId);
+    }
+
+    function _reconcileSelectionAfterReload(prevModelId, prevModelSlug, prevWasGeminiApi, prevPlanFormat) {
+        if (!Persistent.ready || !Persistent.states?.ai) return;
+        const rawSaved = String(Persistent.states.ai.model || "").trim();
+        if (!rawSaved || rawSaved === root.ollamaSetupModelId) return;
+
+        // Local models and the user's own models do not come from the catalog.
+        const existingObj = root._registry[rawSaved];
+        if (existingObj && root._isLocalModel(existingObj)) return;
+        const userIds = (Config.options?.ai?.extraModels ?? []).map(m => root.safeModelName(m?.model ?? ""));
+        if (userIds.includes(rawSaved)) return;
+
+        const resolved = root.canonicalModelId(rawSaved);
+        let target = resolved;
+
+        const planFmt = root.planFormatFor(target) || prevPlanFormat;
+        const isSetup = Object.keys(root.cliPlans).some(fmt => root.cliPlans[fmt].setupId === target);
+        // A plan model the new catalog dropped is still registered at this
+        // point, so only the catalog can say whether a plan id is offered.
+        const existsInCatalog = Boolean(
+            (planFmt === "" && root._registry[target])
+            || root.isGeminiApiModel(target)
+            || isSetup
+            || (planFmt !== "" && root.cliPlanModels[planFmt]?.[target] !== undefined)
+        );
+
+        if (!existsInCatalog) {
+            if (planFmt !== "") {
+                target = root.cliReady(planFmt) ? root._planSuccessor(planFmt, target) : root.cliPlans[planFmt].setupId;
+            } else if (prevWasGeminiApi) {
+                target = root.geminiDefaultModel;
+            } else if (root._isOnlineModelId(target) || prevModelSlug.length > 0) {
+                const fallback = root._activeCatalog?.defaults?.fallbackOnlineModel || root.geminiGroupId;
+                target = root.canonicalModelId(fallback);
+            }
+        }
+
+        if (target && target !== rawSaved) {
+            try {
+                const map = Object.assign({}, Persistent.states.ai.modelThinkingLevels ?? {});
+                const oldKey = rawSaved.toLowerCase();
+                const newKey = target.toLowerCase();
+                if (map[oldKey] !== undefined && map[newKey] === undefined) {
+                    map[newKey] = map[oldKey];
+                    Persistent.states.ai.modelThinkingLevels = map;
+                }
+                Persistent.states.ai.model = target;
+            } catch (e) {
+                console.warn("[Ai] Failed to migrate model selection after catalog reload:", e);
+            }
+        }
+    }
+
     // Model properties:
     // - name: Name of the model
     // - icon: Icon name of the model
@@ -302,163 +654,21 @@ Singleton {
     // - key_get_description: Description of pricing and how to get an API key
     // - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
-    readonly property var geminiApiCatalog: ({
-        "gemini-4-hydrogen": {
-            "name": "Gemini 4 Hydrogen",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's Gemini 4 model\nFast, efficient Gemini 4 model for everyday coding and agentic workflows, with a free tier."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:streamGenerateContent",
-            "model": "gemini-4-hydrogen",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        },
-        "gemini-4-neon": {
-            "name": "Gemini 4 Neon",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's Gemini 4 model\nBalanced Gemini 4 frontier model for complex coding, reasoning, and agentic workflows."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent",
-            "model": "gemini-4-neon",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        },
-        "gemini-4-carbon": {
-            "name": "Gemini 4 Carbon",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's frontier model\nGoogle's deepest Gemini 4 reasoning model for long-horizon coding, research, and complex analysis."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-carbon:streamGenerateContent",
-            "model": "gemini-4-carbon",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        },
-        "gemini-4-argon": {
-            "name": "Gemini 4 Argon",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's frontier model\nGoogle's flagship frontier reasoning model: complex coding, mathematics, and research."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
-            "model": "gemini-4-argon",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        },
-        "gemini-flash-latest": {
-            "name": "Gemini Flash",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
-            "model": "gemini-flash-latest",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        },
-        "gemini-pro-latest": {
-            "name": "Gemini Pro",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nGoogle's flagship Pro reasoning model: complex coding, mathematics, and research."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:streamGenerateContent",
-            "model": "gemini-pro-latest",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free tier and pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
+    readonly property var geminiApiCatalog: {
+        const raw = root._activeCatalog?.geminiApiCatalog ?? {};
+        const out = {};
+        for (const id of Object.keys(raw)) {
+            out[id] = root._modelPropsFromCatalogEntry(raw[id]);
         }
-    })
+        return out;
+    }
     function isGeminiApiModel(id) {
         return root.geminiApiCatalog[id] !== undefined;
     }
 
     // Every model the service knows of, online or not. Only the functions
     // that register or retire models write it; everything else reads models.
-    property var _registry: ({
-        "gemini": aiModelComponent.createObject(root, {
-            "name": "Gemini",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
-            "model": "gemini-flash-latest",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-            "api_format": "gemini",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        }),
-        "mistral-4": aiModelComponent.createObject(root, {
-            "name": "Mistral 4",
-            "icon": "mistral-symbolic",
-            "description": Translation.tr("Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose").arg("Mistral"),
-            "homepage": "https://mistral.ai/news/mistral-large-4",
-            "endpoint": "https://api.mistral.ai/v1/chat/completions",
-            "model": "mistral-large-latest",
-            "requires_key": true,
-            "key_id": "mistral",
-            "key_get_link": "https://console.mistral.ai/api-keys",
-            "key_get_description": Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key"),
-            "api_format": "mistral",
-        }),
-        "claude": aiModelComponent.createObject(root, {
-            "name": "Claude",
-            "icon": "claude-symbolic",
-            "description": Translation.tr("Online | Anthropic's Claude Fable 5.2 over the Messages API"),
-            "homepage": "https://www.anthropic.com/claude",
-            "endpoint": "https://api.anthropic.com/v1/messages",
-            "model": "claude-fable-5-2",
-            "requires_key": true,
-            "key_id": "anthropic",
-            "key_get_link": "https://console.anthropic.com/settings/keys",
-            "key_get_description": Translation.tr("**Instructions**: Log into your Anthropic account, go to API Keys, click Create Key"),
-            "api_format": "anthropic",
-            "sendTemperature": false,
-            "thinkingLevel": "",
-        }),
-        "codex": aiModelComponent.createObject(root, {
-            "name": "Codex",
-            "icon": "openai-symbolic",
-            "description": Translation.tr("Online | OpenAI's GPT-6.2 Sol over the Chat Completions API"),
-            "homepage": "https://platform.openai.com",
-            "endpoint": "https://api.openai.com/v1/chat/completions",
-            "model": "gpt-6.2-sol",
-            "sendTemperature": false,
-            "requires_key": true,
-            "key_id": "openai",
-            "key_get_link": "https://platform.openai.com/api-keys",
-            "key_get_description": Translation.tr("**Instructions**: Log into your OpenAI account, open the API keys page, click Create new secret key"),
-            "api_format": "openai",
-        }),
-    })
+    property var _registry: ({})
     // What the picker offers and requests may use: the local-only policy
     // hides online entries rather than dropping them, so they are back as
     // soon as the policy allows them again.
@@ -485,53 +695,22 @@ Singleton {
     // Only ever a view of the map. Readonly so no fetch handler can hand it
     // a snapshot that stops following the models registered afterwards.
     readonly property var modelList: Object.keys(root.models)
-    readonly property var retiredModels: ({
-        "claude-opus-4-8": "claude",
-        "claude-opus-5-5": "claude",
-        "claude-fable-5-1": "claude",
-        "claude-fable-5-2": "claude",
-        "claude-opus-1m": "claude-opus",
-        "gpt-5.6": "codex",
-        "mistral-medium-3": "mistral-4",
-        "mistral-3": "mistral-4",
-        "mistral-medium": "mistral-4",
-        "mistral": "mistral-4",
-        "gemini-3-flash": "gemini-flash-latest",
-        "gemini-2.5-flash": "gemini-flash-latest",
-        "gemini-3.5-flash-lite": "gemini-flash-latest",
-        "gemini-3.8-flash": "gemini-flash-latest",
-        "gemini": "gemini-flash-latest",
-        "gemini-flash": "gemini-flash-latest",
-        "gemini-pro": "gemini-pro-latest",
-        "gemini-3.1-pro": "gemini-pro-latest",
-        "gemini-3.1-pro-preview": "gemini-pro-latest",
-        "hydrogen": "gemini-4-hydrogen",
-        "gemini-hydrogen": "gemini-4-hydrogen",
-        "neon": "gemini-4-neon",
-        "gemini-neon": "gemini-4-neon",
-        "carbon": "gemini-4-carbon",
-        "gemini-carbon": "gemini-4-carbon",
-        "argon": "gemini-4-argon",
-        "gemini-argon": "gemini-4-argon",
-        "gemini-4": "gemini-4-neon",
-        "gemini-plan-default": "gemini-plan-4-neon",
-        "gemini-plan-3-8-flash-high": "gemini-plan-3-8-flash",
-        "gemini-plan-3-8-flash-medium": "gemini-plan-3-8-flash",
-        "gemini-plan-3-8-flash-low": "gemini-plan-3-8-flash",
-        "gemini-plan-3-1-pro": "gemini-plan-4-neon",
-        "gemini-plan-3-1-pro-high": "gemini-plan-4-neon",
-        "gemini-plan-3-1-pro-low": "gemini-plan-4-neon",
-        "gemini-plan-neon": "gemini-plan-4-neon",
-        "gemini-plan-hydrogen": "gemini-plan-4-hydrogen",
-        "gemini-plan-carbon": "gemini-plan-4-carbon",
-        "gemini-plan-argon": "gemini-plan-4-argon",
-        "gemini-plan-4": "gemini-plan-4-neon",
-    })
+    readonly property var retiredModels: root._activeCatalog?.retiredModels ?? ({})
+    // sessions.js looks an id up once, so chains are resolved here.
+    readonly property var _flattenedRetiredModels: {
+        const raw = root.retiredModels ?? {};
+        const out = {};
+        for (const key of Object.keys(raw)) {
+            const resolved = Catalog.resolveRetiredModel(key, raw);
+            if (resolved && resolved !== key) out[key] = resolved;
+        }
+        return out;
+    }
     // The user's choice as saved in Persistent. Everything that talks to a
     // model reads currentModelId instead.
     readonly property var _savedModelId: {
-        const id = Persistent.states?.ai?.model || modelList[0];
-        return retiredModels[id] ?? id;
+        const id = Persistent.states?.ai?.model || modelList[0] || "";
+        return id ? Catalog.resolveRetiredModel(id, root.retiredModels) : "";
     }
     // Under the local-only policy an online choice stays saved for when the
     // policy allows it again, and the first local model answers in its place.
@@ -555,7 +734,7 @@ Singleton {
     // being looked up, which is the truth of that moment. Readonly: every
     // selection writes Persistent, and both id and object derive from it, so
     // no imperative write can strand the id and the object apart again.
-    readonly property var currentModel: models[currentModelId] ?? (root.isGeminiApiModel(currentModelId) ? models["gemini"] : null)
+    readonly property var currentModel: models[currentModelId] ?? (root.isGeminiApiModel(currentModelId) ? models[root.geminiGroupId] : null)
     readonly property bool currentModelSupportsSessions: Boolean(currentModel && currentModel.supportsSessions !== false && currentModelId !== ollamaSetupModelId)
 
     property var apiStrategies: {
@@ -668,12 +847,7 @@ Singleton {
 
     // ── Codex plan models, from the CLI's own catalog ─────────────
     // What the plan offers when the catalog cannot be read.
-    readonly property var _codexFallbackCatalog: [
-        { slug: "gpt-6.2-astra", name: "GPT-6.2-Astra", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium" },
-        { slug: "gpt-6.2-sol", name: "GPT-6.2-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium" },
-        { slug: "gpt-6.1-terra", name: "GPT-6.1-Terra", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium" },
-        { slug: "gpt-6-luna", name: "GPT-6-Luna", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium" },
-    ]
+    readonly property var _codexFallbackCatalog: root._activeCatalog?.cliPlans?.["codex-cli"]?.fallbackCatalog ?? []
     // The last catalog the CLI answered with: { listed, upgrades }. A read
     // that fails later keeps it.
     property var _codexCatalog: null
@@ -684,7 +858,7 @@ Singleton {
         "high": "high", "xhigh": "extra", "max": "max", "ultra": "ultracode",
     })
     // Ids saved before the catalog named the models keep answering.
-    readonly property var _codexLegacyIds: ({ "gpt-5.6-terra": "codex-terra", "gpt-5.6-luna": "codex-luna" })
+    readonly property var _codexLegacyIds: root._activeCatalog?.cliPlans?.["codex-cli"]?.legacyIds ?? ({})
     function codexModelId(slug: string): string {
         return root._codexLegacyIds[slug] ?? ("codex-" + String(slug).toLowerCase().replace(/[^a-z0-9]+/g, "-"));
     }
@@ -704,7 +878,9 @@ Singleton {
     }
     // The efforts a listed model accepts, or [] when it is not listed.
     function codexEfforts(slug: string): var {
-        return root._codexListed.find(entry => entry.slug === slug)?.efforts ?? [];
+        const list = Catalog.toArray(root._codexListed) ?? [];
+        const efforts = list.find(entry => entry.slug === slug)?.efforts;
+        return Catalog.toArray(efforts) ?? [];
     }
 
     // The filtered catalog line from the detector, or null when it holds no
@@ -757,73 +933,76 @@ Singleton {
         return root.cliPlans[fmt].firstPick;
     }
 
-    readonly property var _antigravityPlanModels: ({
-        "gemini-plan-4-neon": { alias: "gemini-4-neon", name: "Gemini 4 Neon", thinkingLevel: "" },
-        "gemini-plan-4-hydrogen": { alias: "gemini-4-hydrogen", name: "Gemini 4 Hydrogen", thinkingLevel: "" },
-        "gemini-plan-4-carbon": { alias: "gemini-4-carbon", name: "Gemini 4 Carbon", thinkingLevel: "" },
-        "gemini-plan-4-argon": { alias: "gemini-4-argon", name: "Gemini 4 Argon", thinkingLevel: "" },
-        "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini 3.8 Flash", thinkingLevel: "" },
-    })
+    readonly property var _claudePlanModels: root._activeCatalog?.cliPlans?.["claude-code"]?.models ?? ({})
+    readonly property var _antigravityPlanModels: root._activeCatalog?.cliPlans?.["antigravity-cli"]?.models ?? ({})
 
     readonly property var cliPlanModels: ({
-        "claude-code": {
-            "claude-fable": { alias: "fable", name: "Claude Fable 5.2" },
-            "claude-opus": { alias: "opus", name: "Claude Opus 5.5" },
-            "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet 5.5" },
-            "claude-haiku": { alias: "haiku", name: "Claude Haiku 5.5" },
-        },
+        "claude-code": root._claudePlanModels,
         "codex-cli": root._codexPlanModels,
-        // Google serves personal accounts through Antigravity; supports Gemini 3
-        // and Gemini 4 with dynamic reasoning effort.
+        // Google serves personal accounts through Antigravity; supports Gemini 3+
+        // with dynamic reasoning effort.
         "antigravity-cli": root._antigravityPlanModels,
     })
-    readonly property var cliPlans: ({
-        "claude-code": {
-            setupId: "claude-code",
-            setupName: "Claude (Pro/Max plan)",
-            setupDescription: Translation.tr("Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed"),
-            readyDescription: Translation.tr("Plan | Your Claude subscription. Pick it to use its models"),
-            setupHomepage: "https://docs.anthropic.com/en/docs/claude-code",
-            modelDescription: Translation.tr("Plan | %1 through your Claude subscription. No API key needed"),
-            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5."),
-            icon: "claude-symbolic",
-            endpoint: "https://api.anthropic.com",
-            homepage: "https://www.anthropic.com/claude",
-            firstPick: "claude-fable",
-            idPrefix: "claude-",
-        },
-        "codex-cli": {
-            setupId: "codex-plan",
-            setupName: "Codex (ChatGPT plan)",
-            setupDescription: Translation.tr("Plan | OpenAI's Codex through your ChatGPT subscription. Sign in from the sidebar, no API key needed"),
-            readyDescription: Translation.tr("Plan | Your ChatGPT subscription. Pick it to use its models"),
-            setupHomepage: "https://learn.chatgpt.com/docs/codex/cli",
-            modelDescription: Translation.tr("Plan | %1 through your ChatGPT subscription. No API key needed"),
-            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose one."),
-            icon: "openai-symbolic",
-            endpoint: "https://chatgpt.com",
-            homepage: "https://learn.chatgpt.com/docs/codex/cli",
-            firstPick: Object.keys(root._codexPlanModels)[0] ?? "",
-            idPrefix: "codex-",
-        },
-        // Google serves personal accounts through Antigravity now; the
-        // Gemini CLI turns them away.
-        "antigravity-cli": {
-            // "gemini" alone would also match the key-backed Gemini ids.
-            setupId: "gemini-plan",
-            setupName: "Gemini (Google account)",
-            setupDescription: Translation.tr("Plan | Google's Gemini through Antigravity and your Google account, free or with Google AI Pro or Ultra. Sign in from the sidebar, no API key needed"),
-            readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
-            setupHomepage: "https://antigravity.google/product/antigravity-cli",
-            modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
-            signedIn: Translation.tr("Signed in. Gemini 4 Neon, Hydrogen, Carbon, Argon, and Gemini 3.8 Flash are in the picker now. Adjust thinking level with /think."),
-            icon: "antigravity-symbolic",
-            endpoint: "https://antigravity.google",
-            homepage: "https://antigravity.google",
-            firstPick: "gemini-plan-4-neon",
-            idPrefix: "gemini-plan",
-        }
-    })
+    readonly property var cliPlans: {
+        const plans = root._activeCatalog?.cliPlans ?? {};
+        const claudeCfg = plans["claude-code"] ?? {};
+        const codexCfg = plans["codex-cli"] ?? {};
+        const agyCfg = plans["antigravity-cli"] ?? {};
+        const claudeNames = Object.values(root._claudePlanModels).map(m => m.name).join(", ");
+        const agyNames = Object.values(root._antigravityPlanModels).map(m => m.name).join(", ");
+        const result = {
+            "claude-code": {
+                setupId: "claude-code",
+                setupName: "Claude (Pro/Max plan)",
+                setupDescription: Translation.tr("Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed"),
+                readyDescription: Translation.tr("Plan | Your Claude subscription. Pick it to use its models"),
+                setupHomepage: claudeCfg.setupHomepage || "https://docs.anthropic.com/en/docs/claude-code",
+                modelDescription: Translation.tr("Plan | %1 through your Claude subscription. No API key needed"),
+                signedIn: claudeNames.length > 0
+                    ? Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between %1.").arg(claudeNames)
+                    : Translation.tr("Signed in. The plan models are in the picker now: type /model to choose one."),
+                icon: claudeCfg.icon || "claude-symbolic",
+                endpoint: claudeCfg.endpoint || "https://api.anthropic.com",
+                homepage: claudeCfg.homepage || "https://www.anthropic.com/claude",
+                firstPick: claudeCfg.firstPick || Object.keys(root._claudePlanModels)[0] || "",
+                idPrefix: "claude-",
+            },
+            "codex-cli": {
+                setupId: "codex-plan",
+                setupName: "Codex (ChatGPT plan)",
+                setupDescription: Translation.tr("Plan | OpenAI's Codex through your ChatGPT subscription. Sign in from the sidebar, no API key needed"),
+                readyDescription: Translation.tr("Plan | Your ChatGPT subscription. Pick it to use its models"),
+                setupHomepage: codexCfg.setupHomepage || "https://learn.chatgpt.com/docs/codex/cli",
+                modelDescription: Translation.tr("Plan | %1 through your ChatGPT subscription. No API key needed"),
+                signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose one."),
+                icon: codexCfg.icon || "openai-symbolic",
+                endpoint: codexCfg.endpoint || "https://chatgpt.com",
+                homepage: codexCfg.homepage || "https://learn.chatgpt.com/docs/codex/cli",
+                firstPick: Object.keys(root._codexPlanModels)[0] ?? "",
+                idPrefix: "codex-",
+            },
+            // Google serves personal accounts through Antigravity now; the
+            // Gemini CLI turns them away.
+            "antigravity-cli": {
+                // "gemini" alone would also match the key-backed Gemini ids.
+                setupId: "gemini-plan",
+                setupName: "Gemini (Google account)",
+                setupDescription: Translation.tr("Plan | Google's Gemini through Antigravity and your Google account, free or with Google AI Pro or Ultra. Sign in from the sidebar, no API key needed"),
+                readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
+                setupHomepage: agyCfg.setupHomepage || "https://antigravity.google/product/antigravity-cli",
+                modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
+                signedIn: agyNames.length > 0
+                    ? Translation.tr("Signed in. %1 are in the picker now. Adjust thinking level with /think.").arg(agyNames)
+                    : Translation.tr("Signed in. The plan models are in the picker now: type /model to choose one."),
+                icon: agyCfg.icon || "antigravity-symbolic",
+                endpoint: agyCfg.endpoint || "https://antigravity.google",
+                homepage: agyCfg.homepage || "https://antigravity.google",
+                firstPick: agyCfg.firstPick || Object.keys(root._antigravityPlanModels)[0] || "",
+                idPrefix: "gemini-plan",
+            }
+        };
+        return result;
+    }
     property var cliPlanState: ({})
     function cliInstalled(fmt) { return root.cliPlanState[fmt]?.installed === true }
     function cliReady(fmt) { return root.cliPlanState[fmt]?.ready === true }
@@ -854,13 +1033,15 @@ Singleton {
     function syncGeminiApiModels(targetId) {
         const current = targetId || root.currentModelId;
         const isGeminiActive = root.isGeminiApiModel(current);
+        const groupId = root.geminiGroupId;
+        const hasCatalog = Object.keys(root.geminiApiCatalog).length > 0;
         let next = Object.assign({}, root._registry);
         let changed = false;
 
-        if (isGeminiActive) {
-            if (next["gemini"]) {
-                root._bury(next["gemini"]);
-                delete next["gemini"];
+        if (isGeminiActive && hasCatalog) {
+            if (next[groupId]) {
+                root._bury(next[groupId]);
+                delete next[groupId];
                 changed = true;
             }
             for (const id of Object.keys(root.geminiApiCatalog)) {
@@ -876,22 +1057,8 @@ Singleton {
                     changed = true;
                 }
             }
-            if (!next["gemini"]) {
-                next["gemini"] = aiModelComponent.createObject(root, {
-                    "name": "Gemini",
-                    "icon": "google-gemini-symbolic",
-                    "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 4 Hydrogen, Neon, Carbon, Argon, Flash, and Pro."),
-                    "homepage": "https://aistudio.google.com",
-                    "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
-                    "model": "gemini-flash-latest",
-                    "requires_key": true,
-                    "key_id": "gemini",
-                    "key_get_link": "https://aistudio.google.com/app/apikey",
-                    "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-                    "api_format": "gemini",
-                    "sendTemperature": false,
-                    "thinkingLevel": "",
-                });
+            if (hasCatalog && !next[groupId]) {
+                next[groupId] = aiModelComponent.createObject(root, root._geminiGroupModelProps());
                 changed = true;
             }
         }
@@ -915,8 +1082,14 @@ Singleton {
             if (next[plan.setupId]) { root._bury(next[plan.setupId]); delete next[plan.setupId]; changed = true; }
             const wantedIds = Object.keys(planModels);
             const current = registered.length === wantedIds.length && wantedIds.every((id, i) => registered[i] === id
-                && next[id].name === planModels[id].name && next[id].model === planModels[id].alias
-                && next[id].thinkingLevel === (planModels[id].thinkingLevel ?? ""));
+                && next[id].name === planModels[id].name
+                && next[id].model === planModels[id].alias
+                && next[id].thinkingLevel === (planModels[id].thinkingLevel ?? "")
+                && next[id].thinkingProfile === (planModels[id].thinkingProfile ?? "")
+                && next[id].defaultEffort === (planModels[id].defaultEffort ?? "")
+                && Catalog.stableJson(next[id].thinkingLevels) === Catalog.stableJson(planModels[id].thinkingLevels)
+                && Catalog.stableJson(next[id].effortMap) === Catalog.stableJson(planModels[id].effortMap)
+                && Catalog.stableJson(next[id].capabilities ?? {}) === Catalog.stableJson(planModels[id].capabilities ?? {}));
             if (!current) {
                 for (const id of registered) { root._bury(next[id]); delete next[id]; changed = true; }
             }
@@ -937,6 +1110,13 @@ Singleton {
                     "api_format": fmt,
                     "sendTemperature": fmt !== "antigravity-cli",
                     "thinkingLevel": planEntry.thinkingLevel ?? "",
+                    "thinkingProfile": planEntry.thinkingProfile ?? "",
+                    "descProfile": planEntry.descProfile ?? "",
+                    "thinkingLevels": planEntry.thinkingLevels ?? null,
+                    "effortMap": planEntry.effortMap ?? null,
+                    "defaultEffort": planEntry.defaultEffort ?? "",
+                    "capabilities": planEntry.capabilities ?? ({}),
+                    "isSetupEntry": false,
                 });
                 changed = true;
             }
@@ -955,6 +1135,7 @@ Singleton {
                     "requires_key": false,
                     "api_format": fmt,
                     "supportsSessions": false,
+                    "isSetupEntry": true,
                 });
                 changed = true;
             }
@@ -1365,6 +1546,8 @@ Singleton {
     property string pendingFilePath: ""
 
     Component.onCompleted: {
+        // First, because everything below registers models from the catalog.
+        root._initCatalog();
         root.syncGeminiApiModels();
         // The default model is local AI, whose setup entry does not exist
         // until the first status answer arrives. Running it through setModel
@@ -1444,7 +1627,7 @@ Singleton {
     // package is installed but its unit ships disabled.
     readonly property string ollamaSetupModelId: "local-ai-setup"
     readonly property string ollamaSetupEntryName: Translation.tr("Local AI (Ollama)")
-    readonly property string ollamaSuggestedModel: "llama3.2:3b"
+    readonly property string ollamaSuggestedModel: root._activeCatalog?.defaults?.ollamaSuggestedModel || "llama3.2:3b"
     property bool ollamaBusy: false
     property string ollamaPullMessageId: ""
     property string ollamaPendingSelect: ""
@@ -1484,7 +1667,12 @@ Singleton {
     Connections {
         target: GlobalStates
         function onSidebarLeftOpenChanged() {
-            if (GlobalStates.sidebarLeftOpen && root.ollamaState !== "ok") root.refreshOllama();
+            if (GlobalStates.sidebarLeftOpen) {
+                if (root.ollamaState !== "ok") root.refreshOllama();
+                // A file that did not exist at startup cannot be watched, so
+                // a package installed since is found here.
+                root._rearmSystemCatalog();
+            }
         }
     }
 
@@ -2058,10 +2246,10 @@ Singleton {
     function setModel(modelId, feedback = true, setPersistentState = true, keyAdvice = feedback) {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
-        if (modelId === "gemini") {
-            modelId = "gemini-flash-latest";
+        if (modelId === root.geminiGroupId) {
+            modelId = root.geminiDefaultModel;
         }
-        modelId = root.retiredModels[modelId] ?? modelId
+        modelId = Catalog.resolveRetiredModel(modelId, root.retiredModels)
         // Plan models and the Gemini catalog are switched to before they are
         // listed, so the check below on the listed entry would miss them.
         if (Config.options?.policies?.ai === 2 && root._isOnlineModelId(modelId)) {
@@ -2254,107 +2442,113 @@ Singleton {
         root.printTemperature();
     }
 
+    function _thinkingLevelMeta(id: string, descProfile: string): var {
+        const p = descProfile || "generic";
+        switch (id) {
+        case "auto": {
+            const autoDesc = p === "claude" ? Translation.tr("Model default reasoning budget")
+                : p === "openai" ? Translation.tr("Model default reasoning effort")
+                : p === "gemini" ? Translation.tr("Model default dynamic reasoning")
+                : Translation.tr("Model default reasoning");
+            return { id: "auto", name: Translation.tr("Auto"), desc: autoDesc };
+        }
+        case "none":
+            return { id: "none", name: Translation.tr("None"), desc: Translation.tr("Disable reasoning for instantaneous output") };
+        case "minimal":
+            return { id: "minimal", name: Translation.tr("Minimal"), desc: Translation.tr("Minimal thinking for lowest latency") };
+        case "low":
+            return { id: "low", name: Translation.tr("Low"), desc:
+                p === "claude" ? Translation.tr("Quick reasoning for routine edits and questions")
+                : p === "openai" ? Translation.tr("Light reasoning with high throughput")
+                : p === "gemini" ? Translation.tr("Standard reasoning effort")
+                : Translation.tr("Light reasoning effort") };
+        case "medium":
+            return { id: "medium", name: Translation.tr("Medium"), desc:
+                p === "claude" ? Translation.tr("Balanced reasoning for standard coding and debugging")
+                : p === "openai" ? Translation.tr("Standard balanced reasoning effort")
+                : p === "gemini" ? Translation.tr("Balanced reasoning for coding and analysis")
+                : Translation.tr("Standard balanced reasoning") };
+        case "high":
+            return { id: "high", name: Translation.tr("High"), desc:
+                p === "claude" ? Translation.tr("Deep reasoning for complex logic and tricky bugs")
+                : p === "openai" ? Translation.tr("Deep reasoning for complex math and architecture")
+                : p === "gemini" ? Translation.tr("Deep thinking and complex mathematics")
+                : Translation.tr("Deep reasoning effort") };
+        case "extra":
+            return { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") };
+        case "max":
+            return { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") };
+        case "ultracode":
+            return { id: "ultracode", name: Translation.tr("UltraCode"), desc: Translation.tr("Full extended thinking & autonomous multi-pass reasoning") };
+        default:
+            return { id: id, name: root.thinkingLevelName(id), desc: "" };
+        }
+    }
+
+    function _defaultDescProfileFor(fmt: string, mid: string): string {
+        if (fmt === "claude-code" || fmt === "anthropic" || mid.includes("claude")) return "claude";
+        if (fmt === "codex-cli" || fmt === "openai" || mid.includes("codex") || mid.startsWith("o1") || mid.startsWith("o3") || mid.startsWith("o4") || mid.startsWith("gpt-5") || mid.startsWith("gpt-6")) return "openai";
+        if (fmt === "gemini" || fmt === "antigravity-cli" || mid.includes("gemini")) return "gemini";
+        return "generic";
+    }
+
     function getModelThinkingLevels(model) {
         const m = model || root.currentModel;
         const fmt = m?.api_format || "";
         const mid = (m?.model || m?.name || "").toLowerCase();
-        // Generic fallback for any other models, and for local Ollama
-        // models, which speak the OpenAI format but take only these.
-        const generic = () => [
-            { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning") },
-            { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning effort") },
-            { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning") },
-            { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning effort") },
-        ];
-        if ((m?.endpoint ?? "").includes("localhost:11434")) return generic();
+        const mapIds = (ids, profile) => ids.map(id => root._thinkingLevelMeta(id, profile));
 
-        // Claude (Claude Code CLI, Anthropic API, or Claude-named models)
-        if (fmt === "claude-code" || fmt === "anthropic" || mid.includes("claude")) {
-            return [
-                { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning budget") },
-                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Quick reasoning for routine edits and questions") },
-                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for standard coding and debugging") },
-                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex logic and tricky bugs") },
-                { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
-                { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
-                { id: "ultracode", name: Translation.tr("UltraCode"), desc: Translation.tr("Full extended thinking & autonomous multi-pass reasoning") },
-            ];
-        }
-
-        // Codex plan models: the levels the catalog lists for that model.
+        // Codex plan models: the levels the CLI lists for that model.
         const codexEfforts = fmt === "codex-cli" ? root.codexEfforts(m?.model ?? "") : [];
         if (codexEfforts.length > 0) {
-            const rows = [
-                { id: "none", name: Translation.tr("None"), desc: Translation.tr("Disable reasoning for instantaneous output") },
-                { id: "minimal", name: Translation.tr("Minimal"), desc: Translation.tr("Minimal thinking for lowest latency") },
-                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning with high throughput") },
-                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning effort") },
-                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex math and architecture") },
-                { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
-                { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
-                { id: "ultracode", name: Translation.tr("UltraCode"), desc: Translation.tr("Full extended thinking & autonomous multi-pass reasoning") },
-            ];
+            const ordered = ["none", "minimal", "low", "medium", "high", "extra", "max", "ultracode"];
             const offered = codexEfforts.map(effort => root.codexEffortLevels[effort]);
-            return [{ id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") }]
-                .concat(rows.filter(row => offered.includes(row.id)));
+            return mapIds(["auto"].concat(ordered.filter(id => offered.includes(id))), "openai");
         }
 
-        // Codex (Codex CLI or OpenAI reasoning models)
+        const catalogLevels = Catalog.toArray(m?.thinkingLevels);
+        if (catalogLevels && catalogLevels.length > 0) {
+            const profile = m.descProfile || root._defaultDescProfileFor(fmt, mid);
+            return mapIds(catalogLevels, profile);
+        }
+
+        // Local Ollama models speak the OpenAI format but take only these.
+        if ((m?.endpoint ?? "").includes("localhost:11434")) {
+            return mapIds(["auto", "low", "medium", "high"], "generic");
+        }
+
+        // The user's own models have no catalog entry and are judged by name.
+        if (fmt === "claude-code" || fmt === "anthropic" || mid.includes("claude")) {
+            return mapIds(["auto", "low", "medium", "high", "extra", "max", "ultracode"], "claude");
+        }
         if (fmt === "codex-cli" || fmt === "openai" || mid.includes("codex") || mid.startsWith("o1") || mid.startsWith("o3") || mid.startsWith("o4") || mid.startsWith("gpt-5") || mid.startsWith("gpt-6")) {
             if (mid.startsWith("gpt-6")) {
-                return [
-                    { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") },
-                    { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning with high throughput") },
-                    { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning effort") },
-                    { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex math and architecture") },
-                    { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
-                    { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
-                ];
+                return mapIds(["auto", "low", "medium", "high", "extra", "max"], "openai");
             }
             return [
-                { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") },
-                { id: "none", name: Translation.tr("None"), desc: Translation.tr("Disable reasoning for instantaneous output") },
-                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning with high throughput") },
-                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning effort") },
-                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex math and architecture") },
+                root._thinkingLevelMeta("auto", "openai"),
+                root._thinkingLevelMeta("none", "openai"),
+                root._thinkingLevelMeta("low", "openai"),
+                root._thinkingLevelMeta("medium", "openai"),
+                root._thinkingLevelMeta("high", "openai"),
                 { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Maximum reasoning effort for hard problems") },
             ];
         }
-
-        // Gemini (Gemini API or Antigravity CLI)
         if (fmt === "gemini" || fmt === "antigravity-cli" || mid.includes("gemini")) {
             if (mid.includes("neon") || mid.includes("hydrogen")) {
-                return [
-                    { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
-                    { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Standard reasoning effort") },
-                    { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for coding and analysis") },
-                    { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep thinking and complex mathematics") },
-                    { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
-                ];
+                return mapIds(["auto", "low", "medium", "high", "extra"], "gemini");
             }
             if (mid.includes("gemini-4") || mid.includes("carbon") || mid.includes("argon")) {
-                return [
-                    { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
-                    { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Standard reasoning effort") },
-                    { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for coding and analysis") },
-                    { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep thinking and complex mathematics") },
-                ];
+                return mapIds(["auto", "low", "medium", "high"], "gemini");
             }
-            return [
-                { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
-                { id: "minimal", name: Translation.tr("Minimal"), desc: Translation.tr("Minimal thinking for lowest latency") },
-                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Standard reasoning effort") },
-                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for coding and analysis") },
-                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep thinking and complex mathematics") },
-            ];
+            return mapIds(["auto", "minimal", "low", "medium", "high"], "gemini");
         }
-
-        return generic();
+        return mapIds(["auto", "low", "medium", "high"], "generic");
     }
 
     function canonicalModelId(modelId) {
         const id = (modelId || root.currentModelId || "").toLowerCase();
-        return root.retiredModels[id] ?? id;
+        return Catalog.resolveRetiredModel(id, root.retiredModels);
     }
 
     function getModelObject(modelId) {
@@ -2363,16 +2557,23 @@ Singleton {
         const norm = root.canonicalModelId(id);
         if (root.models[norm]) return root.models[norm];
         if (root.models[id]) return root.models[id];
-        if (root.isGeminiApiModel(norm)) return root.geminiApiCatalog[norm] ?? root.models["gemini"];
-        if (root.isGeminiApiModel(id)) return root.geminiApiCatalog[id] ?? root.models["gemini"];
+        if (root.isGeminiApiModel(norm)) return root.geminiApiCatalog[norm] ?? root.models[root.geminiGroupId];
+        if (root.isGeminiApiModel(id)) return root.geminiApiCatalog[id] ?? root.models[root.geminiGroupId];
         for (const fmt of Object.keys(root.cliPlanModels)) {
-            if (root.cliPlanModels[fmt][norm]) {
-                const entry = root.cliPlanModels[fmt][norm];
-                return { api_format: fmt, model: entry.alias || norm, name: entry.name, thinkingLevel: entry.thinkingLevel || "" };
-            }
-            if (root.cliPlanModels[fmt][id]) {
-                const entry = root.cliPlanModels[fmt][id];
-                return { api_format: fmt, model: entry.alias || id, name: entry.name, thinkingLevel: entry.thinkingLevel || "" };
+            const entry = root.cliPlanModels[fmt][norm] ?? root.cliPlanModels[fmt][id];
+            if (entry) {
+                return {
+                    api_format: fmt,
+                    model: entry.alias || norm || id,
+                    name: entry.name,
+                    thinkingLevel: entry.thinkingLevel || "",
+                    thinkingProfile: entry.thinkingProfile || "",
+                    descProfile: entry.descProfile || "",
+                    thinkingLevels: entry.thinkingLevels ?? null,
+                    effortMap: entry.effortMap ?? null,
+                    defaultEffort: entry.defaultEffort || "",
+                    capabilities: entry.capabilities ?? ({}),
+                };
             }
         }
         return root.currentModel;
@@ -2384,8 +2585,10 @@ Singleton {
         const map = Persistent.states?.ai?.modelThinkingLevels ?? ({});
         if (map[norm] !== undefined) return map[norm];
         if (map[id] !== undefined) return map[id];
-        if (norm === "gemini-flash-latest" && map["gemini"] !== undefined) return map["gemini"];
-        if (norm === "gemini" && map["gemini-flash-latest"] !== undefined) return map["gemini-flash-latest"];
+        const groupId = root.geminiGroupId.toLowerCase();
+        const defGemini = root.geminiDefaultModel.toLowerCase();
+        if (norm === defGemini && map[groupId] !== undefined) return map[groupId];
+        if (norm === groupId && map[defGemini] !== undefined) return map[defGemini];
         const legacyLevel = (Persistent.states?.ai?.thinkingLevel || "").toLowerCase();
         if (legacyLevel === "ultracode" && (norm === "claude" || norm.startsWith("claude-"))) {
             return "ultracode";
@@ -2433,14 +2636,16 @@ Singleton {
         const modelKey = root.canonicalModelId(root.currentModelId);
         const validItems = root.getModelThinkingLevels(root.currentModel);
         const validIds = validItems.map(item => item.id.toLowerCase());
+        const groupId = root.geminiGroupId.toLowerCase();
+        const defGemini = root.geminiDefaultModel.toLowerCase();
 
         if (norm === "off" || norm === "default" || norm === "auto" || norm === "") {
             try {
                 if (Persistent.states?.ai) {
                     const next = Object.assign({}, Persistent.states.ai.modelThinkingLevels ?? {});
                     next[modelKey] = "";
-                    if (modelKey === "gemini-flash-latest") next["gemini"] = "";
-                    else if (modelKey === "gemini") next["gemini-flash-latest"] = "";
+                    if (modelKey === defGemini) next[groupId] = "";
+                    else if (modelKey === groupId) next[defGemini] = "";
                     Persistent.states.ai.modelThinkingLevels = next;
                     Persistent.states.ai.thinkingLevel = "";
                 }
@@ -2454,8 +2659,8 @@ Singleton {
                 if (Persistent.states?.ai) {
                     const next = Object.assign({}, Persistent.states.ai.modelThinkingLevels ?? {});
                     next[modelKey] = norm;
-                    if (modelKey === "gemini-flash-latest") next["gemini"] = norm;
-                    else if (modelKey === "gemini") next["gemini-flash-latest"] = norm;
+                    if (modelKey === defGemini) next[groupId] = norm;
+                    else if (modelKey === groupId) next[defGemini] = norm;
                     Persistent.states.ai.modelThinkingLevels = next;
                     Persistent.states.ai.thinkingLevel = norm;
                 }
@@ -3149,7 +3354,7 @@ Singleton {
         }
         root._showNotices(req.notices);
         if (req.searchRefused) {
-            root.addMessage(Translation.tr("Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.").arg("/model"), Ai.interfaceRole);
+            root.addMessage(Translation.tr("Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.").arg("/model"), Ai.interfaceRole);
         }
 
         if (!req.stopped && message && req.confirmationDraft && req.mode === "ask") {
@@ -3566,7 +3771,7 @@ Singleton {
     property bool _saveInFlight: false
     property bool _savePending: false
     readonly property var _sessionOptions: ({
-        "retiredModels": root.retiredModels,
+        "retiredModels": root._flattenedRetiredModels,
         "isAntigravityModel": id => root.planFormatFor(id) === "antigravity-cli" || String(id).startsWith("gemini-plan"),
         "newId": () => root.idForMessage(),
     })
@@ -3896,7 +4101,7 @@ Singleton {
         // At startup the selection the user has now stands over the one saved.
         // Picking the setup entry starts the Ollama walkthrough, so a chat saved
         // on it keeps the current model instead.
-        const savedModel = root.retiredModels[r.parsed.model] ?? r.parsed.model;
+        const savedModel = Catalog.resolveRetiredModel(r.parsed.model, root.retiredModels);
         if (r.kind !== "startup" && savedModel.length > 0 && savedModel !== root.ollamaSetupModelId)
             root.setModel(savedModel, false, true, false);
         // Taken after the model switch, which can post a notice of its own.

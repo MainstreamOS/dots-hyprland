@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-widgets
 pkgver=1.0
-pkgrel=12
+pkgrel=13
 pkgdesc='Mainstream OS Widget Dependencies'
 provides=('illogical-impulse-widgets')
 replaces=('illogical-impulse-widgets')
@@ -22,4 +22,5 @@ depends=(
   libqalculate
   mpris-hyprland
   rust-connect
+  mainstream-assistance
 )

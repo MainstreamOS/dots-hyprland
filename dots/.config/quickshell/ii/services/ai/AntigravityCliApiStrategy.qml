@@ -24,7 +24,11 @@ ApiStrategy {
         const attachment = Helpers.attachmentPath(ctx);
         // A regenerate starts a fresh conversation; its init event replaces the id.
         const sessionId = ctx.regenerate ? "" : root.sessionId;
-        root._requestInfo = { mode: mode, modelName: model.name ?? "" };
+        root._requestInfo = {
+            mode: mode,
+            modelName: model.name ?? "",
+            quotaSwitchTip: model.capabilities?.quotaSwitchTip
+        };
 
         // The = form keeps a value that starts with a dash or a slash from
         // being read as a flag. A conversation the CLI no longer has only
@@ -39,9 +43,22 @@ ApiStrategy {
             if (mode === "auto" || ctx.grant) argv.push("--dangerously-skip-permissions");
         }
         if (sessionId.length > 0) argv.push("--conversation=" + sessionId);
-        if (model.model && model.model !== "gemini-plan") {
+        const setupId = Ai.cliPlans["antigravity-cli"]?.setupId ?? "gemini-plan";
+        if (model.model && !model.isSetupEntry && model.model !== setupId) {
             argv.push("--model=" + model.model);
-            if (model.model.startsWith("gemini-")) {
+            const hasCatalogEffort = (model.effortMap && typeof model.effortMap === "object" && Object.keys(model.effortMap).length > 0)
+                || (typeof model.defaultEffort === "string" && model.defaultEffort.length > 0);
+            if (hasCatalogEffort) {
+                const map = model.effortMap ?? {};
+                const chosen = ctx.thinkingLevel;
+                let effort = "";
+                if (chosen && Object.prototype.hasOwnProperty.call(map, chosen)) {
+                    effort = String(map[chosen] ?? "");
+                } else {
+                    effort = String(model.defaultEffort ?? "");
+                }
+                if (effort.length > 0) argv.push("--effort=" + effort);
+            } else if (model.model.startsWith("gemini-")) {
                 const supportsXhigh = model.model.includes("neon") || model.model.includes("hydrogen");
                 const defaultEffort = (supportsXhigh || model.model.includes("argon")) ? "high" : "medium";
                 let effort = ctx.thinkingLevel || defaultEffort;
@@ -92,7 +109,9 @@ ApiStrategy {
             sink.loginLapsed();
             sink.error(Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting."));
         } else if (/quota reached|resource_exhausted/i.test(detail)) {
-            const tip = /Argon|Carbon|Neon|Pro/.test(root._requestInfo.modelName ?? "");
+            const tip = root._requestInfo.quotaSwitchTip !== undefined
+                ? Boolean(root._requestInfo.quotaSwitchTip)
+                : /Argon|Carbon|Neon|Pro/.test(root._requestInfo.modelName ?? "");
             sink.error(tip ? detail + "\n\n" + Translation.tr("Tip: Switch to another model in the picker to keep going.") : detail);
         } else {
             sink.error(detail);
