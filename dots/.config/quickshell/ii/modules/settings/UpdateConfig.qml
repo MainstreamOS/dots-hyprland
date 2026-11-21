@@ -241,6 +241,11 @@ ContentPage {
         }
         if (exitCode < 0) {
             root.outputText += "\n\n" + Translation.tr("The update did not finish. The record above stops where it stopped.");
+            if (root.bootBroken)
+                root.outputText += "\n" + root.bootBrokenText();
+            if (root.rebootRequired)
+                root.outputText += "\n" + Translation.tr("Parts of the running desktop were already replaced. Reboot, then run the update again to finish it; until then some controls may not work.");
+            rebootMarkCheck.running = true;
             return;
         }
         // sudo refuses a standard account even with the right password, so it
@@ -513,13 +518,16 @@ ContentPage {
     Process {
         id: probeProc
         command: ["bash", "-c",
-            'if [ -f "$1" ]; then read up _ < /proc/uptime; s="";'
-            + ' [ "$(stat -c %Y "$0")" -lt "$(( $(date +%s) - ${up%.*} ))" ] && s=" rebooted";'
-            + ' echo "finished $(cat "$1")$s";'
+            // A run cut short by a shutdown leaves no exit code, and its record is
+            // just as much from before this boot as a finished one.
+            'read up _ < /proc/uptime; s=""; code="";'
+            + ' [ -f "$0" ] && [ "$(stat -c %Y "$0")" -lt "$(( $(date +%s) - ${up%.*} ))" ] && s=" rebooted";'
+            + ' [ -s "$1" ] && read -r code < "$1" 2>/dev/null;'
+            + ' if [ -n "$code" ]; then echo "finished $code$s";'
             // A pid file outlives a killed run, so it only counts if it names a
             // live process; otherwise the page latches into a run that never ends.
             + ' elif bash "$3" "$2" >/dev/null 2>&1; then echo running;'
-            + ' elif [ -s "$0" ]; then rm -f "$2"; echo "finished -1";'
+            + ' elif [ -s "$0" ]; then rm -f "$2"; echo "finished -1$s";'
             + ' else rm -f "$2"; echo none; fi',
             root.logPath, root.exitPath, root.pidPath, root.liveCheck]
         stdout: StdioCollector {
@@ -535,7 +543,8 @@ ContentPage {
                 if (answer.indexOf("finished ") === 0) {
                     const rest = answer.substring("finished ".length);
                     root.recordPredatesBoot = rest.indexOf(" rebooted") !== -1;
-                    root.pendingExitCode = parseInt(rest, 10);
+                    const code = parseInt(rest, 10);
+                    root.pendingExitCode = isNaN(code) ? -1 : code;
                     recordProc.running = true;
                     return;
                 }
@@ -843,11 +852,11 @@ ContentPage {
         ]
 
         // A normal run finishes it: the root half runs after the dotfiles step
-        // even with no new release. Hidden during a pending reboot, like the password field.
+        // even with no new release.
         NoticeBox {
             id: pendingNoticeBox
             Layout.fillWidth: true
-            visible: root.systemHalfPending && !root.isRunning && !root.awaitingReboot
+            visible: root.systemHalfPending && !root.isRunning
             materialIcon: "update"
             text: Translation.tr("Part of the last update did not finish. Enter your password and press Finish update to complete it.")
 
@@ -955,8 +964,8 @@ ContentPage {
             }
         }
 
-        // Clear is offered here too since this state hides the row below; otherwise
-        // the only way out of a reboot verdict would be rebooting.
+        // The controls below stay as they are: a reboot the page asks for is advice,
+        // and a wrong or stale verdict must never be the only thing left on the page.
         RowLayout {
             visible: root.awaitingReboot
             Layout.fillWidth: true
@@ -966,12 +975,6 @@ ContentPage {
             Item { Layout.fillWidth: true }
 
             RippleButtonWithIcon {
-                materialIcon: "delete"
-                mainText: Translation.tr("Clear output")
-                onClicked: root.clearOutput()
-            }
-
-            RippleButtonWithIcon {
                 materialIcon: "restart_alt"
                 mainText: Translation.tr("Reboot Now")
                 onClicked: root.requestReboot()
@@ -979,7 +982,6 @@ ContentPage {
         }
 
         ConfigRow {
-            visible: !root.awaitingReboot
             ConfigSwitch {
                 id: advancedToggle
                 buttonIcon: "tune"
@@ -992,7 +994,6 @@ ContentPage {
 
         ConfigRow {
             id: startRow
-            visible: !root.awaitingReboot
             // Required for every run, with no polkit dialog fallback; it reaches
             // sudo -S over stdin and is cleared on submit.
             Rectangle {
@@ -1051,7 +1052,7 @@ ContentPage {
 
         ContentSubsection {
             title: Translation.tr("Advanced")
-            visible: advancedToggle.checked && !root.awaitingReboot
+            visible: advancedToggle.checked
 
             ConfigRow {
                 uniform: true

@@ -16,7 +16,8 @@
 # What is left in the state dir, for the page to pick up at any point:
 #   update.log   everything the helper printed, ending in the sentinel line
 #                "@@MAINSTREAM-UPDATE-EXIT <code>" once it has finished
-#   update.exit  the exit code, present only once the run is over
+#   update.exit  the exit code, present only once the run is over, a run cut
+#                short by a shutdown included
 #   update.pid   the session leader and its start tick while it runs, for
 #                the Stop button and the page's liveness check
 set -u
@@ -38,16 +39,26 @@ IFS= read -r pw || { echo "run-detached: no password on stdin" >&2; exit 2; }
 # waiting shell. The Stop button signals the child of the recorded pid.
 printf '%s\n' "$pw" | setsid -f bash -c '
     log="$1"; exitf="$2"; pidf="$3"; sound="$4"; shift 4
+    # A shutdown or restart signals this shell along with the helper. Caught, it
+    # waits for the helper to stop and still records how the run ended; ignored,
+    # the helper would inherit the ignore and never hear the signal.
+    interrupted=0
+    trap "interrupted=1" INT TERM HUP
     # The tick this session started at goes in beside the pid, so the page can
     # tell the run from whatever later inherits its number.
     echo "$$ $(sed "s/^[^)]*) //" /proc/$$/stat | awk "{print \$20}")" > "$pidf"
-    "$@" >> "$log" 2>&1
-    rc=$?
+    if (( interrupted )); then
+        rc=143
+    else
+        "$@" >> "$log" 2>&1
+        rc=$?
+    fi
     printf "\n@@MAINSTREAM-UPDATE-EXIT %s\n" "$rc" >> "$log"
-    echo "$rc" > "$exitf"
+    # Renamed into place, so a write cut short never leaves an empty exit code.
+    echo "$rc" > "$exitf.tmp" && mv -f "$exitf.tmp" "$exitf"
     rm -f "$pidf"
     # Once the result is on disk, so the page never waits on the sound.
-    [[ -x "$sound" ]] && "$sound" "$rc"
+    (( interrupted )) || { [[ -x "$sound" ]] && "$sound" "$rc"; }
 ' bash "$log" "$exitf" "$pidf" "$sound" "$@"
 unset pw
 exit 0
