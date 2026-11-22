@@ -44,6 +44,8 @@
 # depends on but that would break the desktop if removed.
 
 set -euo pipefail
+# pacman output is parsed below, so it has to stay untranslated.
+export LC_ALL=C
 
 APPLICATIONS_DIR=/usr/share/applications
 
@@ -135,7 +137,7 @@ _list_entries() {
     local protected explicit desktop_owned candidates
     protected="$(protected_set)"
     explicit="$(pacman -Qeq | sort)"
-    desktop_owned="$(pacman -Qo "$APPLICATIONS_DIR"/*.desktop 2>/dev/null | awk '{print $(NF-1)}' | sort -u)"
+    desktop_owned="$(pacman -Qqo "$APPLICATIONS_DIR"/*.desktop 2>/dev/null | sort -u)"
     candidates="$(comm -12 <(printf '%s\n' "$explicit") <(printf '%s\n' "$desktop_owned"))"
     candidates="$(comm -23 <(printf '%s\n' "$candidates") <(printf '%s\n' "$protected"))"
 
