@@ -525,7 +525,11 @@ cmd_set_avatar() {  # $1 = user  $2 = source image
     fi
     chmod 644 "$tmp"
     mv -f -- "$tmp" "$dest"
-    install -Dm644 -o "$u" -g "$(id -g "$u")" "$dest" "$home/.face"
+    # Written as the account itself, which could have left a link at this path.
+    # The login screen reads the copy above, so this one is not worth failing for.
+    setpriv --reuid="$u" --regid="$(id -g "$u")" --init-groups -- \
+        install -Dm644 "$dest" "$home/.face" \
+        || log "WARN: could not write $home/.face"
 
     if [[ -f "$conf" ]] && grep -q '^Icon=' "$conf"; then
         sed -i "s|^Icon=.*|Icon=$dest|" "$conf"
