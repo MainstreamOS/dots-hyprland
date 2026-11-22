@@ -304,12 +304,6 @@ format_mount() {
 # ── Credentials dir (SMB only) ────────────────────────────────────────────
 CREDS_DIR="/etc/disk-mounter-credentials"
 
-# LUKS keyfile location. The app no longer ships a mount-luks flow (the
-# keyfile-on-disk auto-unlock pattern has security tradeoffs we steer
-# users away from), but the unmount path still cleans up keyfiles for
-# anyone who set LUKS up via gnome-disks or by hand-editing crypttab.
-LUKS_KEYS_DIR="/etc/cryptsetup-keys.d"
-
 ensure_creds_dir() {
     mkdir -p "$CREDS_DIR"
     chmod 0700 "$CREDS_DIR"
@@ -555,15 +549,6 @@ unmount() {
         if [[ -e "/dev/mapper/$mapper_name" ]]; then
             cryptsetup close "$mapper_name" 2>/dev/null || \
                 log "WARN: cryptsetup close $mapper_name failed (mapper may still be in use)."
-        fi
-
-        if [[ "$mode" == "remove-fstab" ]]; then
-            # Strip the crypttab declaration too so the mapper doesn't
-            # get re-opened on next boot, and drop the associated
-            # keyfile (if there was one) since it's worthless without
-            # the crypttab entry pointing at it.
-            [[ -f /etc/crypttab ]] && sed -i "\#^${mapper_name}\b#d" /etc/crypttab
-            [[ -f "${LUKS_KEYS_DIR}/${mapper_name}.key" ]] && rm -f "${LUKS_KEYS_DIR}/${mapper_name}.key"
         fi
     fi
 
