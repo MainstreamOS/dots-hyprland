@@ -645,7 +645,10 @@ switch_esp_mount() {
             AUTOMOUNT_UNIT="$unit"
             systemctl stop "$unit" || return 2
         fi
-        umount "$mp" || return 2
+        # Stopping an automount can take the filesystem mounted through it along.
+        if mountpoint -q "$mp" 2>/dev/null; then
+            umount "$mp" || return 2
+        fi
     fi
     mount -t vfat -o umask=0077 "$dev" "$mp" && return 0
     [[ -z "$current" ]] || mount -t vfat -o umask=0077 "$current" "$mp" 2>/dev/null || true
@@ -677,7 +680,7 @@ finish_cutover() {
     [[ -f "$mp/$loader_path" ]] || die_json "The replacement EFI loader is missing. Boot updates are paused."
     activate_esp "$dev" "$guid" "$loader" || die_json "The new firmware boot entry could not be activated. Boot updates are paused."
     update_fstab_esp_source "$mp" "UUID=$uuid" || die_json "Could not save the replacement EFI mount in fstab. Boot updates are paused."
-    if [[ "$(findmnt -en -o MAJ:MIN -M "$mp")" != "$(lsblk -dno MAJ:MIN "$dev")" ]]; then
+    if [[ "$(findmnt -en -o MAJ:MIN -M "$mp" | tail -n 1)" != "$(lsblk -dno MAJ:MIN "$dev")" ]]; then
         die_json "The mounted EFI partition does not match the replacement. Boot updates are paused."
     fi
     if [[ -d /run/systemd/system ]]; then
