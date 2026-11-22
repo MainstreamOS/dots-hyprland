@@ -2021,6 +2021,7 @@
   "Latest remote tag: %s": "Latest remote tag: %s",
   "Last-applied:      %s": "Last-applied:      %s",
   "Already at %s (use --force to re-apply).": "Already at %s (use --force to re-apply).",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).",
   "[DRY-RUN] Would update '%s' -> '%s'": "[DRY-RUN] Would update '%s' -> '%s'",
   "Local edits/untracked present — auto-stashing as: %s": "Local edits/untracked present — auto-stashing as: %s",
   "Pointing %s at %s...": "Pointing %s at %s...",

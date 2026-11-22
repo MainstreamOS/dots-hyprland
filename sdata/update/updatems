@@ -274,6 +274,13 @@ if [[ "$LATEST_TAG" == "$APPLIED_TAG" && $FORCE -eq 0 ]]; then
     ok "$(tf "Already at %s (use --force to re-apply)." "$LATEST_TAG")"
     exit 0
 fi
+# A machine can hold a release newer than the latest published tag, and
+# applying that tag would roll it back.
+if [[ $EDGE -eq 0 && $FORCE -eq 0 && "$APPLIED_TAG" =~ $TAG_REGEX ]] \
+   && [[ "$(printf '%s\n%s\n' "$APPLIED_TAG" "$LATEST_TAG" | sort -V | tail -n1)" != "$LATEST_TAG" ]]; then
+    ok "$(tf "This system is at %s, ahead of the latest release %s (use --force to apply it anyway)." "$APPLIED_TAG" "$LATEST_TAG")"
+    exit 0
+fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
     ok "$(tf "[DRY-RUN] Would update '%s' -> '%s'" "${APPLIED_TAG:-$(t "<none>")}" "$LATEST_TAG")"
