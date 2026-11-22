@@ -825,8 +825,13 @@ cleanup_and_rollback() {
 }
 
 lock_resize() {
+    local old_umask
     mkdir -p "$(dirname "$BOOT_LOCK")" "$(dirname "$RESIZE_LOCK")"
+    # Any account that can read a lock file can hold it.
+    old_umask="$(umask)"
+    umask 077
     exec 8>"$RESIZE_LOCK" 9>"$BOOT_LOCK"
+    umask "$old_umask"
     flock -w 30 8 && flock -w 30 9 \
         || die_json "Boot partition is currently locked by another system update or snapshot task."
     # Pacman holds its database lock from before the pre-transaction guard until after all boot hooks.
