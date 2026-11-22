@@ -129,7 +129,7 @@ if [ -z "$tree" ]; then
     # so the result is judged by the tree it leaves behind.
     log "Opening the recovery image..."
     mkdir -p "$WORK/tree"
-    fwpath="$(7z l -slt "$dmg" 2>/dev/null | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1)"
+    fwpath="$(7z l -slt "$dmg" 2>/dev/null | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1 || true)"
     if [ -n "$fwpath" ]; then
         7z x -y -o"$WORK/tree" "$dmg" "$fwpath" -r >/dev/null 2>&1 || true
     else
@@ -137,7 +137,7 @@ if [ -z "$tree" ]; then
         7z x -y -o"$WORK/dmg" "$dmg" >/dev/null 2>&1 || true
         hfs="$(find "$WORK/dmg" -type f -size +100M | head -n 1)"
         [ -n "$hfs" ] || fail "No volume found inside the recovery image."
-        fwpath="$(7z l -slt "$hfs" 2>/dev/null | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1)"
+        fwpath="$(7z l -slt "$hfs" 2>/dev/null | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1 || true)"
         [ -n "$fwpath" ] || fail "No firmware tree inside the recovery image."
         7z x -y -o"$WORK/tree" "$hfs" "$fwpath" -r >/dev/null 2>&1 || true
     fi
