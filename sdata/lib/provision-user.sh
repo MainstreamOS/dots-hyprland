@@ -108,7 +108,10 @@ _pu_own_home() {  # $1 = user
     while IFS= read -r mp; do
         [[ "$mp" == "$home"/* ]] && prune+=( -path "$mp" -prune -o )
     done < <(findmnt -J -o TARGET 2>/dev/null | jq -r '.. | .target? // empty' 2>/dev/null)
-    find "$home" "${prune[@]}" -exec chown -h "$u:" {} +
+    # Run inside each folder on bare names, so one swapped for a link midway
+    # cannot aim chown elsewhere. Only what is not theirs, as that is slow.
+    find "$home" "${prune[@]}" \( ! -user "$u" -o ! -gid "$(id -g "$u")" \) \
+        -execdir chown -h "$u:" {} +
 }
 
 # The per-machine parts of a home: built rather than copied. The virtualenv
@@ -314,18 +317,27 @@ provision_venv() {  # $1 = user
     home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     venv="$home/.local/state/quickshell/.venv"
     [[ -d "$venv" ]] || return 0
+    # Rewritten or deleted below, so it has to be the folder it looks like
+    # rather than a link to somewhere else.
+    if [[ -L "$venv" || "$(realpath -e -- "$venv" 2>/dev/null)" != "$(realpath -e -- "$home" 2>/dev/null)/.local/state/quickshell/.venv" ]]; then
+        _pu_warn "the Python environment of $u goes through a link, leaving it alone"
+        return 0
+    fi
 
+    # The cd is for find, which runs sed from the directory it was started in,
+    # and the owner cannot enter the one this was called from.
     if [[ -r /usr/local/lib/mainstream-venv-common.sh ]]; then
-        # shellcheck source=/dev/null
-        source /usr/local/lib/mainstream-venv-common.sh
-        repair_venv_paths "$venv"
+        _pu_as "$u" bash -c 'cd / && source /usr/local/lib/mainstream-venv-common.sh && repair_venv_paths "$1"' bash "$venv" \
+            || _pu_warn "venv: could not repair the paths in $venv"
     fi
 
     # A venv built against a Python that has since moved on cannot be
     # repaired by rewriting paths, so it is thrown away and first-login
     # rebuilds it rather than leaving a subtly broken one in place.
     target_ver="$(/usr/bin/python3.12 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
-    baked_ver="$(cat "$venv/.python-version" 2>/dev/null || true)"
+    # Read as the owner, since the file is theirs to point at anything and its
+    # content goes into the log.
+    baked_ver="$(_pu_as "$u" cat -- "$venv/.python-version" 2>/dev/null || true)"
     # An interpreter that is not there at all is the other way this venv goes
     # stale, and it reads as an empty version rather than a different one.
     if [[ -z "$target_ver" || ( -n "$baked_ver" && "$baked_ver" != "$target_ver" ) ]]; then
@@ -336,10 +348,9 @@ provision_venv() {  # $1 = user
             return 0
         fi
         _pu_warn "venv: $venv does not match Python ${target_ver:-3.12}, leaving it to first login to rebuild"
-        rm -rf "$venv"
+        _pu_as "$u" rm -rf -- "$venv"
         return 0
     fi
-    chown -R "$u:" "$venv"
 }
 
 # Two gates stand between a new account and a themed desktop. first_run.txt
@@ -358,7 +369,7 @@ provision_first_run() {  # $1 = user
         _pu_log "first run: $u has logged in before, leaving the marker alone"
         return 0
     fi
-    rm -f "$home/.local/state/quickshell/user/first_run.txt"
+    _pu_as "$u" rm -f -- "$home/.local/state/quickshell/user/first_run.txt"
     _pu_as "$u" touch "$home/.dotfiles-pending-user-setup"
 }
 
@@ -372,7 +383,7 @@ provision_first_run() {  # $1 = user
 # exists the plugin is removed rather than left in place: a desktop without
 # title bars is a far better outcome than an account nobody can log in to.
 provision_plugins() {  # $1 = user
-    local u="$1" home want dir so stamp src found unit group
+    local u="$1" home want dir so stamp src found unit
     home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     dir="$home/.local/share/hyprland/plugins"
     [[ -d "$dir" ]] || { _pu_log "no plugin directory, nothing to check"; return 0; }
@@ -424,12 +435,17 @@ provision_plugins() {  # $1 = user
             found="$src"; break
         done
         if [[ -n "$found" ]]; then
-            group="$(id -g "$u")"
-            install -Dm755 -o "$u" -g "$group" "$found"            "$so"
-            install -Dm644 -o "$u" -g "$group" "$found.builtfor"   "$so.builtfor"
-            _pu_log "$(basename "$so"): replaced from $found"
+            # Root reads the build, which sits in a home the owner cannot
+            # enter, and the owner writes the copy from a pipe.
+            if cat -- "$found" | _pu_as "$u" install -m755 /dev/stdin "$so" \
+               && cat -- "$found.builtfor" | _pu_as "$u" install -m644 /dev/stdin "$so.builtfor"; then
+                _pu_log "$(basename "$so"): replaced from $found"
+            else
+                _pu_as "$u" rm -f -- "$so" "$so.builtfor"
+                _pu_warn "$(basename "$so"): could not be replaced from $found, removed so the session can start"
+            fi
         else
-            rm -f "$so" "$so.builtfor"
+            _pu_as "$u" rm -f -- "$so" "$so.builtfor"
             _pu_log "$(basename "$so"): no matching build anywhere, removed so the session can start"
             # Nobody on this machine has a usable copy, so ask the rebuild that
             # owns this plugin to run now rather than leaving the account
@@ -739,9 +755,9 @@ fi
 rm -f "$_gs_script"
 }
 
-# The order matters. Groups and the venv first because they are cheap and
-# root-only, then the desktop files, then ownership, and the first-run gates
-# last so nothing arms a login before the home is ready for one.
+# The order matters. Groups first because they are cheap and root-only, then
+# ownership, since every step after it works in the home as its owner, and the
+# first-run gates last so nothing arms a login before the home is ready for one.
 provision_user_home() {  # $1 = user  $2 = "fresh" when the account was just created
     local u="$1" fresh="${2:-}" home
     home="$(provision_home_of "$u")"
@@ -756,11 +772,11 @@ provision_user_home() {  # $1 = user  $2 = "fresh" when the account was just cre
 
     _pu_step dotfiles provision_dotfiles "$u" "$fresh"
     _pu_step groups   provision_groups   "$u"
+    # Before the steps that write as the owner: a home kept from an earlier
+    # account of this name is still closed to everyone but root.
+    _pu_step own      _pu_own_home       "$u"
     _pu_step venv     provision_venv     "$u"
     _pu_step plugins  provision_plugins  "$u"
-    # Before the desktop step, which writes as the owner: a home kept from an
-    # earlier account of this name is still closed to everyone but root.
-    _pu_step own      _pu_own_home       "$u"
     _pu_step desktop  provision_desktop  "$u"
     _pu_step firstrun provision_first_run "$u"
 
@@ -781,7 +797,7 @@ provision_user_home() {  # $1 = user  $2 = "fresh" when the account was just cre
     _pu_log "root-owned paths left in home: $(find "$home" ! -user "$u" -printf . 2>/dev/null | wc -c)"
     local so
     for so in "$home"/.local/share/hyprland/plugins/*.so; do
-        [[ -e "$so" ]] && _pu_log "plugin   $(basename "$so") builtfor=$(head -n1 "$so.builtfor" 2>/dev/null || echo NONE)"
+        [[ -e "$so" ]] && _pu_log "plugin   $(basename "$so") builtfor=$(_pu_as "$u" head -n1 -- "$so.builtfor" 2>/dev/null || echo NONE)"
     done
     # The caller decides what to do about a half-built home, and it can only
     # decide if it is told. Until this said so, a provision that failed
