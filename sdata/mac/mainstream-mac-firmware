@@ -40,6 +40,9 @@ CACHE="${MAC_FIRMWARE_CACHE:-/var/cache/mainstream/mac-firmware-image}"
 keep_image=1
 [ -d /run/archiso ] && keep_image=0
 MAX_FAILURES=5
+# Written last, so a set that was only partly unpacked is never taken as whole.
+STAMP="$FW_DIR/brcm/.mainstream-mac-firmware"
+STAGE="$FW_DIR/.mainstream-mac-firmware.new"
 TIMER=mainstream-mac-firmware.timer
 
 force=0 quiet=0 check=0 from_dmg="" from_tree=""
@@ -62,8 +65,18 @@ log() {
 }
 fail() { log "$*"; exit 1; }
 
+if [ -r "$MAC_LIB" ]; then
+    # shellcheck source=/dev/null
+    source "$MAC_LIB"
+fi
+
 have_firmware() {
     local f
+    [ -e "$STAMP" ] && return 0
+    if declare -F mac_apple_firmware_present >/dev/null; then
+        MAC_FIRMWARE_DIR="$FW_DIR" mac_apple_firmware_present
+        return
+    fi
     for f in "$FW_DIR"/brcm/brcmfmac4364*-pcie.apple*.bin "$FW_DIR"/brcm/brcmfmac4377*-pcie.apple*.bin "$FW_DIR"/brcm/brcmfmac4355*-pcie.apple*.bin; do
         [ -e "$f" ] && return 0
     done
@@ -84,8 +97,6 @@ fi
 
 if [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ]; then
     if [ -r "$MAC_LIB" ]; then
-        # shellcheck source=/dev/null
-        source "$MAC_LIB"
         if ! mac_needs_apple_firmware; then
             log "This machine does not need Apple's Broadcom firmware."
             systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
@@ -133,12 +144,12 @@ image_verifies() {
         "$LIB" "$1" "$2" >/dev/null 2>&1
 }
 
-rm -rf "$WORK"
+rm -rf "$WORK" "$STAGE"
 mkdir -p "$WORK"
 have_image=0
 cleanup() {
     local rc=$?
-    rm -rf "$WORK"
+    rm -rf "$WORK" "$STAGE"
     if [ "$rc" -ne 0 ] && [ "$have_image" = 1 ]; then
         note_failure
     fi
@@ -218,10 +229,14 @@ if [ -d "$tree/bluetooth" ]; then
         || log "Bluetooth firmware could not be prepared; Wi-Fi goes ahead."
 fi
 
+# Everything is unpacked beside the firmware directory first and moved in only
+# when every archive came out whole.
+mkdir -p "$STAGE"
 installed=0
 for pkg in "$WORK/wifi" "$WORK/bluetooth"; do
     [ -s "$pkg/firmware.tar" ] || continue
-    tar -xf "$pkg/firmware.tar" -C "$FW_DIR" --no-same-owner
+    tar -xf "$pkg/firmware.tar" -C "$STAGE" --no-same-owner \
+        || fail "Could not unpack the $(basename "$pkg") firmware."
     # grep -c prints 0 and still exits 1 when it matches nothing, so the
     # fallback would append a second 0 and the sum below would be arithmetic
     # on "0\n0". Under set -e that aborts the run with the firmware already
@@ -232,6 +247,14 @@ for pkg in "$WORK/wifi" "$WORK/bluetooth"; do
     installed=$((installed + n))
 done
 [ "$installed" -gt 0 ] || fail "The recovery image held no usable firmware."
+rm -f "$STAMP"
+( cd "$STAGE" && find . -mindepth 1 -type d ) | while IFS= read -r d; do
+    mkdir -p "$FW_DIR/$d" || exit 1
+done || fail "Could not move the firmware into place."
+( cd "$STAGE" && find . ! -type d ) | while IFS= read -r f; do
+    mv -f "$STAGE/$f" "$FW_DIR/$f" || exit 1
+done || fail "Could not move the firmware into place."
+: >"$STAMP"
 chown -R root:root "$FW_DIR/brcm" 2>/dev/null || true
 
 # On a running system the drivers can pick the files up right away; in an

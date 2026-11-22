@@ -177,8 +177,32 @@ mac_needs_apple_firmware() {
 # test image bakes it in, and an installed machine has already fetched it. Same
 # names mainstream-mac-firmware --check looks for, kept here so the answer does
 # not depend on that script being installed.
+#
+# The fetch leaves a stamp when the whole set is in. Firmware with no stamp
+# (baked into an image, or fetched before the stamp existed) counts only when
+# this machine's chip has each kind of file the fetch installs, so a set that
+# was cut short part way is fetched again.
 mac_apple_firmware_present() {
-    local dir="${MAC_FIRMWARE_DIR:-/usr/lib/firmware}" f
+    local dir="${MAC_FIRMWARE_DIR:-/usr/lib/firmware}" f pci chip="" pattern
+    [ -e "$dir/brcm/.mainstream-mac-firmware" ] && return 0
+    pci="$(_mac_pci)"
+    case "$pci" in
+        *14e4:4464*) chip=4364 ;;
+        *14e4:4488*) chip=4377 ;;
+        *14e4:43dc*) chip=4355 ;;
+    esac
+    if [ -n "$chip" ]; then
+        set -- "brcmfmac${chip}*-pcie.apple*.bin" "brcmfmac${chip}*-pcie.apple*.clm_blob" "brcmfmac${chip}*-pcie.apple*.txt"
+        # Only this chip's Bluetooth takes firmware from the same fetch.
+        [ "$chip" = 4377 ] && set -- "$@" "brcmbt4377*.bin"
+        for pattern in "$@"; do
+            for f in "$dir"/brcm/$pattern; do
+                [ -e "$f" ] && continue 2
+            done
+            return 1
+        done
+        return 0
+    fi
     for f in "$dir"/brcm/brcmfmac4364*-pcie.apple*.bin \
              "$dir"/brcm/brcmfmac4377*-pcie.apple*.bin \
              "$dir"/brcm/brcmfmac4355*-pcie.apple*.bin; do
