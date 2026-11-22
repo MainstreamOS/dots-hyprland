@@ -6,12 +6,14 @@ macrecovery.py
   From OpenCorePkg, Utilities/macrecovery, by vit9696 and the Acidanthera
   contributors. BSD 3-Clause License. Talks to Apple's recovery service for
   a board id and verifies the download against its chunklist.
+  License text: LICENSE-macrecovery.txt
   https://github.com/acidanthera/OpenCorePkg
 
 asahi_firmware/ (core.py, cpio.py, wifi.py, bluetooth.py)
   From the Asahi Linux installer, by The Asahi Linux Contributors. MIT
   License. Turns the firmware tree inside a macOS image into the file names
   the brcmfmac and hci_bcm4377 drivers look for.
+  License text: LICENSE-asahi-firmware.txt
   https://github.com/AsahiLinux/asahi-installer
 
 Local change: bluetooth.py imports FWPackage from asahi_firmware.core, as

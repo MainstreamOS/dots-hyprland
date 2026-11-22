@@ -655,6 +655,9 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
         _install_file 0755 "$REPO_DIR/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware "$(t "Mac firmware fetch")"
         _install_file 0644 "$REPO_DIR/sdata/mac/macrecovery.py" /usr/local/lib/mainstream-mac/macrecovery.py "$(t "macrecovery")"
         _install_file 0644 "$REPO_DIR/sdata/mac/NOTICE" /usr/local/lib/mainstream-mac/NOTICE "$(t "Mac firmware notice")"
+        for f in "$REPO_DIR"/sdata/mac/LICENSE-*.txt; do
+            _install_file 0644 "$f" "/usr/local/lib/mainstream-mac/$(basename "$f")" "$(basename "$f")"
+        done
         for f in "$REPO_DIR"/sdata/mac/asahi_firmware/*.py; do
             _install_file 0644 "$f" "/usr/local/lib/mainstream-mac/asahi_firmware/$(basename "$f")" "asahi_firmware/$(basename "$f")"
         done
