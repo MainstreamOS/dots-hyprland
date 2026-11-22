@@ -115,7 +115,9 @@ boot_layout_detect() {
             BOOT_LAYOUT_ERROR="the LUKS UUID of $LUKS_BACKING_DEV could not be read"
             return 1
         fi
-        ROOT_SPEC="rd.luks.name=${LUKS_UUID}=${LUKS_MAPPER_NAME} root=/dev/mapper/${LUKS_MAPPER_NAME}"
+        # dm-crypt drops discards unless told to pass them, and the weekly
+        # fstrim.timer is how these installs are trimmed.
+        ROOT_SPEC="rd.luks.name=${LUKS_UUID}=${LUKS_MAPPER_NAME} rd.luks.options=discard root=/dev/mapper/${LUKS_MAPPER_NAME}"
     else
         ROOT_PARTUUID=$(lsblk -dno PARTUUID "$ROOT_PART_DEV" 2>/dev/null) || ROOT_PARTUUID=""
         if [[ -z "$ROOT_PARTUUID" ]]; then

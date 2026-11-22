@@ -182,7 +182,7 @@ FIX_LUKS_DEV=/dev/nvme0n1p2; FIX_LUKS_UUID=bbbb-2222; FIX_ROOT_DISK=nvme0n1
 FIX_ESP_MOUNTED=1; FIX_ESP_SRC=/dev/nvme0n1p1; FIX_ESP_FSTYPE=vfat; FIX_ESP_DISK=nvme0n1
 accepts luks-default
 chk luks-default-host "$DISK_HOST_DEV" /dev/nvme0n1p2
-chk luks-default-cmdline "$(cmdline)" "rd.luks.name=bbbb-2222=luks-bbbb-2222 root=/dev/mapper/luks-bbbb-2222 rootflags=subvol=@ rw rootfstype=btrfs $TAIL"
+chk luks-default-cmdline "$(cmdline)" "rd.luks.name=bbbb-2222=luks-bbbb-2222 rd.luks.options=discard root=/dev/mapper/luks-bbbb-2222 rootflags=subvol=@ rw rootfstype=btrfs $TAIL"
 
 # ── 3. the default BIOS install: FAT32 /boot, btrfs root on @ ────────────────
 reset; bios
@@ -249,7 +249,7 @@ accepts bios-luks
 # TARGET_DISK comes from /boot, so the open mapper on the root's partition
 # cannot put a second line into it.
 chk bios-luks-disk "$TARGET_DISK" /dev/sda
-chk bios-luks-cmdline "$(cmdline)" "rd.luks.name=9999=luks-9999 root=/dev/mapper/luks-9999 rootflags=subvol=@ rw rootfstype=btrfs $TAIL"
+chk bios-luks-cmdline "$(cmdline)" "rd.luks.name=9999=luks-9999 rd.luks.options=discard root=/dev/mapper/luks-9999 rootflags=subvol=@ rw rootfstype=btrfs $TAIL"
 
 # ── 12. manual BIOS, /boot on another disk: the loader follows /boot ────────
 # limine-bios-sync rewrites the stages on the disk holding /boot after every
