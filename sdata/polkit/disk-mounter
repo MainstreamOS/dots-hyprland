@@ -166,25 +166,34 @@ mount_block() {
     device="$resolved"
     resolve_caller
 
-    # Optional relabel. If $label is non-empty AND differs from the current
-    # on-disk label, swap to per-fstype labelling utility. Failures abort
-    # because the user explicitly asked for the rename.
-    local current_label
+    # Optional relabel with the per-fstype labelling utility, only when a new
+    # name was asked for. The desktop sends the kernel name of the device (or
+    # of the encrypted partition under it) when the drive has no label and
+    # none was typed, so that renames nothing, like an empty label or the
+    # label already on disk.
+    local current_label device_names
     current_label="$(lsblk -no LABEL "$device" 2>/dev/null | head -n1 || true)"
-    if [[ -n "$label" && "$label" != "$current_label" ]]; then
-        case "$fstype" in
-            ext2|ext3|ext4)                          e2label "$device" "$label" ;;
-            vfat|fat|fat16|fat32|msdos)              fatlabel "$device" "$label" ;;
-            ntfs)
-                command -v ntfslabel >/dev/null || { log "ntfslabel not installed (ntfs-3g)"; exit 2; }
-                ntfslabel "$device" "$label" ;;
-            btrfs)                                    btrfs filesystem label "$device" "$label" ;;
-            xfs)                                      xfs_admin -L "$label" "$device" ;;
-            exfat)
-                command -v exfatlabel >/dev/null || { log "exfatlabel not installed (exfatprogs)"; exit 2; }
-                exfatlabel "$device" "$label" ;;
-            *) log "Cannot relabel $fstype filesystem — proceeding without rename" ;;
-        esac
+    device_names="$(lsblk -nrso KNAME "$device" 2>/dev/null || true)"
+    if [[ -n "$label" && "$label" != "$current_label" ]] \
+            && ! grep -qxF -- "$label" <<<"${1##*/}"$'\n'"$device_names"; then
+        # The subshell keeps a failed rename from ending the mount.
+        if ! (
+            case "$fstype" in
+                ext2|ext3|ext4)                          e2label "$device" "$label" ;;
+                vfat|fat|fat16|fat32|msdos)              fatlabel "$device" "$label" ;;
+                ntfs)
+                    command -v ntfslabel >/dev/null || { log "ntfslabel not installed (ntfs-3g)"; exit 2; }
+                    ntfslabel "$device" "$label" ;;
+                btrfs)                                    btrfs filesystem label "$device" "$label" ;;
+                xfs)                                      xfs_admin -L "$label" "$device" ;;
+                exfat)
+                    command -v exfatlabel >/dev/null || { log "exfatlabel not installed (exfatprogs)"; exit 2; }
+                    exfatlabel "$device" "$label" ;;
+                *) log "Cannot relabel $fstype filesystem — proceeding without rename" ;;
+            esac
+        ); then
+            log "Could not rename $device to \"$label\", mounting it without the rename"
+        fi
     fi
 
     local effective_label="${label:-$current_label}"
