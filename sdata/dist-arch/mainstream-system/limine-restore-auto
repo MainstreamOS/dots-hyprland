@@ -28,16 +28,18 @@ proc answer {text} {
 
 spawn sudo -A /usr/lib/limine/limine-snapper-sync --restore
 
+# With a color terminal a prompt ends in a color reset sequence, so the patterns allow
+# escape sequences between the prompt and the end of the output.
 expect {
-    -re {Choice \[r/l/c\]: $}                       { answer "r\r"; exp_continue }
-    -re {Choice \[s/r/c\]: $}                       { answer "r\r"; exp_continue }
-    -re {Your input: $}                             { answer "y\r"; exp_continue }
+    -re {Choice \[r/l/c\]:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "r\r"; exp_continue }
+    -re {Choice \[s/r/c\]:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "r\r"; exp_continue }
+    -re {Your input:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "y\r"; exp_continue }
     -re {Enter snapshot description[^\n]*$}         { answer "\r";  exp_continue }
-    -re {Description for backup subvolume[^\n]*:\s*$} { answer "\r";  exp_continue }
+    -re {Description for backup subvolume[^\n]*:(?:\s|\e\[[0-9;?]*[A-Za-z])*$} { answer "\r";  exp_continue }
     -re {type \[ID\][^\n]*cancel[^\n]*$}            { answer "c\r"; exp_continue }
-    -re {unused files\? \[y/N\]: $}                 { answer "n\r"; exp_continue }
+    -re {unused files\? \[y/N\]:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "n\r"; exp_continue }
     -re {[Rr]eboot[^\n]*\[y/N\][^\n]*$}             { answer "n\r"; exp_continue }
-    -re {Close the terminal[^\n]*\[y/N\]: $}        { answer "y\r"; exp_continue }
+    -re {Close the terminal[^\n]*\[y/N\]:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "y\r"; exp_continue }
     timeout { exit 124 }
     eof
 }
