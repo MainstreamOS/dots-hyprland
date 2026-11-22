@@ -21,6 +21,7 @@ FSTAB_PATH="${EFI_RESIZE_FSTAB:-/etc/fstab}"
 BOOT_LOCK="${EFI_RESIZE_LOCK:-/run/lock/boot-partition.lock}"
 BACKUP_BASE="${EFI_RESIZE_BACKUP_BASE:-/var/cache/mainstream}"
 CUTOVER_STATE="${EFI_RESIZE_STATE:-/var/lib/mainstream/efi-resize.pending}"
+BUILD_STATE="$(dirname -- "$CUTOVER_STATE")/efi-resize.building"
 RESIZE_LOCK=/run/lock/mainstream-efi-resize.lock
 MOUNT_OVERRIDE="${EFI_RESIZE_MOUNT:-}"
 SKIP_NVRAM="${EFI_RESIZE_SKIP_NVRAM:-0}"
@@ -611,6 +612,8 @@ write_cutover_state() {
     ROLLBACK_BTRFS_MNT=""
     ROLLBACK_BOOT_ENTRY=""
     sync -f -- "$dir"
+    # From here the build is a switch to finish, never something to undo.
+    rm -f -- "$BUILD_STATE"
 }
 
 # Fills the caller's fields from the record.
@@ -686,7 +689,7 @@ finish_cutover() {
     if [[ -d /run/systemd/system ]]; then
         systemctl daemon-reload
     fi
-    rm -f -- "$CUTOVER_STATE"
+    rm -f -- "$BUILD_STATE" "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
     ESP_MNT="$mp"
     ESP_DEV="$dev"
@@ -760,7 +763,7 @@ cancel_cutover() {
         rmdir "$TMP_ESP_MNT"
         TMP_ESP_MNT=""
     fi
-    rm -f -- "$CUTOVER_STATE"
+    rm -f -- "$BUILD_STATE" "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
     emit_progress "done" 100 "The EFI resize was canceled. The unused replacement partition was left in place."
 }
@@ -805,9 +808,10 @@ ROLLBACK_BTRFS_MNT=""
 ROLLBACK_BOOT_ENTRY=""
 AUTOMOUNT_UNIT=""
 TAIL_DEVID=""
+BUILD_STATE_WRITTEN=""
 
 cleanup_and_rollback() {
-    local exit_code=$?
+    local exit_code=$? undone=1
     if [[ -n "$TMP_ESP_MNT" ]]; then
         umount "$TMP_ESP_MNT" 2>/dev/null || true
         rmdir "$TMP_ESP_MNT" 2>/dev/null || true
@@ -820,18 +824,27 @@ cleanup_and_rollback() {
         if [[ -n "$ROLLBACK_DISK" && -n "$SFDISK_BACKUP" && -f "$SFDISK_BACKUP" ]]; then
             if ! sfdisk --force --no-reread "$ROLLBACK_DISK" < "$SFDISK_BACKUP" >/dev/null 2>&1; then
                 rollback_incomplete "The partition table could not be put back; its backup is ${SFDISK_BACKUP}."
+                undone=0
             fi
             refresh_kernel_parttable "$ROLLBACK_DISK"
+        elif [[ -n "$ROLLBACK_DISK" ]]; then
+            undone=0
         fi
         if [[ -n "$ROLLBACK_BTRFS_MNT" ]]; then
             # Grown back only once both the table on disk and the kernel hold the partition at its old
             # size again. Left smaller is safe; grown past the partition is not.
             if disk_part_is "$TAIL_DEV" "$TAIL_START_SEC" "$TAIL_SIZE_SEC" \
                 && await_kernel_part "$TAIL_DEV" "$TAIL_START_SEC" "$TAIL_SIZE_SEC"; then
-                btrfs filesystem resize "${TAIL_DEVID}max" "$ROLLBACK_BTRFS_MNT" >/dev/null 2>&1 || true
+                btrfs filesystem resize "${TAIL_DEVID}max" "$ROLLBACK_BTRFS_MNT" >/dev/null 2>&1 || undone=0
             else
                 rollback_incomplete "Btrfs on ${TAIL_DEV} was left smaller, since its partition could not be confirmed back at its old size. The backups are in ${BACKUP_BASE}."
+                undone=0
             fi
+        fi
+        # The record of the build stays while anything it describes is still on the disk.
+        if (( undone )) && [[ -n "$BUILD_STATE_WRITTEN" ]]; then
+            rm -f -- "$BUILD_STATE" || true
+            sync -f -- "$(dirname -- "$BUILD_STATE")" 2>/dev/null || true
         fi
     fi
     if [[ -n "$AUTOMOUNT_UNIT" ]]; then
@@ -859,6 +872,184 @@ lock_resize() {
     [[ ! -e /var/lib/pacman/db.lck ]] || die_json "Wait for the package transaction to finish before resizing EFI."
 }
 
+# Prints "<node> <start> <size> <type> <partition id>" for each partition in the sfdisk dump on stdin.
+dump_parts() {
+    awk '$2 == ":" {
+        line = $0
+        sub(/,[[:space:]]*name=".*/, "", line)
+        split("start size type uuid", keys, " ")
+        for (i = 1; i <= 4; i++) {
+            val[i] = "-"
+            if (match(line, keys[i] "=[[:space:]]*[0-9A-Fa-f-]+")) {
+                val[i] = substr(line, RSTART, RLENGTH)
+                sub(/^[a-z]+=[[:space:]]*/, "", val[i])
+            }
+        }
+        print $1, val[1], val[2], toupper(val[3]), toupper(val[4])
+    }'
+}
+
+# Whether partition $1, with partition id $2, is mounted or named in fstab. In doubt it is.
+part_in_use() {
+    local dev="$1" guid="$2" real fsid verdict src
+    real="$(readlink -f -- "$dev" 2>/dev/null || true)"
+    [[ -n "$real" ]] || return 0
+    ! findmnt -n -S "$dev" >/dev/null 2>&1 || return 0
+    [[ -z "$(lsblk -dno MOUNTPOINTS "$dev" 2>/dev/null | tr -d '[:space:]')" ]] || return 0
+    [[ -f "$FSTAB_PATH" ]] || return 1
+    fsid="$(blkid -p -s UUID -o value "$dev" 2>/dev/null || true)"
+    verdict="$(awk -v a="${guid,,}" -v b="${fsid,,}" -v d="$dev" -v r="$real" '
+        /^[[:space:]]*#/ || NF < 2 { next }
+        { l = tolower($0) }
+        index(l, a) || (b != "" && index(l, b)) || $1 == d || $1 == r { named = 1 }
+        END { print (named ? "named" : "clear") }
+    ' "$FSTAB_PATH" 2>/dev/null || true)"
+    [[ "$verdict" == clear ]] || return 0
+    while read -r src; do
+        [[ "$(readlink -f -- "$src" 2>/dev/null || true)" != "$real" ]] || return 0
+    done < <(findmnt --fstab -F "$FSTAB_PATH" -e -n -o SOURCE 2>/dev/null || true)
+    return 1
+}
+
+# Records what is about to be built, before the first write to the disk, so a run that dies before
+# the switch is recorded can be undone later. $4 is the partition being shrunk, when there is one.
+write_build_state() {
+    local partn="$1" start="$2" size="$3" tail="${4:-}" disk_id tail_id="" tstart=0 tsize=0 dir tmp
+    disk_id="$(awk '$1 == "label-id:" { print toupper($2); exit }' "$SFDISK_BACKUP")"
+    [[ "$disk_id" =~ ^[[:xdigit:]-]+$ ]] \
+        || die_json "The partition table on ${ESP_DISK} has no identifier; nothing was changed."
+    if [[ -n "$tail" ]]; then
+        tail_id="$(dump_parts < "$SFDISK_BACKUP" | awk -v d="$tail" '$1 == d { print $5 }')"
+        [[ "$tail_id" =~ ^[[:xdigit:]-]{36}$ ]] \
+            || die_json "The partition ${tail} has no identifier; nothing was changed."
+        tstart="$TAIL_START_SEC"
+        tsize="$TAIL_SIZE_SEC"
+    fi
+    dir="$(dirname -- "$BUILD_STATE")"
+    mkdir -p "$dir"
+    tmp="$(mktemp "$dir/efi-resize.XXXXXX")"
+    jq -nc --arg disk "$ESP_DISK" --arg disk_id "$disk_id" --argjson sector "$SECTOR_SIZE" \
+        --argjson partn "$partn" --argjson start "$start" --argjson size "$size" \
+        --arg tail "$tail_id" --argjson tail_start "$tstart" --argjson tail_size "$tsize" \
+        '{disk:$disk, disk_id:$disk_id, sector:$sector, partn:$partn, start:$start, size:$size,
+          tail:$tail, tail_start:$tail_start, tail_size:$tail_size}' > "$tmp"
+    sync -- "$tmp"
+    mv -f -- "$tmp" "$BUILD_STATE"
+    sync -f -- "$dir"
+    BUILD_STATE_WRITTEN=1
+}
+
+# Reads dump_parts lines on stdin and says what became of a planned build: the new partition at
+# $1 with size $2 and, when $3 names a partition to shrink, that partition from $4 with size $5.
+# Prints "built <node> <partition id> <shrunk node>" when the table holds exactly what the build
+# writes, "unbuilt - - <shrunk node>" when it holds none of it, and nothing for any other table.
+build_verdict() {
+    awk -v nstart="$1" -v nsize="$2" -v tail_id="$3" -v tstart="$4" -v tsize="$5" -v esp="$ESP_GPT_TYPE" '
+        $2 == nstart { hits++; nnode = $1; nsz = $3; ntype = $4; nid = $5 }
+        tail_id != "" && $5 == toupper(tail_id) { tnode = $1; ts = $2; tz = $3; next }
+        tail_id != "" && $2 != nstart && $2 ~ /^[0-9]+$/ && $2 + 0 >= tstart + 0 && $2 + 0 < tstart + tsize { clash = 1 }
+        END {
+            if (tail_id != "" && (tnode == "" || ts != tstart || tz !~ /^[0-9]+$/ || clash)) exit
+            if (tnode == "") tnode = "-"
+            if (hits == 1 && nsz == nsize && ntype == toupper(esp) && nid ~ /^[0-9A-F-]+$/ && length(nid) == 36 \
+                && (tail_id == "" || tz + 0 == nstart - tstart))
+                print "built", nnode, nid, tnode
+            else if (hits == 0 && (tail_id == "" || tz == tsize))
+                print "unbuilt", "-", "-", tnode
+        }'
+}
+
+# Undoes a build that never got as far as recording the switch. The partition goes only when it sits
+# exactly where it was planned and nothing uses it; anything else is left for a check by hand.
+undo_interrupted_build() {
+    local disk disk_id sector partn nstart nsize tail_id tstart tsize dump
+    local state="" new_node="" new_id="" tail_node="" mnt="" backup restored entries num tries
+    local manual="An EFI resize was interrupted and could not be undone automatically; nothing was changed. Check the partitions by hand, then remove ${BUILD_STATE}."
+
+    [[ ! -e "$CUTOVER_STATE" ]] || return 0
+    disk="$(jq -er '.disk' "$BUILD_STATE" 2>/dev/null)" && disk_id="$(jq -er '.disk_id' "$BUILD_STATE")" \
+        && sector="$(jq -er '.sector' "$BUILD_STATE")" && partn="$(jq -er '.partn' "$BUILD_STATE")" \
+        && nstart="$(jq -er '.start' "$BUILD_STATE")" && nsize="$(jq -er '.size' "$BUILD_STATE")" \
+        && tail_id="$(jq -er '.tail' "$BUILD_STATE")" && tstart="$(jq -er '.tail_start' "$BUILD_STATE")" \
+        && tsize="$(jq -er '.tail_size' "$BUILD_STATE")" \
+        || die_json "$manual"
+    [[ "$disk" == /dev/* && "$disk_id" =~ ^[[:xdigit:]-]+$ && "$sector" =~ ^[1-9][0-9]*$ \
+        && "$partn" =~ ^[1-9][0-9]*$ && "$nstart" =~ ^[1-9][0-9]*$ && "$nsize" =~ ^[1-9][0-9]*$ \
+        && "$tstart" =~ ^[0-9]+$ && "$tsize" =~ ^[0-9]+$ \
+        && ( -z "$tail_id" || "$tail_id" =~ ^[[:xdigit:]-]{36}$ ) ]] || die_json "$manual"
+
+    dump="$(sfdisk -d "$disk" 2>/dev/null || true)"
+    if [[ "$(awk '$1 == "label-id:" { print toupper($2); exit }' <<<"$dump")" != "${disk_id^^}" ]]; then
+        # Disk names can change from one start to the next.
+        disk="$(lsblk -dnpo NAME,PTUUID 2>/dev/null | awk -v id="${disk_id^^}" 'toupper($2) == id { print $1 }' || true)"
+        [[ -n "$disk" && "$disk" != *$'\n'* && -b "$disk" ]] || die_json "$manual"
+        dump="$(sfdisk -d "$disk" 2>/dev/null || true)"
+        [[ "$(awk '$1 == "label-id:" { print toupper($2); exit }' <<<"$dump")" == "${disk_id^^}" ]] \
+            || die_json "$manual"
+    fi
+    read -r state new_node new_id tail_node \
+        <<<"$(dump_parts <<<"$dump" | build_verdict "$nstart" "$nsize" "$tail_id" "$tstart" "$tsize" || true)" || true
+    [[ "$state" == built || "$state" == unbuilt ]] || die_json "$manual"
+    [[ "$tail_node" != "-" ]] || tail_node=""
+
+    ESP_DISK="$disk"
+    SECTOR_SIZE="$sector"
+    if [[ -n "$tail_id" ]]; then
+        [[ -b "$tail_node" ]] || die_json "$manual"
+        mnt="$(find_mount_for_dev "$tail_node" || true)"
+        [[ -n "$mnt" ]] || die_json "$manual"
+    fi
+
+    if [[ "$state" == built ]]; then
+        [[ "$new_node" == "$(part_path_for_num "$disk" "$partn")" && -b "$new_node" \
+            && "$(awk -v n="$new_node" '$1 == n && $2 == ":"' <<<"$dump")" == *'name="Mainstream EFI"'* ]] \
+            || die_json "$manual"
+        is_esp_partition "$new_node" && kernel_part_is "$new_node" "$nstart" "$nsize" || die_json "$manual"
+        if part_in_use "$new_node" "$new_id"; then
+            die_json "$manual"
+        fi
+
+        emit_progress "undo" 3 "Removing the partition an interrupted EFI resize left behind..."
+        if ! nvram_skipped; then
+            for (( tries = 0; tries < 4; tries++ )); do
+                entries="$(efibootmgr -v 2>/dev/null || true)"
+                num="$(boot_entry_for "$entries" "$new_id" "" || true)"
+                [[ -n "$num" ]] || break
+                efibootmgr -q -b "$num" -B >/dev/null 2>&1 || true
+            done
+        fi
+        mkdir -p -m 0700 "$BACKUP_BASE"
+        backup="$(mktemp "$BACKUP_BASE/sfdisk-backup.XXXXXX")"
+        printf '%s\n' "$dump" > "$backup"
+        restored="$(awk -v ndev="$new_node" -v tdev="$tail_node" -v tsize="$tsize" '
+            $1 == ndev && $2 == ":" { next }
+            tdev != "" && $1 == tdev && $2 == ":" { sub(/size=[[:space:]]*[0-9]+/, "size= " tsize) }
+            { print }
+        ' <<<"$dump")"
+        sfdisk --force --no-reread "$disk" <<<"$restored" >/dev/null 2>&1 \
+            || die_json "The partition table on ${disk} could not be put back; its backup is ${backup}."
+        refresh_kernel_parttable "$disk"
+        dump="$(sfdisk -d "$disk" 2>/dev/null || true)"
+        if [[ -z "$dump" ]] || dump_parts <<<"$dump" | awk -v s="$nstart" '$2 == s { hit = 1 } END { exit !hit }'; then
+            die_json "The partition table on ${disk} still holds the unused EFI partition; its backup is ${backup}."
+        fi
+        rm -f -- "$backup"
+    fi
+
+    if [[ -n "$tail_id" ]]; then
+        # The same rule as the rollback: grown only once the disk and the kernel hold the old size.
+        TAIL_DEV="$tail_node"
+        if disk_part_is "$TAIL_DEV" "$tstart" "$tsize" && await_kernel_part "$TAIL_DEV" "$tstart" "$tsize"; then
+            btrfs filesystem resize "$(btrfs_devid_prefix "$TAIL_DEV" "$mnt")max" "$mnt" >/dev/null 2>&1 \
+                || die_json "Btrfs on ${TAIL_DEV} could not be grown back to its partition. Run the EFI resize again to retry."
+        else
+            die_json "Btrfs on ${TAIL_DEV} was left smaller, since its partition could not be confirmed back at its old size. Restart, then run the EFI resize again."
+        fi
+    fi
+    rm -f -- "$BUILD_STATE"
+    sync -f -- "$(dirname -- "$BUILD_STATE")"
+}
+
 cmd_resize() {
     local target_mb="${1:-}"
     lock_resize
@@ -867,6 +1058,10 @@ cmd_resize() {
         trap cleanup_and_rollback EXIT
         finish_cutover report_recovery
         return 0
+    fi
+    if [[ -e "$BUILD_STATE" ]]; then
+        trap cleanup_and_rollback EXIT
+        undo_interrupted_build
     fi
 
     emit_progress "preflight" 5 "Inspecting GPT layout and free space..."
@@ -893,11 +1088,18 @@ cmd_resize() {
     local new_esp_dev
     new_esp_dev="$(part_path_for_num "$ESP_DISK" "$new_partn")"
 
+    # Enabled before the first write, so a build cut short by a power loss is undone at the next start.
+    if [[ -d /run/systemd/system ]]; then
+        systemctl enable mainstream-efi-resize-recover.service >/dev/null 2>&1 \
+            || die_json "The EFI recovery service could not be enabled; nothing was changed."
+    fi
+
     if [[ "$STRATEGY" == "new_esp_unallocated" ]]; then
         new_esp_start="$GAP_START_SEC"
         if (( new_esp_sec > GAP_SIZE_SEC )); then
             new_esp_sec="$GAP_SIZE_SEC"
         fi
+        write_build_state "$new_partn" "$new_esp_start" "$new_esp_sec"
         ROLLBACK_DISK="$ESP_DISK"
         emit_progress "partition" 25 "Creating new ${target_mb} MB EFI System Partition (${new_esp_dev})..."
         local updated_dump
@@ -922,6 +1124,7 @@ cmd_resize() {
 
         emit_progress "shrink" 20 "Shrinking Btrfs filesystem (${TAIL_MNT}) to free ${target_mb} MB at end of disk..."
         TAIL_DEVID="$(btrfs_devid_prefix "$TAIL_DEV" "$TAIL_MNT")"
+        write_build_state "$new_partn" "$new_esp_start" "$new_esp_sec" "$TAIL_DEV"
         ROLLBACK_BTRFS_MNT="$TAIL_MNT"
         btrfs filesystem resize "${TAIL_DEVID}-${shrink_bytes}" "$TAIL_MNT" >/dev/null
         btrfs filesystem sync "$TAIL_MNT" >/dev/null 2>&1 || sync
@@ -993,10 +1196,6 @@ cmd_resize() {
             || die_json "The firmware did not keep a boot entry for the new EFI partition; rolling back cleanly."
         ROLLBACK_BOOT_ENTRY="$BOOT_ENTRY"
     fi
-    if [[ -d /run/systemd/system ]]; then
-        systemctl enable mainstream-efi-resize-recover.service >/dev/null 2>&1 \
-            || die_json "The EFI recovery service could not be enabled; rolling back cleanly."
-    fi
     cp -a -- "$FSTAB_PATH" "${FSTAB_PATH}.bak-efi-resize"
     sync -f -- "$(dirname -- "$FSTAB_PATH")"
     umount "$TMP_ESP_MNT"
@@ -1028,10 +1227,14 @@ case "${1:-}" in
         ;;
     recover)
         [[ $EUID == 0 ]] || exit 1
-        [[ -e "$CUTOVER_STATE" ]] || exit 0
+        [[ -e "$CUTOVER_STATE" || -e "$BUILD_STATE" ]] || exit 0
         lock_resize
         trap cleanup_and_rollback EXIT
-        if [[ -e "$CUTOVER_STATE" ]]; then finish_cutover; fi
+        if [[ -e "$CUTOVER_STATE" ]]; then
+            finish_cutover
+        elif [[ -e "$BUILD_STATE" ]]; then
+            undo_interrupted_build
+        fi
         ;;
     cancel)
         [[ $EUID == 0 ]] || exit 1

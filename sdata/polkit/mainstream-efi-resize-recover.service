@@ -2,7 +2,8 @@
 Description=Complete an interrupted Mainstream EFI resize
 After=local-fs.target
 Before=multi-user.target graphical.target
-ConditionPathExists=/var/lib/mainstream/efi-resize.pending
+ConditionPathExists=|/var/lib/mainstream/efi-resize.pending
+ConditionPathExists=|/var/lib/mainstream/efi-resize.building
 
 [Service]
 Type=oneshot
