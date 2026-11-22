@@ -615,13 +615,24 @@ activate_esp() {
     ensure_boot_entry "$@" && promote_boot_entry "$BOOT_ENTRY"
 }
 
+# Prints the record of what the resize built, from whichever record holds it, or null. It travels
+# with the switch so that undoing the switch can also remove the partition.
+saved_build() {
+    jq -ce 'select(type == "object")' "$BUILD_STATE" 2>/dev/null \
+        || jq -ce '.build | select(type == "object")' "$CUTOVER_STATE" 2>/dev/null \
+        || jq -ce '.build | select(type == "object")' "$RETIRE_STATE" 2>/dev/null \
+        || printf 'null\n'
+}
+
 write_cutover_state() {
-    local mp="$1" old="$2" new="$3" uuid="$4" loader="$5" action="${6:-finish}" dir tmp
+    local mp="$1" old="$2" new="$3" uuid="$4" loader="$5" action="${6:-finish}" dir tmp build
     dir="$(dirname -- "$CUTOVER_STATE")"
     mkdir -p "$dir"
+    build="$(saved_build)"
     tmp="$(mktemp "$dir/efi-resize.XXXXXX")"
     jq -nc --arg mount "$mp" --arg old "$old" --arg new "$new" --arg uuid "$uuid" --arg loader "$loader" --arg action "$action" \
-        '{mount:$mount, old:$old, new:$new, uuid:$uuid, loader:$loader, action:$action}' > "$tmp"
+        --argjson build "$build" \
+        '{mount:$mount, old:$old, new:$new, uuid:$uuid, loader:$loader, action:$action, build:$build}' > "$tmp"
     # Flushed before it takes its name, so a power cut never leaves an empty record behind.
     sync -- "$tmp"
     mv -f -- "$tmp" "$CUTOVER_STATE"
@@ -649,12 +660,18 @@ read_cutover_state() {
 }
 
 # Records that the old partition, with partition id $2, waits to be retired until a start has come
-# from the new one, with partition id $3.
+# from the new one, with partition id $3. The new one's volume id $4 and loader $5 are what undoing
+# the switch needs; $6 counts the starts that came from another partition. The record is stamped
+# with the running start, which is the one that finished the switch or the one last counted.
 write_retire_state() {
-    local dir tmp
+    local dir tmp boot build
     dir="$(dirname -- "$RETIRE_STATE")"
+    boot="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+    build="$(saved_build)"
     tmp="$(mktemp "$dir/efi-resize.XXXXXX")" || return 1
-    if jq -nc --arg mount "$1" --arg old "$2" --arg new "$3" '{mount:$mount, old:$old, new:$new}' > "$tmp" \
+    if jq -nc --arg mount "$1" --arg old "$2" --arg new "$3" --arg uuid "$4" --arg loader "$5" \
+            --arg boot "$boot" --argjson misses "${6:-0}" --argjson build "$build" \
+            '{mount:$mount, old:$old, new:$new, uuid:$uuid, loader:$loader, boot_id:$boot, misses:$misses, build:$build}' > "$tmp" \
         && sync -- "$tmp" && mv -f -- "$tmp" "$RETIRE_STATE" && sync -f -- "$dir"; then
         return 0
     fi
@@ -662,13 +679,20 @@ write_retire_state() {
     return 1
 }
 
-# Fills the caller's fields from the record of a waiting retirement.
+# Fills the caller's fields from the record of a waiting retirement. A record without the fields
+# an undo needs leaves them empty.
 read_retire_state() {
     mp="$(jq -er '.mount' "$RETIRE_STATE" 2>/dev/null)" && old="$(jq -er '.old' "$RETIRE_STATE" 2>/dev/null)" \
         && guid="$(jq -er '.new' "$RETIRE_STATE" 2>/dev/null)" || return 1
     [[ "$mp" == /boot || "$mp" == /boot/efi || "$mp" == /efi || ( -n "$MOUNT_OVERRIDE" && "$mp" == "$MOUNT_OVERRIDE" ) ]] \
         || return 1
-    [[ "$guid" =~ ^[[:xdigit:]-]+$ && "$old" =~ ^[[:xdigit:]-]+$ && "${guid,,}" != "${old,,}" ]]
+    [[ "$guid" =~ ^[[:xdigit:]-]+$ && "$old" =~ ^[[:xdigit:]-]+$ && "${guid,,}" != "${old,,}" ]] || return 1
+    uuid="$(jq -r '.uuid // ""' "$RETIRE_STATE" 2>/dev/null || true)"
+    loader="$(jq -r '.loader // ""' "$RETIRE_STATE" 2>/dev/null || true)"
+    boot_id="$(jq -r '.boot_id // ""' "$RETIRE_STATE" 2>/dev/null || true)"
+    misses="$(jq -r '.misses // 0' "$RETIRE_STATE" 2>/dev/null || true)"
+    [[ "$uuid" =~ ^[[:xdigit:]-]+$ && -n "$loader" ]] || uuid="" loader=""
+    [[ "$misses" =~ ^[0-9]+$ ]] || misses=0
 }
 
 # Prints the partition id named by the firmware entry this start came from, or nothing when the
@@ -884,10 +908,12 @@ retire_old_esp() {
 }
 
 # Retires the old partition when this start came from the new one. Any other start leaves both
-# partitions and the record as they are, so a firmware that ignores the new entry still finds the
-# old loader.
+# partitions in place, so a firmware that ignores the new entry still finds the old loader. A start
+# the firmware says came from another partition puts the new entry first again, and the second such
+# start undoes the switch: boot updates only reach the new partition, so the old one must not stay
+# the one that is started.
 retire_after_restart() {
-    local mp old guid dev from
+    local mp old guid uuid loader boot_id misses dev from now again
     if ! read_retire_state; then
         log_note "The record of the old EFI partition cannot be read, so that partition was left as it is."
         rm -f -- "$RETIRE_STATE"
@@ -896,7 +922,24 @@ retire_after_restart() {
     dev="$(blkid -t "PARTUUID=$guid" -o device 2>/dev/null || true)"
     from="$(started_from_part || true)"
     if [[ ! -b "$dev" || "${from,,}" != "${guid,,}" ]]; then
-        log_note "The old EFI partition was kept, because this start did not come from the new one."
+        now="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+        # Counted once per start, and never in the start that finished the switch, which still came
+        # from the old entry. Nothing is counted when the firmware does not say where it started.
+        if [[ -z "$from" || "${from,,}" == "${guid,,}" || -z "$uuid" || -z "$now" || -z "$boot_id" \
+            || "$now" == "$boot_id" ]]; then
+            log_note "The old EFI partition was kept, because this start did not come from the new one."
+            return 0
+        fi
+        if (( misses >= 1 )); then
+            cancel_cutover
+            log_note "The firmware would not start from the new EFI partition, so the resize was undone and the old EFI partition is in use again."
+            return 0
+        fi
+        write_retire_state "$mp" "$old" "$guid" "$uuid" "$loader" $(( misses + 1 )) \
+            || log_note "The start from another EFI partition could not be recorded."
+        again="is first in the boot order again"
+        activate_esp "$dev" "$guid" "$loader" || again="could not be put first in the boot order again"
+        log_note "The old EFI partition was kept, because this start did not come from the new one. The new one ${again}; if the next start does not come from it either, the resize is undone."
         return 0
     fi
     if [[ "$(esp_mount_source "$mp")" != "$dev" ]]; then
@@ -943,7 +986,7 @@ finish_cutover() {
         systemctl daemon-reload
     fi
     # The old partition keeps its loader and firmware entry until a start has come from the new one.
-    write_retire_state "$mp" "$old" "$guid" \
+    write_retire_state "$mp" "$old" "$guid" "$uuid" "$loader" \
         || log_note "The old EFI partition could not be recorded for retirement, so it stays as it is."
     rm -f -- "$BUILD_STATE" "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
@@ -958,11 +1001,19 @@ finish_cutover() {
     fi
 }
 
-# Backs out of a prepared switch that cannot finish. The original partition takes the mount, fstab
-# and firmware order back. Remove the replacement's loader files before allowing boot updates.
+# Backs out of a prepared switch that cannot finish, or of a finished one whose old partition still
+# waits to be retired. The original partition takes the mount, fstab and firmware order back. Remove
+# the replacement's loader files before allowing boot updates.
 cancel_cutover() {
     local mp old guid uuid loader action old_dev old_uuid new_dev current rc entries num original_source named
-    read_cutover_state
+    local boot_id misses build tmp disk ours=0
+    if [[ -e "$CUTOVER_STATE" ]]; then
+        read_cutover_state
+    else
+        read_retire_state && [[ -n "$uuid" ]] \
+            || die_json "The record of the finished EFI resize cannot be read, so the resize cannot be undone."
+        action=finish
+    fi
     old_dev="$(blkid -t "PARTUUID=$old" -o device || true)"
     old_uuid=""
     [[ ! -b "$old_dev" ]] || old_uuid="$(blkid -s UUID -o value "$old_dev" || true)"
@@ -1024,10 +1075,43 @@ cancel_cutover() {
         umount "$TMP_ESP_MNT" || die_json "Could not unmount the replacement EFI partition. Retry cancellation before updating."
         rmdir "$TMP_ESP_MNT"
         TMP_ESP_MNT=""
+        ours=1
+    fi
+    # A partition verified as the replacement goes the way one left by an interrupted build does.
+    # Its build record is back in place before the others go, so an interruption still removes it.
+    build=null
+    (( ! ours )) || build="$(saved_build)"
+    if [[ "$build" != null ]]; then
+        tmp="$(mktemp "$(dirname -- "$BUILD_STATE")/efi-resize.XXXXXX")"
+        printf '%s\n' "$build" > "$tmp"
+        sync -- "$tmp"
+        mv -f -- "$tmp" "$BUILD_STATE"
+    else
+        rm -f -- "$BUILD_STATE"
     fi
     # The original partition is the one in use again, so nothing waits to retire it.
-    rm -f -- "$RETIRE_STATE" "$BUILD_STATE" "$CUTOVER_STATE"
+    rm -f -- "$RETIRE_STATE" "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
+    if [[ "$build" != null ]]; then
+        disk="$(resolve_parent_disk "$new_dev" || true)"
+        # In a subshell, so a partition that cannot be removed safely does not fail the cancel.
+        set +e
+        ( set -e; undo_interrupted_build ) >/dev/null
+        rc=$?
+        set -e
+        if (( rc == 0 )); then
+            emit_progress "done" 100 "The EFI resize was canceled and the unused replacement partition was removed."
+            return 0
+        fi
+        # With the partition gone from the table its space is still to be given back, which the
+        # record makes the next start retry.
+        if ! sfdisk -d "$disk" 2>/dev/null | dump_parts | awk -v id="${guid^^}" '$5 == id { hit = 1 } END { exit !hit }'; then
+            die_json "The EFI resize was canceled, but the space of the replacement partition was not given back. Restart to retry."
+        fi
+        rm -f -- "$BUILD_STATE"
+        sync -f -- "$(dirname -- "$BUILD_STATE")"
+        log_note "The unused EFI partition ${new_dev} could not be removed, so it was left in place."
+    fi
     emit_progress "done" 100 "The EFI resize was canceled. The unused replacement partition was left in place."
 }
 
@@ -1508,10 +1592,10 @@ case "${1:-}" in
         ;;
     cancel)
         [[ $EUID == 0 ]] || exit 1
-        [[ -e "$CUTOVER_STATE" ]] || exit 0
+        [[ -e "$CUTOVER_STATE" || -e "$RETIRE_STATE" ]] || exit 0
         lock_resize
         trap cleanup_and_rollback EXIT
-        if [[ -e "$CUTOVER_STATE" ]]; then cancel_cutover; fi
+        if [[ -e "$CUTOVER_STATE" || -e "$RETIRE_STATE" ]]; then cancel_cutover; fi
         ;;
     *)
         echo "Usage: $0 {probe [target_mb]|plan|resize <target_mb>|recover|cancel}" >&2
