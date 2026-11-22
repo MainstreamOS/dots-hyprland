@@ -558,7 +558,10 @@ update_fstab_esp_source() {
 
 loader_on_esp() {
     local dir="$1"
-    if [[ -f "$dir/EFI/limine/BOOTX64.EFI" ]]; then
+    # limine-install refreshes and signs this file, and adds its own entry when none names it.
+    if [[ -f "$dir/EFI/limine/limine_x64.efi" ]]; then
+        printf '%s' '\EFI\limine\limine_x64.efi'
+    elif [[ -f "$dir/EFI/limine/BOOTX64.EFI" ]]; then
         printf '%s' '\EFI\limine\BOOTX64.EFI'
     elif [[ -f "$dir/EFI/systemd/systemd-bootx64.efi" ]]; then
         printf '%s' '\EFI\systemd\systemd-bootx64.efi'
