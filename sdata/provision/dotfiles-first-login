@@ -179,21 +179,26 @@ STUB_EOF
     fi
 
     if (( NEED_VENV )); then
+        # The interpreter the installer builds this venv with. The system
+        # Python is newer, and the pinned packages may have no builds for it.
+        VENV_PYTHON=/usr/bin/python3.12
+        [[ -x "$VENV_PYTHON" ]] || VENV_PYTHON=/usr/bin/python
+
         # Diagnose exactly why we cannot build before attempting, so the log
         # is useful if startup fails again instead of silently doing nothing.
         if ! command -v uv &>/dev/null; then
             echo "[first-login] ERROR: uv not found in PATH — cannot build venv"
             echo "[first-login]   PATH was: $PATH"
             echo "[first-login]   Check that uv is installed (pacman -Q uv or ~/.local/bin/uv)"
-        elif [[ ! -x /usr/bin/python ]]; then
-            echo "[first-login] ERROR: /usr/bin/python not executable — cannot build venv"
+        elif [[ ! -x "$VENV_PYTHON" ]]; then
+            echo "[first-login] ERROR: $VENV_PYTHON not executable — cannot build venv"
         elif [[ ! -f "$REQUIREMENTS" ]]; then
             echo "[first-login] ERROR: requirements.txt not found at $REQUIREMENTS"
         else
             echo "[first-login] (re)building venv at $VENV_PATH"
             rm -rf "$VENV_PATH"
             mkdir -p "$(dirname "$VENV_PATH")"
-            if uv venv --python /usr/bin/python "$VENV_PATH" && \
+            if uv venv --python "$VENV_PYTHON" "$VENV_PATH" && \
                install_venv_requirements "$VENV_PATH/bin/python" "$REQUIREMENTS" && \
                venv_has_materialyoucolor "$VENV_PATH"; then
                 repair_venv_paths "$VENV_PATH"
