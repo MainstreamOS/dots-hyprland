@@ -51,6 +51,21 @@ echo
 fail=0
 did_vendor=false
 
+# The kernel this machine boots. A driver module built for one kernel release,
+# or headers that DKMS builds against, must not move ahead of the kernel
+# itself, so the kernel rides in the same transaction as either.
+kernel_pkg=""
+_k="$(gpu_target_kernel 2>/dev/null)"
+[[ -n "$_k" && -r "/usr/lib/modules/$_k/pkgbase" ]] && kernel_pkg="$(<"/usr/lib/modules/$_k/pkgbase")"
+[[ -n "$kernel_pkg" ]] || kernel_pkg=linux
+kernel_pkgs=()
+kernel_headers=linux-headers
+if pacman -Qq -- "$kernel_pkg" >/dev/null 2>&1 && pacman -Si -- "$kernel_pkg" >/dev/null 2>&1; then
+    kernel_pkgs=("$kernel_pkg")
+    kernel_headers="$kernel_pkg-headers"
+    pacman -Qq -- "$kernel_headers" >/dev/null 2>&1 && kernel_pkgs+=("$kernel_headers")
+fi
+
 if [[ $HAS_NVIDIA == true ]]; then
     did_vendor=true
     gpu_classify_nvidia_driver
@@ -60,13 +75,15 @@ if [[ $HAS_NVIDIA == true ]]; then
         for _p in "${NVIDIA_REPO_PKGS[@]}"; do
             case "$_p" in lib32-*) lib32+=("$_p") ;; *) repo+=("$_p") ;; esac
         done
-        [[ "$NVIDIA_DRIVER_FAMILY" != nouveau ]] && repo+=(egl-wayland) || true
+        [[ "$NVIDIA_DRIVER_FAMILY" != nouveau ]] && repo=("${kernel_pkgs[@]}" "${repo[@]}" egl-wayland) || true
         run pacman -S --needed --noconfirm "${repo[@]}" || fail=1
         (( ${#lib32[@]} > 0 )) && { run pacman -S --needed --noconfirm "${lib32[@]}" || true; }
     else
         # Frozen legacy branch (nvidia-580xx/470xx/390xx) from [mainstream]; the
         # -dkms package builds against the kernel, so headers + dkms come first.
-        run pacman -S --needed --noconfirm linux-headers dkms || fail=1
+        legacy_pre=("${kernel_pkgs[@]}")
+        [[ " ${legacy_pre[*]} " == *" $kernel_headers "* ]] || legacy_pre+=("$kernel_headers")
+        run pacman -S --needed --noconfirm "${legacy_pre[@]}" dkms || fail=1
         if ! run pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
             echo "Legacy NVIDIA branch $NVIDIA_DRIVER_FAMILY unavailable — installing nouveau instead."
             run pacman -S --needed --noconfirm xf86-video-nouveau mesa || fail=1
