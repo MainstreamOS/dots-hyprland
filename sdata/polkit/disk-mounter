@@ -133,10 +133,16 @@ strip_fstab_match() {
 # column rather than a space-wrapped substring, leaving comments/others intact.
 strip_fstab_mountpoint() {  # $1=mountpoint
     [[ -f /etc/fstab ]] || return 0
-    local tmp; tmp="$(mktemp)"
-    awk -v mp="$1" '$0 ~ /^[[:space:]]*#/ || $2 != mp' /etc/fstab > "$tmp"
-    cat "$tmp" > /etc/fstab
+    # Built beside fstab and renamed over it, so a full disk or an
+    # interruption leaves the old file whole.
+    local tmp; tmp="$(mktemp /etc/fstab.XXXXXX)"
+    if awk -v mp="$1" '$0 ~ /^[[:space:]]*#/ || $2 != mp' /etc/fstab > "$tmp" \
+            && chown root:root "$tmp" && chmod 0644 "$tmp" && sync "$tmp" \
+            && mv -f "$tmp" /etc/fstab; then
+        return 0
+    fi
     rm -f "$tmp"
+    die "could not rewrite /etc/fstab, it is unchanged"
 }
 
 # ── Subcommand: mount-block ───────────────────────────────────────────────
