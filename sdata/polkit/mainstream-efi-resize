@@ -56,8 +56,8 @@ find_esp_mount() {
     if [[ -n "$MOUNT_OVERRIDE" ]]; then
         if mountpoint -q "$MOUNT_OVERRIDE" 2>/dev/null; then
             local fstype src
-            fstype="$(findmnt -n -o FSTYPE -M "$MOUNT_OVERRIDE" 2>/dev/null || true)"
-            src="$(findmnt -nv -o SOURCE -M "$MOUNT_OVERRIDE" 2>/dev/null || true)"
+            fstype="$(findmnt -n -o FSTYPE -M "$MOUNT_OVERRIDE" 2>/dev/null | tail -n 1 || true)"
+            src="$(findmnt -nv -o SOURCE -M "$MOUNT_OVERRIDE" 2>/dev/null | tail -n 1 || true)"
             if [[ "$fstype" == "vfat" && -b "$src" ]] && is_esp_partition "$src"; then
                 printf '%s\n' "$MOUNT_OVERRIDE"
                 return 0
@@ -69,9 +69,9 @@ find_esp_mount() {
     local mp fstype src
     for mp in /boot/efi /efi /boot; do
         mountpoint -q "$mp" 2>/dev/null || continue
-        fstype="$(findmnt -n -o FSTYPE -M "$mp" 2>/dev/null || true)"
+        fstype="$(findmnt -n -o FSTYPE -M "$mp" 2>/dev/null | tail -n 1 || true)"
         [[ "$fstype" == "vfat" ]] || continue
-        src="$(findmnt -nv -o SOURCE -M "$mp" 2>/dev/null || true)"
+        src="$(findmnt -nv -o SOURCE -M "$mp" 2>/dev/null | tail -n 1 || true)"
         [[ -n "$src" && -b "$src" ]] || continue
         is_esp_partition "$src" || continue
         printf '%s\n' "$mp"
@@ -167,7 +167,7 @@ analyze_layout() {
         return 1
     fi
 
-    ESP_DEV="$(findmnt -nv -o SOURCE -M "$ESP_MNT" 2>/dev/null || true)"
+    ESP_DEV="$(findmnt -nv -o SOURCE -M "$ESP_MNT" 2>/dev/null | tail -n 1 || true)"
     if [[ -z "$ESP_DEV" || ! -b "$ESP_DEV" ]]; then
         REASON="Could not resolve backing block device for $ESP_MNT."
         return 1
@@ -177,7 +177,7 @@ analyze_layout() {
         return 1
     fi
 
-    ESP_UUID="$(findmnt -n -o UUID -M "$ESP_MNT" 2>/dev/null || true)"
+    ESP_UUID="$(findmnt -n -o UUID -M "$ESP_MNT" 2>/dev/null | tail -n 1 || true)"
     [[ -n "$ESP_UUID" ]] || ESP_UUID="$(blkid -s UUID -o value "$ESP_DEV" 2>/dev/null || true)"
     ESP_DISK="$(resolve_parent_disk "$ESP_DEV" || true)"
     ESP_PARTN="$(resolve_part_num "$ESP_DEV" || true)"
