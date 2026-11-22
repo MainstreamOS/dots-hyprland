@@ -196,9 +196,9 @@ mount_block() {
     local mount_opts
     case "$fstype" in
         vfat|fat|fat16|fat32|msdos|exfat|ntfs|ntfs-3g)
-            mount_opts="defaults,nofail,rw,uid=$caller_uid,gid=$caller_gid,umask=0022,$gvfs_opts" ;;
+            mount_opts="defaults,nofail,rw,nosuid,nodev,uid=$caller_uid,gid=$caller_gid,umask=0022,$gvfs_opts" ;;
         *)
-            mount_opts="defaults,nofail,rw,$gvfs_opts" ;;
+            mount_opts="defaults,nofail,rw,nosuid,nodev,$gvfs_opts" ;;
     esac
 
     # Mount NTFS with the in-kernel ntfs3 driver: blkid reports "ntfs",
@@ -347,7 +347,7 @@ mount_smb() {
     # Base CIFS options. uid/gid stamp the user's ownership on every file
     # (CIFS doesn't carry Unix perms unless the server supports the Unix
     # extensions). file_mode/dir_mode default to a sensible 0644/0755.
-    local mount_opts="rw,nofail,uid=$caller_uid,gid=$caller_gid,file_mode=0644,dir_mode=0755,_netdev,$gvfs_opts"
+    local mount_opts="rw,nofail,nosuid,nodev,uid=$caller_uid,gid=$caller_gid,file_mode=0644,dir_mode=0755,_netdev,$gvfs_opts"
 
     # Source spec uses //host/share with forward slashes (kept verbatim in
     # fstab column 1). The mount takes the raw source; the fstab write escapes
@@ -409,7 +409,7 @@ mount_nfs() {
     # the server's uid/gid are what land on the client. nofail keeps boot
     # going if the server is down; _netdev defers mounting until network
     # is up.
-    local mount_opts="rw,nofail,_netdev,$gvfs_opts"
+    local mount_opts="rw,nofail,nosuid,nodev,_netdev,$gvfs_opts"
 
     local source="${host}:${export_path}"
     mkdir -p "$mountpoint"
