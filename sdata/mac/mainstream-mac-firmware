@@ -17,7 +17,8 @@
 #   --from-tree  use a macOS /usr/share/firmware tree already on disk
 #
 # Runs as root. Exit 0 also means "nothing to do" and "offline for now": the
-# timer that drives it retries until the firmware lands, then stops itself.
+# timer that drives it retries until the firmware lands, then stops itself. It
+# also stops after five runs that had the image and still failed.
 set -euo pipefail
 
 LIB="${MAC_FIRMWARE_LIB:-/usr/local/lib/mainstream-mac}"
@@ -32,6 +33,13 @@ elif [ -d /run/archiso ]; then
 else
     WORK=/var/cache/mainstream/mac-firmware
 fi
+# The verified image waits here between attempts so a failure after the
+# download does not cost another download. The live image has no disk to keep
+# it on, so only the failure count lives here in a session run from it.
+CACHE="${MAC_FIRMWARE_CACHE:-/var/cache/mainstream/mac-firmware-image}"
+keep_image=1
+[ -d /run/archiso ] && keep_image=0
+MAX_FAILURES=5
 TIMER=mainstream-mac-firmware.timer
 
 force=0 quiet=0 check=0 from_dmg="" from_tree=""
@@ -42,7 +50,7 @@ while [ $# -gt 0 ]; do
         --check)     check=1 ;;
         --from-dmg)  from_dmg="${2:-}"; shift ;;
         --from-tree) from_tree="${2:-}"; shift ;;
-        -h|--help)   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)   sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -69,6 +77,7 @@ fi
 
 if [ "$force" = 0 ] && have_firmware; then
     log "Firmware already in place."
+    rm -rf "$CACHE" 2>/dev/null || true
     systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
     exit 0
 fi
@@ -86,13 +95,54 @@ if [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ]; then
 fi
 
 [ -w "$FW_DIR" ] || fail "This needs to run as root to write $FW_DIR."
+# The hardware setup enables the timer again whenever it runs. Once the fetch
+# has given up, only a run by hand starts over.
+if [ "$quiet" = 1 ] && [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ]; then
+    gave_up="$(cat "$CACHE/failures" 2>/dev/null || true)"
+    case "$gave_up" in ''|*[!0-9]*) gave_up=0 ;; esac
+    if [ "$((10#$gave_up))" -ge "$MAX_FAILURES" ]; then
+        systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+        exit 0
+    fi
+fi
+
 command -v python3 >/dev/null || fail "python3 is missing."
 [ -r "$LIB/macrecovery.py" ] || fail "$LIB/macrecovery.py is missing."
 [ -r "$LIB/asahi_firmware/wifi.py" ] || fail "$LIB/asahi_firmware is missing."
+command -v tar >/dev/null || fail "tar is missing."
+[ -n "$from_tree" ] || command -v 7z >/dev/null || fail "7z is missing (package 7zip)."
+
+# A run that had the image and still failed will fail the same way next time,
+# so those are counted and the timer is stopped once there are enough of them.
+note_failure() {
+    local n
+    n="$(cat "$CACHE/failures" 2>/dev/null || true)"
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
+    n=$((10#$n + 1))
+    { mkdir -p "$CACHE" && echo "$n" >"$CACHE/failures"; } 2>/dev/null || true
+    if [ "$n" -ge "$MAX_FAILURES" ]; then
+        log "Giving up after $n failed attempts with the recovery image. To try again, run: sudo mainstream-mac-firmware"
+        # Most of a gigabyte, and a run by hand fetches a current one.
+        rm -f "$CACHE/BaseSystem.dmg" "$CACHE/BaseSystem.chunklist" 2>/dev/null || true
+        systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+    fi
+}
+
+image_verifies() {
+    python3 -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import macrecovery; macrecovery.verify_image(sys.argv[2], sys.argv[3])' \
+        "$LIB" "$1" "$2" >/dev/null 2>&1
+}
 
 rm -rf "$WORK"
 mkdir -p "$WORK"
-cleanup() { rm -rf "$WORK"; }
+have_image=0
+cleanup() {
+    local rc=$?
+    rm -rf "$WORK"
+    if [ "$rc" -ne 0 ] && [ "$have_image" = 1 ]; then
+        note_failure
+    fi
+}
 trap cleanup EXIT
 
 tree="$from_tree"
@@ -100,26 +150,39 @@ tree="$from_tree"
 if [ -z "$tree" ]; then
     dmg="$from_dmg"
     if [ -z "$dmg" ]; then
-        # Quiet when there is no route out: the timer will be back.
-        if ! ip route get 1.1.1.1 >/dev/null 2>&1; then
-            [ "$quiet" = 1 ] || echo "No network yet; will try again later."
-            exit 0
+        if [ "$keep_image" = 1 ]; then
+            imgdir="$CACHE"
+            mkdir -p "$imgdir"
+            chmod 700 "$imgdir"
+        else
+            imgdir="$WORK/recovery"
+            mkdir -p "$imgdir"
         fi
-        # A Mac's DMI board name is its Apple board id, which is what the
-        # recovery service keys the image on. Anything else gets the generic
-        # recent-Mac id, whose image carries the same firmware tree.
-        bid="$(cat /sys/class/dmi/id/board_name 2>/dev/null || true)"
-        case "$bid" in Mac-*) ;; *) bid="" ;; esac
-        log "Downloading this Mac's recovery image from Apple${bid:+ for board $bid}..."
-        mkdir -p "$WORK/recovery"
-        if ! python3 "$LIB/macrecovery.py" ${bid:+-b "$bid"} -os latest -o "$WORK/recovery" -n BaseSystem download >"$WORK/download.log" 2>&1; then
-            tail -n 3 "$WORK/download.log" | while read -r line; do log "  $line"; done
-            fail "Could not download the recovery image; will try again later."
+        dmg="$imgdir/BaseSystem.dmg"
+        if [ -s "$dmg" ] && [ -s "$imgdir/BaseSystem.chunklist" ] && image_verifies "$dmg" "$imgdir/BaseSystem.chunklist"; then
+            log "Using the recovery image kept from an earlier attempt."
+        else
+            rm -f "$dmg" "$imgdir/BaseSystem.chunklist"
+            # Quiet when there is no route out: the timer will be back.
+            if ! ip route get 1.1.1.1 >/dev/null 2>&1; then
+                [ "$quiet" = 1 ] || echo "No network yet; will try again later."
+                exit 0
+            fi
+            # A Mac's DMI board name is its Apple board id, which is what the
+            # recovery service keys the image on. Anything else gets the generic
+            # recent-Mac id, whose image carries the same firmware tree.
+            bid="$(cat /sys/class/dmi/id/board_name 2>/dev/null || true)"
+            case "$bid" in Mac-*) ;; *) bid="" ;; esac
+            log "Downloading this Mac's recovery image from Apple${bid:+ for board $bid}..."
+            if ! python3 "$LIB/macrecovery.py" ${bid:+-b "$bid"} -os latest -o "$imgdir" -n BaseSystem download >"$WORK/download.log" 2>&1; then
+                tail -n 3 "$WORK/download.log" | while read -r line; do log "  $line"; done
+                rm -f "$dmg" "$imgdir/BaseSystem.chunklist"
+                fail "Could not download the recovery image; will try again later."
+            fi
         fi
-        dmg="$WORK/recovery/BaseSystem.dmg"
+        have_image=1
     fi
     [ -r "$dmg" ] || fail "Recovery image not found at $dmg."
-    command -v 7z >/dev/null || fail "7z is missing (package 7zip)."
 
     # 7-Zip reads the disk image and the HFS+ volume inside it as one archive,
     # so the firmware tree is addressed by its path under the volume's name and
@@ -181,4 +244,5 @@ if [ -d /run/systemd/system ] && [ "$FW_DIR" = /usr/lib/firmware ]; then
     systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
 fi
 
+rm -rf "$CACHE" 2>/dev/null || true
 log "Wi-Fi and Bluetooth firmware is in place."
