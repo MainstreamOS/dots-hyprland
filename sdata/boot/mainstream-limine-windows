@@ -55,6 +55,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# limine-entry-tool names a loader on the partition Limine starts from relative
+# to that partition. When Windows is not on it, as after the EFI partition was
+# replaced by a larger one, that entry starts nothing: its name is taken here
+# and given to the partition that does hold the loader.
+stale_entry=""
+if [[ ! -f "$ESP_PATH/$WINDOWS_LOADER" ]]; then
+    stale_entry=$(awk '
+        /^[ \t]*\/\// { name = ""; next }
+        /^[ \t]*\// { name = $0; sub(/^[ \t]*\/\+?/, "", name); sub(/[ \t\r]+$/, "", name); next }
+        name != "" && tolower($0) ~ /^[ \t]*path[ \t]*:[ \t]*boot\(\):\/+efi\/microsoft\/boot\/bootmgfw\.efi(#[0-9a-f]*)?[ \t\r]*$/ { print name; exit }
+    ' "$ESP_PATH/limine.conf" 2>/dev/null)
+fi
+
 # lsblk's own PATH column would overwrite the shell's command search path the
 # moment its key=value output is eval'd, so the device is rebuilt from KNAME.
 found=0
@@ -98,8 +111,12 @@ while IFS= read -r line; do
     found=$((found + 1))
     name="Windows"
     [[ $found -gt 1 ]] && name="Windows ($found)"
+    overwrite=""
+    if [[ -n $stale_entry ]]; then
+        name=$stale_entry overwrite=1 stale_entry=""
+    fi
     if limine-entry-tool --add-efi "$name" "$loader" \
-        --comment "Windows Boot Manager" --priority 15 --quiet --no-mutex --no-hooks; then
+        --comment "Windows Boot Manager" --priority 15 ${overwrite:+--overwrite} --quiet --no-mutex --no-hooks; then
         say "Added a '$name' entry for the install on $KNAME."
     else
         warn "Could not add a boot entry for the Windows install on $KNAME."
