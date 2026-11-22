@@ -184,7 +184,7 @@ _gpu_frozen_family() {
             NVIDIA_LOCAL_PKGS=(nvidia-470xx-dkms nvidia-470xx-utils lib32-nvidia-470xx-utils) ;;
         390xx)
             NVIDIA_DRIVER_FAMILY=nvidia-390xx
-            NVIDIA_LOCAL_PKGS=(nvidia-390xx-dkms nvidia-390xx-utils lib32-nvidia-390xx-utils) ;;
+            NVIDIA_LOCAL_PKGS=(nvidia-390xx-dkms nvidia-390xx-utils) ;;
     esac
 }
 # The driver branch this system runs or is about to get: mainline, 580xx, 470xx,

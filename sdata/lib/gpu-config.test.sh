@@ -890,6 +890,7 @@ classify maxwell "";  chk cls-maxwell NVIDIA_DRIVER_FAMILY nvidia-580xx
 chk_str cls-maxwell-local "${NVIDIA_LOCAL_PKGS[0]}" nvidia-580xx-dkms
 classify kepler "";   chk cls-kepler NVIDIA_DRIVER_FAMILY nvidia-470xx
 classify fermi "";    chk cls-fermi NVIDIA_DRIVER_FAMILY nvidia-390xx
+chk_str cls-fermi-local "${NVIDIA_LOCAL_PKGS[*]}" "nvidia-390xx-dkms nvidia-390xx-utils"
 classify prefermi ""; chk cls-prefermi NVIDIA_DRIVER_FAMILY nouveau
 classify none "";     chk cls-none NVIDIA_DRIVER_FAMILY nouveau
 
