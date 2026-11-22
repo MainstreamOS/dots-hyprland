@@ -22,6 +22,7 @@ BOOT_LOCK="${EFI_RESIZE_LOCK:-/run/lock/boot-partition.lock}"
 BACKUP_BASE="${EFI_RESIZE_BACKUP_BASE:-/var/cache/mainstream}"
 CUTOVER_STATE="${EFI_RESIZE_STATE:-/var/lib/mainstream/efi-resize.pending}"
 BUILD_STATE="$(dirname -- "$CUTOVER_STATE")/efi-resize.building"
+RETIRE_STATE="$(dirname -- "$CUTOVER_STATE")/efi-resize.retire"
 RESIZE_LOCK=/run/lock/mainstream-efi-resize.lock
 MOUNT_OVERRIDE="${EFI_RESIZE_MOUNT:-}"
 SKIP_NVRAM="${EFI_RESIZE_SKIP_NVRAM:-0}"
@@ -41,6 +42,12 @@ die_json() {
     local msg="$1"
     jq -nc --arg msg "$msg" '{step: "error", percent: 0, error: true, message: $msg}' 2>/dev/null || true
     exit 1
+}
+
+# For the system log: what a best effort step left undone. The progress lines are read as the
+# result of the resize, so these stay out of them.
+log_note() {
+    logger -t mainstream-efi-resize -- "$1" 2>/dev/null || printf '%s\n' "$1" >&2 || true
 }
 
 # Only a partition typed as the EFI System Partition, wherever it is mounted: a FAT data partition
@@ -630,6 +637,40 @@ read_cutover_state() {
         || die_json "The EFI resize record has an invalid operation."
 }
 
+# Records that the old partition, with partition id $2, waits to be retired until a start has come
+# from the new one, with partition id $3.
+write_retire_state() {
+    local dir tmp
+    dir="$(dirname -- "$RETIRE_STATE")"
+    tmp="$(mktemp "$dir/efi-resize.XXXXXX")" || return 1
+    if jq -nc --arg mount "$1" --arg old "$2" --arg new "$3" '{mount:$mount, old:$old, new:$new}' > "$tmp" \
+        && sync -- "$tmp" && mv -f -- "$tmp" "$RETIRE_STATE" && sync -f -- "$dir"; then
+        return 0
+    fi
+    rm -f -- "$tmp"
+    return 1
+}
+
+# Fills the caller's fields from the record of a waiting retirement.
+read_retire_state() {
+    mp="$(jq -er '.mount' "$RETIRE_STATE" 2>/dev/null)" && old="$(jq -er '.old' "$RETIRE_STATE" 2>/dev/null)" \
+        && guid="$(jq -er '.new' "$RETIRE_STATE" 2>/dev/null)" || return 1
+    [[ "$mp" == /boot || "$mp" == /boot/efi || "$mp" == /efi || ( -n "$MOUNT_OVERRIDE" && "$mp" == "$MOUNT_OVERRIDE" ) ]] \
+        || return 1
+    [[ "$guid" =~ ^[[:xdigit:]-]+$ && "$old" =~ ^[[:xdigit:]-]+$ && "${guid,,}" != "${old,,}" ]]
+}
+
+# Prints the partition id named by the firmware entry this start came from, or nothing when the
+# firmware does not say.
+started_from_part() {
+    local entries cur
+    nvram_skipped && return 0
+    entries="$(efibootmgr -v 2>/dev/null || true)"
+    cur="$(sed -n 's/^BootCurrent: *\([0-9A-Fa-f]\{4\}\).*/\1/p' <<<"$entries" | head -n 1)"
+    [[ -n "$cur" ]] || return 0
+    grep -i "^Boot${cur}[* ]" <<<"$entries" | sed -n 's/.*HD([0-9]*,GPT,\([0-9A-Fa-f-]\{36\}\),.*/\1/p' | head -n 1
+}
+
 # The device mounted at $1, once any pending automount has fired.
 esp_mount_source() {
     local src
@@ -658,6 +699,206 @@ switch_esp_mount() {
     return 1
 }
 
+# Mounts $2 at $1 unless it is mounted there already.
+remount_esp() {
+    if [[ "$(esp_mount_source "$1")" != "$2" ]]; then
+        mount -t vfat -o umask=0077 "$2" "$1" 2>/dev/null || mount "$1" 2>/dev/null \
+            || log_note "The EFI partition $2 could not be mounted at $1 again. Mount it before installing updates."
+    fi
+}
+
+# Gives the new partition $3 the volume id of the old one $2, so an fstab from before the resize, in
+# a snapshot for one, mounts the partition in use. fstab is first made to name the partition id,
+# which nothing here changes, so $3 is found at $1 however far this gets.
+hand_over_esp_id() {
+    local mp="$1" old_dev="$2" dev="$3" guid="$4" old_id new_id unit now
+    if ! command -v fatlabel >/dev/null 2>&1; then
+        log_note "fatlabel is not installed, so the EFI partition ${dev} keeps its own volume id."
+        return 0
+    fi
+    old_id="$(blkid -p -s UUID -o value "$old_dev" 2>/dev/null || true)"
+    new_id="$(blkid -p -s UUID -o value "$dev" 2>/dev/null || true)"
+    if [[ ! "$old_id" =~ ^[[:xdigit:]]{4}-[[:xdigit:]]{4}$ || ! "$new_id" =~ ^[[:xdigit:]]{4}-[[:xdigit:]]{4}$ \
+        || "${old_id^^}" == "${new_id^^}" ]]; then
+        log_note "The EFI volume ids could not be read, so the EFI partition ${dev} keeps its own."
+        return 0
+    fi
+    if ! update_fstab_esp_source "$mp" "PARTUUID=$guid"; then
+        log_note "fstab could not be rewritten, so the EFI partition ${dev} keeps its own volume id."
+        return 0
+    fi
+    # Until systemd has read the new line, its mount unit is tied to the volume id about to change.
+    if [[ -d /run/systemd/system ]] && ! systemctl daemon-reload 2>/dev/null; then
+        log_note "systemd could not reload fstab, so the EFI partition ${dev} keeps its own volume id."
+        return 0
+    fi
+    unit="$(systemd-escape -p --suffix=automount "$mp" 2>/dev/null || true)"
+    if [[ -n "$unit" ]] && systemctl is-active --quiet "$unit" 2>/dev/null; then
+        AUTOMOUNT_UNIT="$unit"
+        if ! systemctl stop "$unit" 2>/dev/null; then
+            log_note "The automount for ${mp} could not be stopped, so the EFI partition ${dev} keeps its own volume id."
+            return 0
+        fi
+    fi
+    # Nothing has changed an id yet, so a busy mountpoint stops here with both partitions as they were.
+    if mountpoint -q "$mp" 2>/dev/null && ! umount "$mp" 2>/dev/null; then
+        log_note "${mp} is busy, so the EFI partition ${dev} keeps its own volume id."
+        return 0
+    fi
+    if mountpoint -q "$mp" 2>/dev/null || findmnt -n -S "$dev" >/dev/null 2>&1 \
+        || findmnt -n -S "$old_dev" >/dev/null 2>&1; then
+        remount_esp "$mp" "$dev"
+        log_note "An EFI partition is still mounted, so the EFI partition ${dev} keeps its own volume id."
+        return 0
+    fi
+
+    fatlabel -i -r "$old_dev" >/dev/null 2>&1 || true
+    sync -- "$old_dev" 2>/dev/null || true
+    now="$(blkid -p -s UUID -o value "$old_dev" 2>/dev/null || true)"
+    if [[ -z "$now" || "${now^^}" == "${old_id^^}" ]]; then
+        remount_esp "$mp" "$dev"
+        log_note "The old EFI partition ${old_dev} did not take a new volume id, so ${dev} keeps its own."
+        return 0
+    fi
+    fatlabel -i "$dev" "${old_id//-/}" >/dev/null 2>&1 || true
+    sync -- "$dev" 2>/dev/null || true
+    now="$(blkid -p -s UUID -o value "$dev" 2>/dev/null || true)"
+    if [[ "${now^^}" == "${new_id^^}" ]]; then
+        # The new partition did not take the id, so the old one gets it back and nothing is lost.
+        fatlabel -i "$old_dev" "${old_id//-/}" >/dev/null 2>&1 || true
+        sync -- "$old_dev" 2>/dev/null || true
+    fi
+    udevadm settle --timeout=10 2>/dev/null || true
+    remount_esp "$mp" "$dev"
+    if [[ "${now^^}" == "${old_id^^}" && "$(esp_mount_source "$mp")" == "$dev" ]]; then
+        log_note "The EFI partition ${dev} took over the volume id ${old_id} from ${old_dev}."
+    else
+        log_note "The EFI partition ${dev} has the volume id ${now:-unknown} where ${old_id} was wanted; fstab names it by partition id."
+    fi
+}
+
+# Runs once a start has come from the new partition. The old one, with partition id $2, must not be
+# able to start or be mounted in place of the one in use, so Mainstream's own loader, menu, boot
+# images and firmware entry on it go. Best effort: whatever cannot be done is left as it was and
+# logged.
+retire_old_esp() {
+    local mp="$1" old="$2" dev="$3" guid="$4"
+    local old_dev o f name mid foreign=0 left="" entries num="" tries
+    local -a ours=(-iname 'mainstream_*.efi')
+    emit_progress "retire" 96 "Retiring the old EFI partition..."
+    old_dev="$(blkid -t "PARTUUID=$old" -o device 2>/dev/null || true)"
+    if [[ ! -b "$old_dev" || "$old_dev" == "$dev" ]] || ! is_esp_partition "$old_dev" \
+        || findmnt -n -S "$old_dev" >/dev/null 2>&1; then
+        log_note "The old EFI partition could not be identified or is mounted, so it was left as it is."
+        return 0
+    fi
+    mid="$(tr -d '[:space:]' < /etc/machine-id 2>/dev/null || true)"
+    mid="${mid,,}"
+    if [[ "$mid" =~ ^[0-9a-f]{32}$ ]]; then
+        ours+=(-o -iname "${mid}_*.efi")
+    else
+        mid=""
+    fi
+    mkdir -p /run/mainstream 2>/dev/null || true
+    o="$(mktemp -d /run/mainstream/old-esp.XXXXXX 2>/dev/null || true)"
+    if [[ -z "$o" ]] || ! mount -t vfat -o umask=0077 "$old_dev" "$o" 2>/dev/null; then
+        [[ -z "$o" ]] || rmdir "$o" 2>/dev/null || true
+        log_note "The old EFI partition ${old_dev} could not be mounted, so it was left as it is."
+        return 0
+    fi
+    TMP_ESP_MNT="$o"
+
+    # Another system's boot images beside Mainstream's mean the loader and its menu are shared.
+    for f in "$o"/*; do
+        name="${f##*/}"
+        name="${name,,}"
+        if [[ -d "$f" && "$name" =~ ^[0-9a-f]{32}$ && "$name" != "$mid" ]]; then
+            foreign=1
+        fi
+    done
+    for f in "$o"/EFI/Linux/*; do
+        [[ -e "$f" ]] || continue
+        name="${f##*/}"
+        name="${name,,}"
+        if [[ "$name" != mainstream_*.efi && ( -z "$mid" || "$name" != "$mid"_*.efi ) ]]; then
+            foreign=1
+        fi
+    done
+    if (( foreign )); then
+        log_note "Another system keeps boot images on the old EFI partition ${old_dev}, so Mainstream's loader there was left in place."
+    else
+        if ! nvram_skipped; then
+            for (( tries = 0; tries < 4; tries++ )); do
+                entries="$(efibootmgr -v 2>/dev/null || true)"
+                num="$(boot_entry_for "$entries" "$old" '\EFI\limine\' || true)"
+                [[ -n "$num" ]] || break
+                efibootmgr -q -b "$num" -B >/dev/null 2>&1 || true
+            done
+            [[ -z "$num" ]] || log_note "The firmware kept a boot entry for the old EFI partition ${old_dev}."
+        fi
+        # The fallback loader goes only when it is a copy of Mainstream's loader.
+        for f in "$o"/EFI/limine/* /usr/share/limine/BOOTX64.EFI; do
+            if [[ -f "$f" && -f "$o/EFI/BOOT/BOOTX64.EFI" ]] && cmp -s -- "$f" "$o/EFI/BOOT/BOOTX64.EFI"; then
+                rm -f -- "$o/EFI/BOOT/BOOTX64.EFI"
+            fi
+        done
+        # The loaders go before the menu, so an interruption never leaves a loader that has no menu.
+        rm -rf -- "$o/EFI/limine"
+        rm -f -- "$o/limine.conf" "$o/limine.conf.old"
+        find "$o/EFI/Linux" -maxdepth 1 -type f \( "${ours[@]}" \) -delete 2>/dev/null
+        [[ -z "$mid" ]] || rm -rf -- "$o/$mid"
+        # systemd writes these two at every start; left behind they would count as someone else's files.
+        rm -f -- "$o/loader/random-seed" "$o/loader/boot-secret-mixin"
+        rmdir "$o/loader" "$o/EFI/Linux" "$o/EFI/BOOT" "$o/EFI" 2>/dev/null
+        left="$(find "$o" -mindepth 1 -print -quit 2>/dev/null)" || left="unknown"
+        sync -f -- "$o" 2>/dev/null
+    fi
+    if ! umount "$o" 2>/dev/null; then
+        log_note "The old EFI partition ${old_dev} could not be unmounted from ${o}."
+        return 0
+    fi
+    rmdir "$o" 2>/dev/null
+    TMP_ESP_MNT=""
+    if (( foreign )); then
+        return 0
+    fi
+    if [[ -n "$left" ]]; then
+        log_note "Files that are not Mainstream's remain on the old EFI partition ${old_dev}, so it keeps its volume id."
+        return 0
+    fi
+    # The record goes before the ids change hands: a second handover would swap them back.
+    rm -f -- "$RETIRE_STATE"
+    sync -f -- "$(dirname -- "$RETIRE_STATE")" 2>/dev/null || true
+    hand_over_esp_id "$mp" "$old_dev" "$dev" "$guid"
+}
+
+# Retires the old partition when this start came from the new one. Any other start leaves both
+# partitions and the record as they are, so a firmware that ignores the new entry still finds the
+# old loader.
+retire_after_restart() {
+    local mp old guid dev from
+    if ! read_retire_state; then
+        log_note "The record of the old EFI partition cannot be read, so that partition was left as it is."
+        rm -f -- "$RETIRE_STATE"
+        return 0
+    fi
+    dev="$(blkid -t "PARTUUID=$guid" -o device 2>/dev/null || true)"
+    from="$(started_from_part || true)"
+    if [[ ! -b "$dev" || "${from,,}" != "${guid,,}" ]]; then
+        log_note "The old EFI partition was kept, because this start did not come from the new one."
+        return 0
+    fi
+    if [[ "$(esp_mount_source "$mp")" != "$dev" ]]; then
+        log_note "The old EFI partition was kept, because the new one is not mounted at ${mp}."
+        return 0
+    fi
+    ESP_MNT="$mp"
+    ESP_DEV="$dev"
+    retire_old_esp "$mp" "$old" "$dev" "$guid" || true
+    rm -f -- "$RETIRE_STATE"
+    sync -f -- "$(dirname -- "$RETIRE_STATE")" 2>/dev/null || true
+}
+
 finish_cutover() {
     local mp old guid uuid loader action dev current rc
     read_cutover_state
@@ -682,13 +923,17 @@ finish_cutover() {
     loader_path="${loader//\\//}"
     [[ -f "$mp/$loader_path" ]] || die_json "The replacement EFI loader is missing. Boot updates are paused."
     activate_esp "$dev" "$guid" "$loader" || die_json "The new firmware boot entry could not be activated. Boot updates are paused."
-    update_fstab_esp_source "$mp" "UUID=$uuid" || die_json "Could not save the replacement EFI mount in fstab. Boot updates are paused."
+    # By partition id, which stays what it is when the volume ids change hands later.
+    update_fstab_esp_source "$mp" "PARTUUID=$guid" || die_json "Could not save the replacement EFI mount in fstab. Boot updates are paused."
     if [[ "$(findmnt -en -o MAJ:MIN -M "$mp" | tail -n 1)" != "$(lsblk -dno MAJ:MIN "$dev")" ]]; then
         die_json "The mounted EFI partition does not match the replacement. Boot updates are paused."
     fi
     if [[ -d /run/systemd/system ]]; then
         systemctl daemon-reload
     fi
+    # The old partition keeps its loader and firmware entry until a start has come from the new one.
+    write_retire_state "$mp" "$old" "$guid" \
+        || log_note "The old EFI partition could not be recorded for retirement, so it stays as it is."
     rm -f -- "$BUILD_STATE" "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
     ESP_MNT="$mp"
@@ -701,7 +946,7 @@ finish_cutover() {
 # Backs out of a prepared switch that cannot finish. The original partition takes the mount, fstab
 # and firmware order back. Remove the replacement's loader files before allowing boot updates.
 cancel_cutover() {
-    local mp old guid uuid loader action old_dev old_uuid new_dev current rc entries num original_source
+    local mp old guid uuid loader action old_dev old_uuid new_dev current rc entries num original_source named
     read_cutover_state
     old_dev="$(blkid -t "PARTUUID=$old" -o device || true)"
     old_uuid=""
@@ -726,14 +971,16 @@ cancel_cutover() {
     if [[ "$action" != cancel ]]; then
         write_cutover_state "$mp" "$old" "$guid" "$uuid" "$loader" cancel
     fi
-    if awk -v mp="$mp" -v src="UUID=$uuid" '!/^[[:space:]]*#/ && $2 == mp && $1 == src { found = 1 } END { exit !found }' "$FSTAB_PATH"; then
+    for named in "PARTUUID=$guid" "UUID=$uuid"; do
+        awk -v mp="$mp" -v src="$named" '!/^[[:space:]]*#/ && $2 == mp && $1 == src { found = 1 } END { exit !found }' "$FSTAB_PATH" \
+            || continue
         original_source="UUID=$old_uuid"
         if [[ -f "${FSTAB_PATH}.bak-efi-resize" ]]; then
             original_source="$(awk -v mp="$mp" '!/^[[:space:]]*#/ && NF >= 3 && $2 == mp { print $1; exit }' "${FSTAB_PATH}.bak-efi-resize")"
         fi
-        update_fstab_esp_source "$mp" "$original_source" "UUID=$uuid" \
+        update_fstab_esp_source "$mp" "$original_source" "$named" \
             || die_json "Could not put the original EFI mount back in fstab. Boot updates are paused."
-    fi
+    done
     if ! nvram_skipped; then
         entries="$(efibootmgr -v)" || die_json "The firmware boot entries could not be read. Boot updates are paused."
         num="$(boot_entry_for "$entries" "$guid" "$loader" || true)"
@@ -763,7 +1010,8 @@ cancel_cutover() {
         rmdir "$TMP_ESP_MNT"
         TMP_ESP_MNT=""
     fi
-    rm -f -- "$BUILD_STATE" "$CUTOVER_STATE"
+    # The original partition is the one in use again, so nothing waits to retire it.
+    rm -f -- "$RETIRE_STATE" "$BUILD_STATE" "$CUTOVER_STATE"
     sync -f -- "$(dirname -- "$CUTOVER_STATE")"
     emit_progress "done" 100 "The EFI resize was canceled. The unused replacement partition was left in place."
 }
@@ -1059,6 +1307,9 @@ cmd_resize() {
         finish_cutover report_recovery
         return 0
     fi
+    if [[ -e "$RETIRE_STATE" ]]; then
+        die_json "The last EFI resize is completed at the next restart. Restart, then run the EFI resize again."
+    fi
     if [[ -e "$BUILD_STATE" ]]; then
         trap cleanup_and_rollback EXIT
         undo_interrupted_build
@@ -1227,13 +1478,16 @@ case "${1:-}" in
         ;;
     recover)
         [[ $EUID == 0 ]] || exit 1
-        [[ -e "$CUTOVER_STATE" || -e "$BUILD_STATE" ]] || exit 0
+        [[ -e "$CUTOVER_STATE" || -e "$BUILD_STATE" || -e "$RETIRE_STATE" ]] || exit 0
         lock_resize
         trap cleanup_and_rollback EXIT
         if [[ -e "$CUTOVER_STATE" ]]; then
             finish_cutover
         elif [[ -e "$BUILD_STATE" ]]; then
             undo_interrupted_build
+        fi
+        if [[ -e "$RETIRE_STATE" && ! -e "$CUTOVER_STATE" && ! -e "$BUILD_STATE" ]]; then
+            retire_after_restart
         fi
         ;;
     cancel)
