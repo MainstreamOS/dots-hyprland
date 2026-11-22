@@ -709,7 +709,7 @@ function setup_proton_ge(){
   # ── Resolve latest release tag (e.g. "GE-Proton10-5") ─────────────────────
   local api_url="https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
   local release_json
-  release_json=$(curl -fsSL "$api_url") || {
+  release_json=$(curl -fsSL --connect-timeout 15 --max-time 30 "$api_url") || {
     echo -e "${STY_YELLOW}[$0]: GitHub API query failed — skipping Proton GE (set a version in Steam later).${STY_RST}"
     return 0
   }
@@ -770,7 +770,10 @@ for name in (tag + "-x86_64", tag):
       return 0
     fi
     echo -e "${STY_CYAN}[$0]: Downloading $release_name...${STY_RST}"
-    if ! curl -fL --progress-bar -o "$stage/download.tar.gz" "$tarball_url"; then
+    # Gives up on a stalled transfer, not on a slow one.
+    if ! curl -fL --connect-timeout 15 --speed-limit 10240 --speed-time 60 \
+        --max-time 2400 --progress-bar \
+        -o "$stage/download.tar.gz" "$tarball_url"; then
       echo -e "${STY_YELLOW}[$0]: GE-Proton download failed, skipping (set a Proton version in Steam later).${STY_RST}"
       rm -rf "$stage"
       return 0
