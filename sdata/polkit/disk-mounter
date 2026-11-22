@@ -5,7 +5,8 @@
 # the disk-mounter.qml UI ("Auto Drive Mount"). A polkit policy ships
 # alongside this script and declares allow_active=auth_admin_keep, so the
 # first admin prompt caches for ~5 minutes and subsequent mount/unmount
-# operations within that window don't re-prompt.
+# operations within that window don't re-prompt. 50-user-manager.rules keeps
+# that to an administrator's own session.
 #
 # Subcommand dispatch:
 #

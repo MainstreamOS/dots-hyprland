@@ -11,7 +11,8 @@
 
     `allow_active = auth_admin_keep` means: in an active local session the
     user authenticates as an admin ONCE, then removing several apps in a
-    row within ~5 minutes doesn't re-prompt. `allow_inactive` and
+    row within ~5 minutes doesn't re-prompt. 50-user-manager.rules keeps
+    that to administrators' own sessions. `allow_inactive` and
     `allow_any` keep the full-strength prompt for non-active/non-local
     sessions where caching could be abused.
 

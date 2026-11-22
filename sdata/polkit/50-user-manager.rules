@@ -1,10 +1,18 @@
-// Account changes keep an administrator's authentication for a few minutes
-// (auth_admin_keep in the policy), and polkit keeps it for the whole session
-// it was typed in. Typed into a standard account's session, to change that
-// account's picture say, it would let the account make itself an
-// administrator meanwhile, so only an administrator's own session keeps it.
+// Account changes, drive mounts, app removal and resizing the EFI partition
+// keep an administrator's authentication for a few minutes (auth_admin_keep
+// in their policies), and polkit keeps it for the whole session it was typed
+// in. Typed into a standard account's session, to change that account's
+// picture or mount a drive say, it would let the account run the same helper
+// with arguments of its own meanwhile, and make itself an administrator, so
+// only an administrator's own session keeps it.
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.mainstreamos.user-manager" && !subject.isInGroup("wheel")) {
+    var kept = [
+        "org.mainstreamos.user-manager",
+        "org.mainstreamos.disk-mounter",
+        "org.mainstreamos.app-remover",
+        "org.mainstreamos.efi-resize"
+    ];
+    if (kept.indexOf(action.id) >= 0 && !subject.isInGroup("wheel")) {
         return polkit.Result.AUTH_ADMIN;
     }
 });

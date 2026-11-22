@@ -9,7 +9,9 @@
     (typical desktop use), the user has to authenticate as an admin
     ONCE, then subsequent invocations within ~5 minutes don't re-prompt.
     That's the "mount three drives in a row" UX win — without this, each
-    mount/unmount triggers a fresh polkit dialog.
+    mount/unmount triggers a fresh polkit dialog. 50-user-manager.rules
+    keeps it to administrators' own sessions, since polkit keeps it for
+    the whole session it was typed in.
 
     `allow_inactive = auth_admin` and `allow_any = auth_admin` keep the
     full-strength prompt for non-active or non-local sessions (SSH,
