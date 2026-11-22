@@ -76,6 +76,8 @@ find_esp_mount() {
 
     local mp fstype src
     for mp in /boot/efi /efi /boot; do
+        # An automount that has not fired yet shows only itself until the path is used.
+        stat -- "$mp/." >/dev/null 2>&1 || true
         mountpoint -q "$mp" 2>/dev/null || continue
         fstype="$(findmnt -n -o FSTYPE -M "$mp" 2>/dev/null | tail -n 1 || true)"
         [[ "$fstype" == "vfat" ]] || continue
@@ -322,6 +324,8 @@ analyze_layout() {
     if [[ -n "$TAIL_DEV" && -b "$TAIL_DEV" && "$TAIL_DEV" != "$ESP_DEV" ]] && (( part_count < 128 )); then
         TAIL_PARTN="$(resolve_part_num "$TAIL_DEV" || echo 0)"
         TAIL_FSTYPE="$(lsblk -dno FSTYPE "$TAIL_DEV" 2>/dev/null | tr -d ' ' || true)"
+        # What lsblk knows can lag behind a filesystem that was just written to the partition.
+        [[ -n "$TAIL_FSTYPE" ]] || TAIL_FSTYPE="$(blkid -p -s TYPE -o value "$TAIL_DEV" 2>/dev/null || true)"
         TAIL_MNT="$(find_mount_for_dev "$TAIL_DEV" || true)"
 
         if [[ "$TAIL_FSTYPE" == "crypto_LUKS" ]]; then
@@ -1222,7 +1226,7 @@ build_verdict() {
 # exactly where it was planned and nothing uses it; anything else is left for a check by hand.
 undo_interrupted_build() {
     local disk disk_id sector partn nstart nsize tail_id tstart tsize dump
-    local state="" new_node="" new_id="" tail_node="" mnt="" backup restored entries num tries
+    local state="" new_node="" new_id="" tail_node="" mnt="" backup restored entries num tries stray
     local manual="An EFI resize was interrupted and could not be undone automatically; nothing was changed. Check the partitions by hand, then remove ${BUILD_STATE}."
 
     [[ ! -e "$CUTOVER_STATE" ]] || return 0
@@ -1264,6 +1268,11 @@ undo_interrupted_build() {
             && "$(awk -v n="$new_node" '$1 == n && $2 == ":"' <<<"$dump")" == *'name="Mainstream EFI"'* ]] \
             || die_json "$manual"
         is_esp_partition "$new_node" && kernel_part_is "$new_node" "$nstart" "$nsize" || die_json "$manual"
+        # A run that was killed while it filled the partition left it mounted in its own folder.
+        while read -r stray; do
+            [[ "$stray" =~ ^/run/mainstream/new-esp\.[A-Za-z0-9]+$ ]] || continue
+            umount "$stray" 2>/dev/null && rmdir "$stray" 2>/dev/null || true
+        done < <(findmnt -rn -o TARGET -S "$new_node" 2>/dev/null || true)
         if part_in_use "$new_node" "$new_id"; then
             die_json "$manual"
         fi
