@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Privileged half of Settings > Gaming. Runs under pkexec.
 set -euo pipefail
+# pkexec keeps the caller's umask, and the boot line and state must not end up
+# writable by anyone else.
+umask 022
 
 SERVICE=mainstream-scx-lavd.service
 CMDLINE=/etc/kernel/cmdline
@@ -25,7 +28,7 @@ declare -A OFF=(
 die() { printf 'gaming-tuning: %s\n' "$*" >&2; exit 1; }
 
 set_kernel_opt() {
-    local name="$1" want="$2" on off key line before foreign="" token="" out=() t drop_prev=""
+    local name="$1" want="$2" on off key line before foreign="" token="" out=() t drop_prev="" prev=""
     on="${ON[$name]:-}"
     [ -n "$on" ] || die "unknown option: $name"
     off="${OFF[$name]}"
@@ -46,12 +49,20 @@ set_kernel_opt() {
         out+=("$t")
     done
 
-    mkdir -p "$STATE"
+    install -d -m 0755 -o root -g root "$STATE"
+    if [ "$want" != on ] && [ -r "$STATE/$key.prev" ]; then
+        prev="$(cat "$STATE/$key.prev")"
+        # Only one plain token for this key may go back on the boot line.
+        if ! [[ "$prev" =~ ^"$key"(=[A-Za-z0-9_.,:+-]*)?$ ]]; then
+            printf 'gaming-tuning: ignoring %s: not a saved %s value\n' "$STATE/$key.prev" "$key" >&2
+            prev=""
+        fi
+    fi
     if [ "$want" = on ]; then
         if [ -n "$foreign" ]; then printf '%s\n' "$foreign" > "$STATE/$key.prev"; fi
         token="$on"
-    elif [ -r "$STATE/$key.prev" ]; then
-        token="$(cat "$STATE/$key.prev")"
+    elif [ -n "$prev" ]; then
+        token="$prev"
         drop_prev=1
     elif [ -n "$foreign" ]; then
         # Off was asked for over a value this helper never set; it stays.
