@@ -35,6 +35,8 @@
 #       fstab entry pointing at it and removes any associated credentials file.
 
 set -euo pipefail
+# pkexec keeps the caller's umask.
+umask 022
 
 # ── Common helpers (used by every subcommand) ─────────────────────────────
 log() { echo "[disk-mounter] $*" >&2; }
@@ -81,18 +83,42 @@ reject_label_unsafe() {  # $1=field name  $2=value
 }
 
 # Constrain the root-created/mounted/chowned mountpoint to a safe path under /mnt.
-validate_mountpoint() {  # $1=mountpoint
+# $2 is given when a mount is about to be created there: "single" allows one
+# folder directly under /mnt, "nested" any depth.
+validate_mountpoint() {  # $1=mountpoint  $2=single|nested (optional)
     if [[ ! "$1" =~ ^/mnt/[A-Za-z0-9._/-]+$ ]]; then
         die "mountpoint must be a safe path under /mnt/"
     fi
     # The regex alone lets '.', '..' and empty segments through (/mnt/.,
     # /mnt/./x, /mnt//x) — those normalise to /mnt itself or escape it.
-    local seg IFS=/
+    local seg path=/mnt depth=0 IFS=/
     for seg in ${1#/mnt/}; do
         if [[ -z "$seg" || "$seg" == "." || "$seg" == ".." ]]; then
             die "mountpoint has an invalid path segment"
         fi
+        # Whoever owns a folder on the way can swap what is below it for a
+        # link, so a new mount only goes under folders that belong to root.
+        if [[ -n "${2:-}" && -e "$path" && "$(stat -c %u "$path")" != 0 ]]; then
+            die "mountpoint is inside a folder that root does not own: $path"
+        fi
+        path="$path/$seg"
+        depth=$((depth + 1))
+        if [[ -L "$path" ]]; then
+            die "mountpoint is, or passes through, a symbolic link: $path"
+        fi
     done
+    if [[ "${2:-}" == single && "$depth" -ne 1 ]]; then
+        die "mountpoint must be a single folder under /mnt/"
+    fi
+}
+
+# A server name or address. It opens the mount source, so it must not be able
+# to read as an option; brackets, colons and % are for IPv6 addresses.
+validate_host() {  # $1=host
+    local re='^[][A-Za-z0-9._:%][][A-Za-z0-9._:%-]*$'
+    if [[ ! "$1" =~ $re ]]; then
+        die "server must be a host name or an IP address"
+    fi
 }
 
 # Resolve the human who invoked pkexec so we can chown native-ownership
@@ -153,9 +179,8 @@ mount_block() {
     fi
     local device="$1" fstype="$2" uuid="$3" mountpoint="$4" label="$5" fstab_mode="$6"
 
-    validate_mountpoint "$mountpoint"
+    validate_mountpoint "$mountpoint" single
     reject_fstab_unsafe uuid "$uuid"
-    reject_fstab_unsafe fstype "$fstype"
     reject_label_unsafe label "$label"
 
     [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
@@ -164,6 +189,14 @@ mount_block() {
     local resolved; resolved="$(blkid -U "$uuid" 2>/dev/null || true)"
     [[ -n "$resolved" && -b "$resolved" ]] || { log "UUID $uuid does not resolve to a block device"; exit 1; }
     device="$resolved"
+    # The type picks the program or driver that mounts the device as root, so
+    # it is read from the device, not taken from the caller, and must be one
+    # the desktop lists.
+    fstype="$(blkid -p -s TYPE -o value "$device" 2>/dev/null || true)"
+    case "$fstype" in
+        ext2|ext3|ext4|btrfs|xfs|f2fs|vfat|exfat|ntfs|hfs|hfsplus|apfs) ;;
+        *) die "cannot mount $device: unsupported filesystem (${fstype:-none found})" ;;
+    esac
     resolve_caller
 
     # Optional relabel with the per-fstype labelling utility, only when a new
@@ -289,7 +322,7 @@ format_mount() {
     fi
     local device="$1" mountpoint="$2" label="$3" fstab_mode="$4"
 
-    validate_mountpoint "$mountpoint"
+    validate_mountpoint "$mountpoint" single
     reject_label_unsafe label "$label"
     [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
     command -v mkfs.ext4 >/dev/null || { log "mkfs.ext4 not found (install e2fsprogs)"; exit 2; }
@@ -354,8 +387,8 @@ mount_smb() {
     fi
     local host="$1" share="$2" mountpoint="$3" label="$4" username="$5" fstab_mode="$6"
 
-    validate_mountpoint "$mountpoint"
-    reject_fstab_unsafe host "$host"
+    validate_mountpoint "$mountpoint" nested
+    validate_host "$host"
     reject_label_unsafe share "$share"
     reject_label_unsafe label "$label"
     reject_label_unsafe username "$username"
@@ -395,7 +428,7 @@ mount_smb() {
     fi
 
     mkdir -p "$mountpoint"
-    mount -t cifs -o "$mount_opts" "$source" "$mountpoint"
+    mount -t cifs -o "$mount_opts" -- "$source" "$mountpoint"
 
     if [[ "$fstab_mode" == "fstab" ]]; then
         # Strip any earlier line for the same mountpoint (column 2) — the
@@ -415,9 +448,12 @@ mount_nfs() {
     fi
     local host="$1" export_path="$2" mountpoint="$3" label="$4" fstab_mode="$5"
 
-    validate_mountpoint "$mountpoint"
-    reject_fstab_unsafe host "$host"
+    validate_mountpoint "$mountpoint" nested
+    validate_host "$host"
     reject_label_unsafe export "$export_path"
+    if [[ "$export_path" != /* ]]; then
+        die "export must be an absolute path on the server, such as /srv/share"
+    fi
     reject_label_unsafe label "$label"
 
     command -v mount.nfs >/dev/null || command -v mount.nfs4 >/dev/null \
@@ -435,7 +471,7 @@ mount_nfs() {
 
     local source="${host}:${export_path}"
     mkdir -p "$mountpoint"
-    mount -t nfs -o "$mount_opts" "$source" "$mountpoint"
+    mount -t nfs -o "$mount_opts" -- "$source" "$mountpoint"
 
     if [[ "$fstab_mode" == "fstab" ]]; then
         strip_fstab_mountpoint "$mountpoint"
@@ -452,7 +488,7 @@ unlock_mount() {
     fi
     local device="$1" mountpoint="$2" label="$3" fstab_mode="$4"
 
-    validate_mountpoint "$mountpoint"
+    validate_mountpoint "$mountpoint" single
     reject_label_unsafe label "$label"
     [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
     command -v cryptsetup >/dev/null || { log "cryptsetup not found"; exit 2; }
