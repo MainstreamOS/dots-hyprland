@@ -213,7 +213,20 @@ mount_block() {
     mount -t "$mount_fstype" -o "$mount_opts" UUID="$uuid" "$mountpoint"
 
     case "$fstype" in
-        ext2|ext3|ext4|btrfs|xfs) chown "$caller_uid:$caller_gid" "$mountpoint" ;;
+        ext2|ext3|ext4|btrfs|xfs)
+            # Only a data volume is handed to the caller. One that holds an
+            # operating system keeps the ownership that system gave its root.
+            local marker os_volume=0
+            for marker in etc/os-release usr/lib/os-release usr/bin @ @home; do
+                if [[ -e "$mountpoint/$marker" || -L "$mountpoint/$marker" ]]; then
+                    os_volume=1
+                fi
+            done
+            if [[ "$os_volume" == 1 ]]; then
+                log "Not changing the owner of $mountpoint: it holds an operating system"
+            else
+                chown "$caller_uid:$caller_gid" "$mountpoint"
+            fi ;;
     esac
 
     if [[ "$fstab_mode" == "fstab" ]]; then
