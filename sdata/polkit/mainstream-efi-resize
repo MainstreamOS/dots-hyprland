@@ -777,6 +777,23 @@ find_next_free_partn() {
     return 1
 }
 
+# Prints "<id>:" for device $1 in the Btrfs mounted at $2, the prefix a resize takes to address it.
+# Prints nothing when the id cannot be found, which leaves btrfs on its default, device 1.
+btrfs_devid_prefix() {
+    local want id path
+    want="$(readlink -f -- "$1" 2>/dev/null || true)"
+    [[ -n "$want" ]] || return 0
+    while read -r id path; do
+        [[ "$id" =~ ^[0-9]+$ && -n "$path" ]] || continue
+        if [[ "$(readlink -f -- "$path" 2>/dev/null || true)" == "$want" ]]; then
+            printf '%s:' "$id"
+            return 0
+        fi
+    done < <(btrfs filesystem show "$2" 2>/dev/null \
+        | awk '$1 == "devid" { for (i = 3; i < NF; i++) if ($i == "path") { print $2, $(i + 1); break } }')
+    return 0
+}
+
 # Variables tracked for emergency rollback
 TMP_ESP_MNT=""
 SFDISK_BACKUP=""
@@ -784,6 +801,7 @@ ROLLBACK_DISK=""
 ROLLBACK_BTRFS_MNT=""
 ROLLBACK_BOOT_ENTRY=""
 AUTOMOUNT_UNIT=""
+TAIL_DEVID=""
 
 cleanup_and_rollback() {
     local exit_code=$?
@@ -807,7 +825,7 @@ cleanup_and_rollback() {
             # size again. Left smaller is safe; grown past the partition is not.
             if disk_part_is "$TAIL_DEV" "$TAIL_START_SEC" "$TAIL_SIZE_SEC" \
                 && await_kernel_part "$TAIL_DEV" "$TAIL_START_SEC" "$TAIL_SIZE_SEC"; then
-                btrfs filesystem resize max "$ROLLBACK_BTRFS_MNT" >/dev/null 2>&1 || true
+                btrfs filesystem resize "${TAIL_DEVID}max" "$ROLLBACK_BTRFS_MNT" >/dev/null 2>&1 || true
             else
                 rollback_incomplete "Btrfs on ${TAIL_DEV} was left smaller, since its partition could not be confirmed back at its old size. The backups are in ${BACKUP_BASE}."
             fi
@@ -900,8 +918,9 @@ cmd_resize() {
         local shrink_bytes=$(( old_tail_bytes - new_tail_bytes + SHRINK_CUSHION_BYTES ))
 
         emit_progress "shrink" 20 "Shrinking Btrfs filesystem (${TAIL_MNT}) to free ${target_mb} MB at end of disk..."
+        TAIL_DEVID="$(btrfs_devid_prefix "$TAIL_DEV" "$TAIL_MNT")"
         ROLLBACK_BTRFS_MNT="$TAIL_MNT"
-        btrfs filesystem resize "-${shrink_bytes}" "$TAIL_MNT" >/dev/null
+        btrfs filesystem resize "${TAIL_DEVID}-${shrink_bytes}" "$TAIL_MNT" >/dev/null
         btrfs filesystem sync "$TAIL_MNT" >/dev/null 2>&1 || sync
 
         # Verify Btrfs logical device size is strictly <= new_tail_bytes before touching GPT!
@@ -929,7 +948,7 @@ cmd_resize() {
             || die_json "The kernel did not take the new partition sizes; Btrfs was not grown and nothing was formatted."
 
         emit_progress "reexpand" 55 "Snapping Btrfs filesystem to updated partition boundary..."
-        btrfs filesystem resize max "$TAIL_MNT" >/dev/null
+        btrfs filesystem resize "${TAIL_DEVID}max" "$TAIL_MNT" >/dev/null
         btrfs filesystem sync "$TAIL_MNT" >/dev/null 2>&1 || sync
     else
         die_json "Unhandled resize strategy '${STRATEGY}'."
