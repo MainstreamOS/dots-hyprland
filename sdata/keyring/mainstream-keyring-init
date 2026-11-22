@@ -214,7 +214,7 @@ point_at_github() {
     cp -a "$PACMAN_CONF" "$PACMAN_CONF_BAK" || return 1
     # Only [mainstream]: the MacBook edition's [arch-mact2] is unsigned.
     sed -i \
-        -e "s|^Server = file://.*pkgs|Server = $REPO_URL|" \
+        -e "/^\[mainstream\]/,/^\[/ s|^Server = file://.*pkgs|Server = $REPO_URL|" \
         -e "/^\[mainstream\]/,/^\[/ s|^SigLevel = Never|SigLevel = Required|" \
         "$PACMAN_CONF"
     # sed succeeds whether or not the lines it was aimed at existed, and the
