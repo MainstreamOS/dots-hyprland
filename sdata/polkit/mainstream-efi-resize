@@ -949,7 +949,7 @@ cmd_resize() {
     emit_progress "copy" 80 "Copying bootloader and UKI images to ${new_esp_dev}..."
     mkdir -p /run/mainstream
     TMP_ESP_MNT="$(mktemp -d /run/mainstream/new-esp.XXXXXX)"
-    mount "$new_esp_dev" "$TMP_ESP_MNT"
+    mount -t vfat -o umask=0077 "$new_esp_dev" "$TMP_ESP_MNT"
     copy_esp_tree "$ESP_MNT" "$TMP_ESP_MNT"
 
     emit_progress "verify" 90 "Verifying UKIs and Limine pins on the new partition..."
