@@ -31,6 +31,5 @@ hl.window_rule({
     match = { class = "^(io.calamares.calamares)$" },
     float = true,
     suppress_event = "fullscreen maximize",
-    size = "1500 800",
     center = true,
 })

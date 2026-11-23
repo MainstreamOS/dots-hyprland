@@ -9,6 +9,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.services
 import qs.services.network
@@ -21,7 +22,8 @@ ApplicationWindow {
     id: root
     visible: true
     width: 700
-    height: 800
+    height: designHeight
+    readonly property int designHeight: 800
     minimumWidth: 500
     minimumHeight: 600
     // Deliberately not translated. This string is the window's identity, not
@@ -75,15 +77,17 @@ ApplicationWindow {
 
     Process {
         id: recenterProc
-        command: ["hyprctl", "monitors", "-j"]
+        command: ["hyprctl", "-j", "--batch",
+            "monitors ; getoption plugin:hyprbars:enabled ; getoption plugin:hyprbars:bar_height"]
         // Collected whole. SplitParser with an empty marker hands over each
         // raw pipe read as it arrives, so anything past the first chunk showed
         // up as truncated JSON and was swallowed by the catch below.
         stdout: StdioCollector {
             onStreamFinished: {
-                const data = this.text;
+                // One JSON document per batched request, blank lines between.
+                const parts = this.text.split(/\n{3,}/);
                 try {
-                    let mons = JSON.parse(data);
+                    let mons = JSON.parse(parts[0]);
                     if (!mons || mons.length === 0) return;
                     let mon = mons.find(m => m.focused) || mons[0];
                     let scale = mon.scale || 1.0;
@@ -95,6 +99,40 @@ ApplicationWindow {
                     let logicalH = pxH / scale;
                     let tx = Math.round(mon.x + (logicalW - root.width)  / 2);
                     let ty = Math.round(mon.y + (logicalH - root.height) / 2);
+                    // On a short screen the centered window would start under
+                    // the bar: keep it, and its title bar when one is drawn,
+                    // inside the area the panels leave free.
+                    let titleBar = 0;
+                    try {
+                        if (JSON.parse(parts[1]).bool)
+                            titleBar = JSON.parse(parts[2]).int || 0;
+                    } catch (e) {}
+                    let res = mon.reserved || [0, 0, 0, 0];
+                    // A window taller than that area cannot be placed in it,
+                    // so the compositor is asked for the height that fits (a
+                    // height set from here is not taken up), and the window
+                    // is placed when the resize brings this back round.
+                    let fitH = Math.max(root.minimumHeight,
+                        Math.min(root.designHeight, Math.floor(logicalH - res[1] - res[3] - titleBar)));
+                    // Asked for once per height: a compositor that answers
+                    // with another size must not be asked again and again.
+                    if (fitH !== root.height && fitH !== root.lastFitHeight) {
+                        root.lastFitHeight = fitH;
+                        let fitTitle = (root.title || "")
+                            .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                        fitResizeProc.command = [
+                            "hyprctl", "dispatch",
+                            `hl.dsp.window.resize({ x = ${root.width}, y = ${fitH}, window = [[title:^${fitTitle}$]] })`
+                        ];
+                        fitResizeProc.running = false;
+                        fitResizeProc.running = true;
+                        return;
+                    }
+                    root.lastFitHeight = fitH;
+                    let maxX = mon.x + logicalW - res[2] - root.width;
+                    let maxY = mon.y + logicalH - res[3] - root.height;
+                    tx = Math.max(mon.x + res[0], Math.min(tx, maxX));
+                    ty = Math.max(mon.y + res[1] + titleBar, Math.min(ty, maxY));
                     // Asking for a position it has already asked for is what
                     // turned a resize into a move into another resize, forking
                     // two hyprctl processes each time round. A genuinely new
@@ -129,10 +167,12 @@ ApplicationWindow {
     }
 
     Process { id: recenterMoveProc; command: [] }
+    Process { id: fitResizeProc; command: [] }
 
     // Where the last move asked for, so the same request is not made twice.
     property int lastRecenterX: -100000
     property int lastRecenterY: -100000
+    property int lastFitHeight: -1
 
     // Debounce — give hyprctl reload a beat to land before we query so we
     // don't read the pre-apply geometry.
@@ -141,6 +181,16 @@ ApplicationWindow {
         interval: 220
         repeat: false
         onTriggered: root.recenter()
+    }
+
+    // The bar reserves its strip of the screen only once it is up, which at
+    // session start is after this window has been placed.
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name === "openlayer" || event.name === "closelayer")
+                recenterTimer.restart();
+        }
     }
 
     Screen.onWidthChanged:  recenterTimer.restart()
@@ -264,7 +314,9 @@ ApplicationWindow {
 
     // The one place that knows how to hand over to the installer.
     function launchInstaller() {
-        Quickshell.execDetached(["sudo", "-E", "calamares"]);
+        // The live image's helper sizes the installer window for this screen.
+        Quickshell.execDetached(["sh", "-c",
+            "[ -x /usr/local/bin/calamares-fit-window ] && /usr/local/bin/calamares-fit-window; exec sudo -E calamares"]);
         Qt.quit();
     }
 
