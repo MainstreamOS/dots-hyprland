@@ -430,6 +430,34 @@ hyprland_lua_preflight() {
     return 0
 }
 
+# pacman skips a package that pacman.conf holds back, then rejects the whole upgrade when
+# something else needs its newer version. Its error names the dependency, not the hold,
+# so this names the held packages that are in the way. $1 is pacman's output.
+held_packages_notice() {
+    local log="$1" held=() needed blocking
+    grep -q 'failed to prepare transaction (could not satisfy dependencies)' "$log" || return 0
+    mapfile -t held < <(sed -n 's/^warning: \([^:]*\): ignoring package upgrade .*/\1/p' "$log" | sort -u)
+    (( ${#held[@]} )) || return 0
+    # Either an installed, held package needs what an upgrade takes away, or an upgrade
+    # needs what only the newer version of a held package provides.
+    needed=$(sed -n "s/^:: unable to satisfy dependency '\([^'<>=]*\)[^']*' required by .*/\1/p" "$log" | sort -u)
+    blocking=$(
+        {
+            sed -n "s/^:: .* breaks dependency '.*' required by \(.*\)/\1/p" "$log"
+            printf '%s\n' "$needed"
+            [[ -z "$needed" ]] || pacman -Si "${held[@]}" 2>/dev/null | awk -v needed="$needed" '
+                BEGIN { split(needed, list, "\n"); for (i in list) want[list[i]] = 1 }
+                /^Name[[:space:]]*:/ { name = $3 }
+                /^Provides[[:space:]]*:/ { for (i = 3; i <= NF; i++) { sub(/[<>=].*/, "", $i); if ($i in want) print name } }'
+        } | sort -u | grep -Fx -f <(printf '%s\n' "${held[@]}") || true
+    )
+    [[ -n "$blocking" ]] || return 0
+    echo ""
+    echo ">>> $(tf "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s" "${blocking//$'\n'/ }")"
+    echo "   $(tf "All packages held back here: %s" "${held[*]}")"
+    echo "   $(t "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.")"
+}
+
 # ── 0. Boot menu, before anything can rebuild the boot image ────────────────
 # Mends an entry Limine would refuse and keeps a copy of the working image. It
 # holds the package step when the EFI partition is too full and no copy exists.
@@ -571,6 +599,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
                 echo ""
             fi
         fi
+        held_packages_notice "$PACMAN_LOG"
         # Repeating a rejected dependency plan cannot resolve its conflicts.
         # Keep pacman's explanation visible instead of calling it a cache error.
         if [[ "$PACMAN_RC" -ne 0 ]] \

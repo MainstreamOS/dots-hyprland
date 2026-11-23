@@ -3479,5 +3479,8 @@
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Signed in. %1 are in the picker now. Adjust thinking level with /think.",
   "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.",
   "Could not add the group %s to the group shadow file": "Could not add the group %s to the group shadow file",
-  "Added the missing group shadow entries for %s": "Added the missing group shadow entries for %s"
+  "Added the missing group shadow entries for %s": "Added the missing group shadow entries for %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s",
+  "All packages held back here: %s": "All packages held back here: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again."
 }
