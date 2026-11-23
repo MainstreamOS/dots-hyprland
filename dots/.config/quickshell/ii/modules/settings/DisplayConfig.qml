@@ -1744,7 +1744,10 @@ except Exception:
                     buttonIcon: "power_settings_new"
                     text: Translation.tr("Enabled")
                     checked: monitorSection.pending.enabled ?? true
-                    onCheckedChanged: displayConfigPage.updatePending(monitorSection.monName, "enabled", checked)
+                    onCheckedChanged: {
+                        if (checked === (monitorSection.pending.enabled ?? true)) return;
+                        displayConfigPage.updatePending(monitorSection.monName, "enabled", checked);
+                    }
                 }
 
                 // Set Default button — lights up with monColor when this is the default
