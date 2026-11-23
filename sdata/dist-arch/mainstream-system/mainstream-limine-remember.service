@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep the installed system as the boot menu's remembered entry after a snapshot was started
+ConditionPathExists=/sys/firmware/efi/efivars/LimineLastBootedEntry-03884334-1756-4978-9c8c-86fb8998b4ea
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/limine-remember-installed
+
+[Install]
+WantedBy=multi-user.target

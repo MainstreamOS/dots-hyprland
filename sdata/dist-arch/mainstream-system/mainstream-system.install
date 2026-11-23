@@ -194,6 +194,11 @@ _migrate() {  # $1 = the version upgraded from, or nothing on an install
             systemctl start --no-block paccache.timer 2>/dev/null || true
         fi
     fi
+    # A snapshot started from the boot menu must not stay the menu's remembered entry.
+    # Enabled once, by the release that brings it, so a disable sticks.
+    if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-28)" -lt 0 ]; then
+        systemctl preset mainstream-limine-remember.service 2>/dev/null || true
+    fi
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true

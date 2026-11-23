@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=27
+pkgrel=28
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -77,6 +77,8 @@ source=(
   50-mainstream-nvpcr.conf
   paccache-uninstalled.conf
   mainstream-hardware-quirks
+  limine-remember-installed
+  mainstream-limine-remember.service
 )
 sha256sums=(
   SKIP SKIP SKIP
@@ -84,6 +86,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP
 )
 
 build() {
@@ -174,4 +177,7 @@ package() {
   done
   install -Dm644 "$srcdir/paccache-uninstalled.conf" \
       "$pkgdir/usr/lib/systemd/system/paccache.service.d/50-mainstream-uninstalled.conf"
+  install -Dm755 "$srcdir/limine-remember-installed"     "$pkgdir/usr/lib/mainstream/limine-remember-installed"
+  install -Dm644 "$srcdir/mainstream-limine-remember.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-limine-remember.service"
 }

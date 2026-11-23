@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# limine-remember-installed: after a snapshot was started from the boot menu, makes
+# the installed system the menu's remembered entry again.
+#
+# With remember_last_entry Limine records the entry it starts in a firmware variable
+# and preselects it at the next start. A snapshot entry recorded there would make a
+# plain restart land in the snapshot again, so its record is replaced by the entry of
+# the same system and kernel outside the Snapshots menu. Any other record, such as a
+# second operating system, is left alone.
+set -uo pipefail
+export LC_ALL=C
+PATH=/usr/bin
+
+VAR=${MAINSTREAM_LIMINE_LAST_ENTRY:-/sys/firmware/efi/efivars/LimineLastBootedEntry-03884334-1756-4978-9c8c-86fb8998b4ea}
+[[ -f $VAR ]] || exit 0
+
+# Four bytes of attributes, then the entry's path in the menu, ended by a zero byte.
+entry=$(tail -c +5 -- "$VAR" 2>/dev/null | tr -d '\0') || exit 0
+[[ $entry =~ ^(.+)/Snapshots/[^/]+(/[^/]+)$ ]] || exit 0
+installed=${BASH_REMATCH[1]}${BASH_REMATCH[2]}
+
+# efivarfs marks its files immutable and takes a variable in one write.
+attrs=$(head -c 4 -- "$VAR" 2>/dev/null | od -An -tx1) || exit 0
+[[ $attrs =~ ^(\ [0-9a-f]{2}){4}$ ]] || exit 0
+chattr -i -- "$VAR" 2>/dev/null || true
+if { printf "${attrs// /\\x}"; printf '%s\0' "$installed"; } \
+    | dd of="$VAR" bs=4096 iflag=fullblock status=none 2>/dev/null; then
+    echo "The boot menu remembers \"$installed\" again in place of the snapshot that was started."
+else
+    echo "The boot menu still remembers the snapshot that was started; choose the installed system in the menu at the next start." >&2
+fi
+exit 0

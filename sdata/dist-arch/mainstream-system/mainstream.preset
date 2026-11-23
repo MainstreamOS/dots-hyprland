@@ -4,3 +4,4 @@ enable mainstream-luks-keyfile.timer
 enable mainstream-vmwgfx-greeter.service
 enable NetworkManager-dispatcher.service
 enable paccache.timer
+enable mainstream-limine-remember.service
