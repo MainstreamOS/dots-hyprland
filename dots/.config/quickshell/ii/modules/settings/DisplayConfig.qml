@@ -662,7 +662,19 @@ print(json.dumps(result))
             .replace(/\\/g, "\\\\")
             .replace(/'/g, "\\'")
             .replace(/\n/g, "\\n");
+        // An output that stops duplicating another has to reconnect before the reload,
+        // or Hyprland leaves it without a wl_output and the shell cannot draw on it.
+        const standalone = monitors.map(mon => mon.name).filter(name => {
+            const source = pendingChanges[name]?.mirror ?? "";
+            return source === "" || pendingChanges[source]?.enabled === false;
+        });
+        const detach = [`${Quickshell.env("HOME")}/.config/hypr/hyprland/scripts/clamshell.sh`, "detach"].concat(standalone);
         let py =
+            "import subprocess\n" +
+            "try:\n" +
+            "    subprocess.run(" + JSON.stringify(detach) + ")\n" +
+            "except OSError:\n" +
+            "    pass\n" +
             "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
             "content = '" + escaped + "'\n" +
             "open(path, 'w').write(content)\n";

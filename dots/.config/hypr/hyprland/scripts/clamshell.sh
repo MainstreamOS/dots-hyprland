@@ -18,7 +18,7 @@ inhibit_lid() {
       --description="Mainstream Clamshell Lid Switch Inhibitor" \
       --property=PartOf=graphical-session.target \
       systemd-inhibit --what=handle-lid-switch --mode=block \
-      --who="Mainstream OS" --why="Laptop docked or sleep on lid close disabled" sleep infinity &
+      --who="Mainstream OS" --why="Laptop docked or sleep on lid close disabled" sleep infinity 9>&- &
   fi
 }
 
@@ -158,6 +158,37 @@ is_monitor_enabled() {
   hyprctl monitors -j 2>/dev/null | jq -e --arg name "$1" 'any(.[]; .name == $name)' >/dev/null 2>&1
 }
 
+# Enabled outputs that duplicate $1. hyprctl names the source by its id, not its name.
+get_mirrors_of() {
+  hyprctl monitors all -j 2>/dev/null | jq -r --arg name "$1" '(.[] | select(.name == $name) | .id | tostring) as $id | .[] | select(.disabled != true and (.mirrorOf == $id or .mirrorOf == $name)) | .name' 2>/dev/null || true
+}
+
+is_mirror() {
+  hyprctl monitors all -j 2>/dev/null | jq -e --arg name "$1" 'any(.[]; .name == $name and .disabled != true and .mirrorOf != "none")' >/dev/null 2>&1
+}
+
+# Hyprland applies a monitor rule a moment after the call returns and merges changes that land
+# together, so a step that must happen on its own waits until hyprctl reports it. $2 is the
+# "disabled" value to wait for.
+wait_monitor_disabled() {
+  for _ in $(seq 60); do
+    [ "$(hyprctl monitors all -j 2>/dev/null | jq -r --arg name "$1" '.[] | select(.name == $name) | .disabled' 2>/dev/null)" = "$2" ] && return 0
+    sleep 0.05
+  done
+  return 1
+}
+
+# In Hyprland 0.57 an output that connected as a duplicate has no wl_output, and ending the
+# duplication does not give it one, so clients cannot draw on it. Off and on does. The pause
+# lets clients bind the new output before the next change takes another one away.
+detach_mirror() {
+  set_monitor "output = \"$1\", mirror = \"\", disabled = true"
+  wait_monitor_disabled "$1" true || true
+  set_monitor "output = \"$1\", disabled = false"
+  wait_monitor_disabled "$1" false || true
+  sleep 0.3
+}
+
 save_internal_state() {
   local internal="$1"
   mkdir -p "$STATE_DIR"
@@ -165,7 +196,7 @@ save_internal_state() {
     local info
     info=$(hyprctl monitors -j 2>/dev/null | jq -r --arg int "$internal" '.[] | select(.name == $int) | "\(.width)x\(.height)@\(.refreshRate) \(.x)x\(.y) \(.scale) \(.transform)"' 2>/dev/null || true)
     if [ -n "$info" ] && [ "$info" != "null" ]; then
-      printf '%s\n' "$info" > "$STATE_FILE"
+      printf '%s\n' "$info${2:+ ${2% }}" > "$STATE_FILE"
       return 0
     fi
   fi
@@ -192,7 +223,13 @@ handle_close() {
         inhibit_lid
         # Saved only while the panel is on, so a second close cannot overwrite it.
         if is_monitor_enabled "$internal"; then
-          save_internal_state "$internal"
+          local mirrors ext
+          mirrors=$(get_mirrors_of "$internal" | tr '\n' ' ')
+          save_internal_state "$internal" "$mirrors"
+          # Duplicates take over as screens of their own while the panel is still on.
+          for ext in $mirrors; do
+            detach_mirror "$ext"
+          done
           set_monitor "output = \"$internal\", disabled = true"
         fi
         ;;
@@ -222,12 +259,21 @@ handle_open() {
   reconcile_inhibitor
 
   if [ -s "$STATE_FILE" ]; then
-    read -r mode pos scale transform < "$STATE_FILE" || true
+    local mode="" pos="" scale="" transform="" mirrors="" ext
+    read -r mode pos scale transform mirrors < "$STATE_FILE" || true
     if [ -n "$mode" ] && [ -n "$pos" ] && [ -n "$scale" ]; then
       # A rotated panel, as some small laptops have, comes back the right way up.
       set_monitor "output = \"$internal\", disabled = false, mode = \"$mode\", position = \"$pos\", scale = \"$scale\", transform = ${transform:-0}"
     else
       set_monitor "output = \"$internal\", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\""
+    fi
+    # The outputs that duplicated the panel before the lid closed do so again once it is back.
+    if [ -n "$mirrors" ]; then
+      wait_monitor_disabled "$internal" false || true
+      sleep 0.3
+      for ext in $mirrors; do
+        set_monitor "output = \"$ext\", mirror = \"$internal\""
+      done
     fi
     rm -f "$STATE_FILE"
   elif ! is_monitor_enabled "$internal"; then
@@ -268,6 +314,11 @@ handle_monitors_changed() {
   fi
 }
 
+# One run at a time: turning outputs off and on fires the monitor events that start this script again.
+mkdir -p "$STATE_DIR"
+exec 9>"$STATE_DIR/clamshell.lock"
+flock -w 30 9 || exit 0
+
 case "${1:-check}" in
   close)
     handle_close
@@ -284,8 +335,15 @@ case "${1:-check}" in
   monitors)
     handle_monitors_changed
     ;;
+  detach)
+    # For the display settings, before they stop an output duplicating another.
+    shift
+    for output in "$@"; do
+      ! is_mirror "$output" || detach_mirror "$output"
+    done
+    ;;
   *)
-    echo "Usage: $0 {close|open|check|reconcile|monitors}" >&2
+    echo "Usage: $0 {close|open|check|reconcile|monitors|detach <output>...}" >&2
     exit 1
     ;;
 esac
