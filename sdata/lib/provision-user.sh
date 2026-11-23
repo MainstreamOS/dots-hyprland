@@ -471,7 +471,7 @@ provision_desktop() {  # $1 = user
     local _ime_env _ime_execs _ime_profile _ime_layout _gtkv _gtkini mime
     local EXECS_LUA SYSTEMD_USER_DIR AUTOSTART_DIR
     local IMAGE_TYPES VIDEO_TYPES AUDIO_TYPES TEXT_TYPES WEB_TYPES DOCUMENT_TYPES
-    local _lang _gs_script
+    local _lang _gs_script _gs_err _gs_line
 
     # The console keymap, read here rather than passed in: the variable that
     # used to carry it belonged to the installer.
@@ -732,27 +732,40 @@ dconf update 2>/dev/null || true
 # session bus address pointing there leaves dconf unable to commit and every
 # write below silently lost. dbus-run-session gives the batch a bus of its own;
 # the keys land in the user's own dconf database either way. The batch goes
-# through a file so the quoting survives two levels of shell.
+# through a file so the quoting survives two levels of shell, and fails when
+# any one write does.
 _gs_script="$(mktemp)"
+_gs_err="$(mktemp)"
 cat > "$_gs_script" << 'GSETTINGSEOF'
-gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
-gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark'
-gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
-gsettings set org.gnome.desktop.interface font-name 'Google Sans Flex Medium 11 @opsz=11,wght=500'
-gsettings set org.gnome.desktop.interface document-font-name 'Readex Pro 11'
-gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrains Mono NF 11'
-gsettings set org.gnome.desktop.interface cursor-theme 'Bibata-Modern-Classic'
-gsettings set org.gnome.desktop.interface cursor-size 24
-gsettings set org.gnome.nautilus.preferences default-folder-viewer 'icon-view'
-gsettings set org.gnome.nautilus.preferences show-hidden-files false
+rc=0
+s() { gsettings set "$@" || rc=1; }
+s org.gnome.desktop.interface color-scheme 'prefer-dark'
+s org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark'
+s org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+s org.gnome.desktop.interface font-name 'Google Sans Flex Medium 11 @opsz=11,wght=500'
+s org.gnome.desktop.interface document-font-name 'Readex Pro 11'
+s org.gnome.desktop.interface monospace-font-name 'JetBrains Mono NF 11'
+s org.gnome.desktop.interface cursor-theme 'Bibata-Modern-Classic'
+s org.gnome.desktop.interface cursor-size 24
+# Files is one of the apps chosen in the installer, which installs them after
+# this runs, so its settings may not exist. The two values are its defaults.
+if gsettings list-schemas | grep -qx org.gnome.nautilus.preferences; then
+    s org.gnome.nautilus.preferences default-folder-viewer 'icon-view'
+    s org.gnome.nautilus.preferences show-hidden-files false
+fi
+exit "$rc"
 GSETTINGSEOF
 chmod 0644 "$_gs_script"
-if su -s /bin/bash "$u" -c "dbus-run-session -- bash '$_gs_script'" 2>/dev/null; then
+if su -s /bin/bash "$u" -c "dbus-run-session -- bash '$_gs_script'" 2>"$_gs_err"; then
     _pu_log "desktop settings written for $u"
 else
     _pu_warn "desktop settings could not be written for $u"
+    # What the failing write said, without the session bus's own chatter.
+    grep -v '^dbus-daemon\[' "$_gs_err" | head -n 20 | while IFS= read -r _gs_line; do
+        _pu_log "  $_gs_line"
+    done
 fi
-rm -f "$_gs_script"
+rm -f "$_gs_script" "$_gs_err"
 }
 
 # The order matters. Groups first because they are cheap and root-only, then
