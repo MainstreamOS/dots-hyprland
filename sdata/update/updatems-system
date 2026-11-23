@@ -877,6 +877,27 @@ if [[ ! -e "$TPM_STAMP" && -f "/usr/lib/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" 
     fi
 fi
 
+# ── Group shadow file ──────────────────────────────────────────────────────
+# Older images defined these groups without an entry in /etc/gshadow, and the
+# install kept the gap, so the daily shadow.service check fails. Setting a
+# group's members to the list it already has makes gpasswd write the missing
+# entry and nothing else; a group that has one is skipped.
+if [[ -f /etc/gshadow && ! -L /etc/gshadow ]]; then
+    _gs_added=()
+    for _g in wheel network audio video storage lp input power; do
+        _gs_line=$(grep -m1 "^$_g:" /etc/group 2>/dev/null) || continue
+        grep -q "^$_g:" /etc/gshadow 2>/dev/null && continue
+        if gpasswd -M "${_gs_line##*:}" "$_g" >/dev/null 2>&1; then
+            _gs_added+=("$_g")
+        else
+            warn "$(tf "Could not add the group %s to the group shadow file" "$_g")"
+        fi
+    done
+    if (( ${#_gs_added[@]} > 0 )); then
+        ok "$(tf "Added the missing group shadow entries for %s" "${_gs_added[*]}")"
+    fi
+fi
+
 # ── Install leftovers ──────────────────────────────────────────────────────
 # The finalize step that sweeps these runs at install time only, so a machine
 # installed before it covered them is still carrying the dotfiles archive the

@@ -3477,5 +3477,7 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Online | Google's model\nGoogle's Gemini models with a free tier: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Signed in. The plan models are in the picker now: type /model to choose between %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Signed in. %1 are in the picker now. Adjust thinking level with /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.",
+  "Could not add the group %s to the group shadow file": "Could not add the group %s to the group shadow file",
+  "Added the missing group shadow entries for %s": "Added the missing group shadow entries for %s"
 }
