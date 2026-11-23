@@ -640,6 +640,25 @@ nvidia_module_present() {
     _gpu_modinfo "$k" nvidia || _gpu_module_file "$k"
 }
 
+# ── gpu_installed_kernels / gpu_kernels_missing_nvidia ──────────────────────
+# Every kernel this system can boot, one "<release> <package>" per line: a
+# module tree with a kernel image and the name of the package that owns it.
+gpu_installed_kernels() {
+    local d
+    while IFS= read -r d; do
+        [[ -f "$d/vmlinuz" && -r "$d/pkgbase" ]] || continue
+        printf '%s %s\n' "$(basename "$d")" "$(<"$d/pkgbase")"
+    done < <(_gpu_module_dirs | sed 's|/*$||' | sort -V)
+}
+# The ones among them with no loadable nvidia module, in the same form.
+gpu_kernels_missing_nvidia() {
+    local rel base
+    while read -r rel base; do
+        [[ -n "$rel" ]] || continue
+        nvidia_module_present "$rel" || printf '%s %s\n' "$rel" "$base"
+    done < <(gpu_installed_kernels)
+}
+
 # ── nvidia_write_qs_hint <user_home> ────────────────────────────────────────
 # Ship the QS_DISABLE_DMABUF escape hatch as a commented, opt-in line. It cures
 # the NVIDIA EGL dmabuf-import gray/blank Quickshell surface but forces the
