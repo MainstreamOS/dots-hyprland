@@ -37,6 +37,12 @@ _gpu_installed_nvidia_branch() {
     done
     printf ''
 }
+# Whether the DKMS build of the open driver is what is installed. It provides
+# the name nvidia-open, so only an exact answer counts.
+_gpu_installed_nvidia_open_dkms() {
+    command -v pacman >/dev/null 2>&1 || return 1
+    [[ "$(pacman -Qq nvidia-open-dkms 2>/dev/null)" == nvidia-open-dkms ]]
+}
 
 # ── gpu_detect ──────────────────────────────────────────────────────────────
 # Single detection pass. Exports (true/false unless noted):
@@ -220,7 +226,11 @@ gpu_classify_nvidia_driver() {
     case "$NVIDIA_GEN" in
         turing)
             NVIDIA_DRIVER_FAMILY=nvidia-open
-            NVIDIA_REPO_PKGS=(nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils libva-nvidia-driver libva-utils) ;;
+            NVIDIA_REPO_PKGS=(nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils libva-nvidia-driver libva-utils)
+            # The DKMS build conflicts with the prebuilt one, and pacman refuses
+            # an unattended request for the prebuilt name on a machine that has
+            # the DKMS build. The same family, under the package that is here.
+            if _gpu_installed_nvidia_open_dkms; then NVIDIA_REPO_PKGS[0]=nvidia-open-dkms; fi ;;
         maxwell)
             _gpu_frozen_family 580xx ;;
         kepler)

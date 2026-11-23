@@ -881,6 +881,8 @@ rm -rf "$KDIR"
 # The write-seam sections above re-source the lib, which restores the real
 # pacman probe; pin the fixture again so these cases stay hermetic.
 _gpu_installed_nvidia_branch() { printf '%s' "$FIX_INSTALLED_BRANCH"; }
+FIX_OPEN_DKMS=no
+_gpu_installed_nvidia_open_dkms() { [[ "$FIX_OPEN_DKMS" == yes ]]; }
 classify() { NVIDIA_GEN="$1"; FIX_INSTALLED_BRANCH="$2"; CASES=$((CASES + 1)); gpu_classify_nvidia_driver; }
 
 # Fresh systems: nothing installed, the generation decides.
@@ -906,6 +908,16 @@ classify fermi 390xx;   chk cls-installed-390 NVIDIA_DRIVER_FAMILY nvidia-390xx
 # An unrecognized probe answer must not zero the result; the map still runs.
 classify maxwell bogus; chk cls-installed-bogus NVIDIA_DRIVER_FAMILY nvidia-580xx
 FIX_INSTALLED_BRANCH=""
+
+# The DKMS build of the open driver is installed: the family is the same and
+# the package named is the one that is there, since pacman refuses the
+# prebuilt name on such a machine.
+FIX_OPEN_DKMS=yes
+classify turing "";     chk cls-open-dkms-family NVIDIA_DRIVER_FAMILY nvidia-open
+chk_str cls-open-dkms-pkgs "${NVIDIA_REPO_PKGS[*]}" "nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils libva-nvidia-driver libva-utils"
+classify turing 580xx;  chk cls-open-dkms-frozen-wins NVIDIA_DRIVER_FAMILY nvidia-580xx
+classify prefermi "";   chk_str cls-open-dkms-nouveau "${NVIDIA_REPO_PKGS[0]}" xf86-video-nouveau
+FIX_OPEN_DKMS=no
 
 # ── resume=: only the swap in use, only beside a plain root ─────────────────
 # Hibernation writes all of memory to the swap, so a plain swap beside an
