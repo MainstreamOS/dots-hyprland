@@ -342,8 +342,31 @@ case "${1:-check}" in
       ! is_mirror "$output" || detach_mirror "$output"
     done
     ;;
+  off)
+    # For the display settings, before a reload that turns off an output others stay set to
+    # duplicate: the reload would attach them to it for a moment and leave no screen at all.
+    shift
+    for output in "$@"; do
+      is_monitor_enabled "$output" || continue
+      set_monitor "output = \"$output\", disabled = true"
+      wait_monitor_disabled "$output" true || true
+    done
+    ;;
+  on)
+    # For the display settings, before a reload that turns $1 on together with its duplicates.
+    # They let go of it first, so they stay screens until clients have bound the one coming on.
+    shift
+    if [ -n "${1:-}" ] && ! is_monitor_enabled "$1"; then
+      for output in "${@:2}"; do
+        set_monitor "output = \"$output\", mirror = \"\""
+      done
+      set_monitor "output = \"$1\", disabled = false"
+      wait_monitor_disabled "$1" false || true
+      sleep 0.3
+    fi
+    ;;
   *)
-    echo "Usage: $0 {close|open|check|reconcile|monitors|detach <output>...}" >&2
+    echo "Usage: $0 {close|open|check|reconcile|monitors|detach <output>...|off <output>...|on <output> [<duplicate>...]}" >&2
     exit 1
     ;;
 esac

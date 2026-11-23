@@ -43,6 +43,8 @@ ContentPage {
     // see" — Component.onDestruction triggers the revert too.
     property string lastReadMonitorsConf: ""
     property string revertSnapshot: ""
+    // Commands a revert of the last Apply runs before it writes the file.
+    property var revertSteps: []
     property bool revertPending: false
     property int revertSecondsRemaining: 0
     // Set true in applyAllChanges, consumed by reloadProc.onExited
@@ -668,19 +670,44 @@ print(json.dumps(result))
             const source = pendingChanges[name]?.mirror ?? "";
             return source === "" || pendingChanges[source]?.enabled === false;
         });
-        const detach = [`${Quickshell.env("HOME")}/.config/hypr/hyprland/scripts/clamshell.sh`, "detach"].concat(standalone);
-        let py =
-            "import subprocess\n" +
-            "try:\n" +
-            "    subprocess.run(" + JSON.stringify(detach) + ")\n" +
-            "except OSError:\n" +
-            "    pass\n" +
+        const steps = [[lidScript, "detach"].concat(standalone)];
+        // Reloading with an output newly off and others still set to duplicate it, or newly on
+        // together with its duplicates, leaves clients without any screen for a moment. Such an
+        // output is turned off or on before the reload, here and in a revert.
+        const duplicatesAfter = source => monitors.map(mon => mon.name).filter(name =>
+            pendingChanges[name]?.enabled && pendingChanges[name]?.mirror === source);
+        const duplicatesBefore = source => monitors.filter(mon => !mon.disabled && confMirror[mon.name] === source).map(mon => mon.name);
+        const revert = [];
+        monitors.forEach(mon => {
+            const on = !!pendingChanges[mon.name]?.enabled;
+            if (on === !mon.disabled) return;
+            const after = duplicatesAfter(mon.name);
+            const before = duplicatesBefore(mon.name);
+            if (after.length > 0) steps.push(on ? [lidScript, "on", mon.name].concat(after) : [lidScript, "off", mon.name]);
+            if (before.length === 0) return;
+            if (on) revert.push([lidScript, "detach"].concat(before), [lidScript, "off", mon.name]);
+            else revert.push([lidScript, "on", mon.name].concat(before));
+        });
+        revertSteps = revert;
+        let py = stepsScript(steps) +
             "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
             "content = '" + escaped + "'\n" +
             "open(path, 'w').write(content)\n";
         writeProc.command = ["python3", "-c", py];
         writeProc.running = false;
         writeProc.running = true;
+    }
+
+    readonly property string lidScript: `${Quickshell.env("HOME")}/.config/hypr/hyprland/scripts/clamshell.sh`
+
+    // Python that runs each command in turn before the file is written; a missing script is skipped.
+    function stepsScript(steps) {
+        return "import subprocess\n" +
+            "for step in " + JSON.stringify(steps) + ":\n" +
+            "    try:\n" +
+            "        subprocess.run(step)\n" +
+            "    except OSError:\n" +
+            "        pass\n";
     }
 
     // User clicked "Keep" on the revert banner — accept the new config.
@@ -708,7 +735,7 @@ print(json.dumps(result))
             .replace(/\\/g, "\\\\")
             .replace(/'/g, "\\'")
             .replace(/\n/g, "\\n");
-        let py =
+        let py = stepsScript(revertSteps) +
             "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
             "content = '" + escaped + "'\n" +
             "open(path, 'w').write(content)\n";
@@ -728,8 +755,7 @@ print(json.dumps(result))
             .replace(/\\/g, "\\\\")
             .replace(/'/g, "\\'")
             .replace(/\n/g, "\\n");
-        let py =
-            "import subprocess\n" +
+        let py = stepsScript(revertSteps) +
             "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
             "content = '" + escaped + "'\n" +
             "open(path, 'w').write(content)\n" +
