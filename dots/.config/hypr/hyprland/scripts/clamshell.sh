@@ -189,6 +189,51 @@ detach_mirror() {
   sleep 0.3
 }
 
+# The numbered workspace $1 shows, when it has windows on it.
+workspace_in_view_on() {
+  local id
+  id=$(hyprctl monitors all -j 2>/dev/null | jq -r --arg name "$1" '.[] | select(.name == $name) | .activeWorkspace.id // empty' 2>/dev/null || true)
+  [[ "$id" =~ ^[1-9][0-9]*$ ]] || return 0
+  hyprctl workspaces -j 2>/dev/null | jq -r --argjson id "$id" '.[] | select(.id == $id and .windows > 0) | .id' 2>/dev/null || true
+}
+
+# A workspace that moved to another screen stays out of view there. Workspace $1 is shown on
+# the screen that received it, unless that screen has windows of its own in view.
+bring_workspace_into_view() {
+  local workspaces monitors
+  [ -n "${1:-}" ] || return 0
+  workspaces=$(hyprctl workspaces -j 2>/dev/null) && monitors=$(hyprctl monitors -j 2>/dev/null) || return 0
+  jq -n -e --argjson id "$1" --argjson workspaces "$workspaces" --argjson monitors "$monitors" '
+    ($workspaces[] | select(.id == $id) | .monitor) as $screen
+    | ($monitors[] | select(.name == $screen) | .activeWorkspace.id) as $shown
+    | $shown != $id and ([$workspaces[] | select(.id == $shown) | .windows] | add // 0) == 0' >/dev/null 2>&1 || return 0
+  hyprctl dispatch "hl.dsp.focus({ workspace = $1 })" >/dev/null 2>&1 || true
+}
+
+# The keyboard stays with the window that had it, even on a workspace no screen shows any
+# more, so typing would go to a window nobody sees; and a screen that hands its workspace
+# back is left with no window focused. Focus moves to the last used window that is in view.
+focus_a_window_in_view() {
+  local monitors workspace target screen
+  monitors=$(hyprctl monitors -j 2>/dev/null) || return 0
+  workspace=$(hyprctl activewindow -j 2>/dev/null | jq -r '.workspace.name // empty' 2>/dev/null || true)
+  if [ -n "$workspace" ]; then
+    jq -e --arg ws "$workspace" 'any(.[]; .disabled != true and (.mirrorOf // "none") == "none"
+      and (.activeWorkspace.name == $ws or .specialWorkspace.name == $ws))' <<<"$monitors" >/dev/null 2>&1 && return 0
+  fi
+  target=$(hyprctl clients -j 2>/dev/null | jq -r --argjson monitors "$monitors" '
+    [$monitors[] | select(.disabled != true and (.mirrorOf // "none") == "none") | .activeWorkspace.id] as $shown
+    | [.[] | select(.mapped and (.hidden | not) and (.workspace.id as $id | $shown | index($id)))]
+    | sort_by(.focusHistoryID) | .[0].address // empty' 2>/dev/null || true)
+  if [ -n "$target" ]; then
+    hyprctl dispatch "hl.dsp.focus({ window = \"address:$target\" })" >/dev/null 2>&1 || true
+  elif [ -n "$workspace" ]; then
+    screen=$(jq -r 'map(select(.disabled != true and (.mirrorOf // "none") == "none"))
+      | (map(select(.focused)) + .)[0].name // empty' <<<"$monitors" 2>/dev/null || true)
+    [ -z "$screen" ] || hyprctl dispatch "hl.dsp.focus({ monitor = \"$screen\" })" >/dev/null 2>&1 || true
+  fi
+}
+
 save_internal_state() {
   local internal="$1"
   mkdir -p "$STATE_DIR"
@@ -223,14 +268,18 @@ handle_close() {
         inhibit_lid
         # Saved only while the panel is on, so a second close cannot overwrite it.
         if is_monitor_enabled "$internal"; then
-          local mirrors ext
+          local mirrors ext in_view
           mirrors=$(get_mirrors_of "$internal" | tr '\n' ' ')
+          in_view=$(workspace_in_view_on "$internal")
           save_internal_state "$internal" "$mirrors"
           # Duplicates take over as screens of their own while the panel is still on.
           for ext in $mirrors; do
             detach_mirror "$ext"
           done
           set_monitor "output = \"$internal\", disabled = true"
+          wait_monitor_disabled "$internal" true || true
+          bring_workspace_into_view "$in_view"
+          focus_a_window_in_view
         fi
         ;;
       suspend)
@@ -259,8 +308,9 @@ handle_open() {
   reconcile_inhibitor
 
   if [ -s "$STATE_FILE" ]; then
-    local mode="" pos="" scale="" transform="" mirrors="" ext
+    local mode="" pos="" scale="" transform="" mirrors="" ext in_view=""
     read -r mode pos scale transform mirrors < "$STATE_FILE" || true
+    [ -z "$mirrors" ] || in_view=$(workspace_in_view_on "${mirrors%% *}")
     if [ -n "$mode" ] && [ -n "$pos" ] && [ -n "$scale" ]; then
       # A rotated panel, as some small laptops have, comes back the right way up.
       set_monitor "output = \"$internal\", disabled = false, mode = \"$mode\", position = \"$pos\", scale = \"$scale\", transform = ${transform:-0}"
@@ -274,7 +324,18 @@ handle_open() {
       for ext in $mirrors; do
         set_monitor "output = \"$ext\", mirror = \"$internal\""
       done
+      # Their workspaces go to the panel, which shows what was on them.
+      for _ in $(seq 60); do
+        is_mirror "${mirrors%% *}" && break
+        sleep 0.05
+      done
+      bring_workspace_into_view "$in_view"
+    else
+      # The panel takes its workspaces back a moment after it is on.
+      wait_monitor_disabled "$internal" false || true
+      sleep 0.3
     fi
+    focus_a_window_in_view
     rm -f "$STATE_FILE"
   elif ! is_monitor_enabled "$internal"; then
     set_monitor "output = \"$internal\", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\""
