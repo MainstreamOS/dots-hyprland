@@ -53,6 +53,7 @@ ROOT_FILES=(
     "0644|sdata/lib/venv-common.sh|/usr/local/lib/mainstream-venv-common.sh"
     "0644|sdata/lib/mac-config.sh|/usr/local/lib/mac-config.sh"
     "0644|sdata/lib/gpu-config.sh|/usr/local/lib/gpu-config.sh"
+    "0644|sdata/lib/gpu-driver-install.sh|/usr/local/lib/gpu-driver-install.sh"
     "0755|scripts/gpu-drivers/gpu-drivers|/usr/local/bin/gpu-drivers"
     "0755|sdata/provision/dotfiles-first-login|/usr/local/bin/dotfiles-first-login"
     "0755|sdata/polkit/user-manager|/usr/local/bin/user-manager"

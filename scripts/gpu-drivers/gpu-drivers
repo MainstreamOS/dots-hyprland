@@ -33,6 +33,15 @@ if [[ ! -r "$GPU_LIB" ]]; then
 fi
 # shellcheck source=/dev/null
 source "$GPU_LIB"
+# The per-kernel module steps live beside the library. An image that does not
+# carry them yet still installs the packages below.
+GPU_INSTALL_LIB="${GPU_LIB%/*}/gpu-driver-install.sh"
+have_kernel_steps=false
+if [[ -r "$GPU_INSTALL_LIB" ]] && declare -F gpu_installed_kernels >/dev/null; then
+    # shellcheck source=/dev/null
+    source "$GPU_INSTALL_LIB"
+    have_kernel_steps=true
+fi
 
 run() { echo "+ $*"; "$@"; }
 
@@ -78,15 +87,24 @@ if [[ $HAS_NVIDIA == true ]]; then
         [[ "$NVIDIA_DRIVER_FAMILY" != nouveau ]] && repo=("${kernel_pkgs[@]}" "${repo[@]}" egl-wayland) || true
         run pacman -S --needed --noconfirm "${repo[@]}" || fail=1
         (( ${#lib32[@]} > 0 )) && { run pacman -S --needed --noconfirm "${lib32[@]}" || true; }
+        if [[ $have_kernel_steps == true ]]; then
+            gpu_nvidia_ensure_modules || fail=1
+        fi
     else
         # Frozen legacy branch (nvidia-580xx/470xx/390xx) from [mainstream]; the
         # -dkms package builds against the kernel, so headers + dkms come first.
-        legacy_pre=("${kernel_pkgs[@]}")
-        [[ " ${legacy_pre[*]} " == *" $kernel_headers "* ]] || legacy_pre+=("$kernel_headers")
-        run pacman -S --needed --noconfirm "${legacy_pre[@]}" dkms || fail=1
+        if [[ $have_kernel_steps == true ]]; then
+            gpu_nvidia_kernel_toolchain || fail=1
+        else
+            legacy_pre=("${kernel_pkgs[@]}")
+            [[ " ${legacy_pre[*]} " == *" $kernel_headers "* ]] || legacy_pre+=("$kernel_headers")
+            run pacman -S --needed --noconfirm "${legacy_pre[@]}" dkms || fail=1
+        fi
         if ! run pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
             echo "Legacy NVIDIA branch $NVIDIA_DRIVER_FAMILY unavailable — installing nouveau instead."
             run pacman -S --needed --noconfirm xf86-video-nouveau mesa || fail=1
+        elif [[ $have_kernel_steps == true ]]; then
+            gpu_nvidia_ensure_modules || fail=1
         fi
     fi
     [[ $IS_HYBRID == true ]] && { run pacman -S --needed --noconfirm nvidia-prime || true; }
@@ -136,8 +154,16 @@ pacman -T vulkan-driver >/dev/null 2>&1 || { run pacman -S --needed --noconfirm 
 pacman -T lib32-vulkan-driver >/dev/null 2>&1 || { run pacman -S --needed --noconfirm lib32-vulkan-swrast || true; }
 
 echo
+# This run is the whole repair, so the failure note on disk is replaced by what
+# this run found, and removed when it found nothing.
+if [[ $have_kernel_steps == true ]]; then
+    if (( fail != 0 && ${#GPU_FAILURES[@]} == 0 )); then
+        note_failure "gpu-drivers: a driver package could not be installed."
+    fi
+    gpu_driver_run_report || true
+fi
 if (( fail != 0 )); then
-    echo "gpu-drivers: one or more required driver packages failed — see the log above." >&2
+    echo "gpu-drivers: a driver package or a kernel module is missing. See the lines marked GPU: above." >&2
     exit 1
 fi
 echo "Done. Reboot to load the new GPU drivers."

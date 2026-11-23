@@ -12,6 +12,7 @@ ms_section "Configuring..."
 # host's existing boot setup (no UKI on the ESP), so ESP size doesn't constrain
 # the initramfs.
 source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
+source "${REPO_ROOT}/sdata/lib/gpu-driver-install.sh"
 source "${REPO_ROOT}/sdata/lib/mac-config.sh"
 source "${REPO_ROOT}/sdata/lib/wifi-country.sh"
 GPU_SUDO=sudo
@@ -304,6 +305,7 @@ function install_optional_gpu_packages(){
 function setup_gpu_drivers(){
   local vendors
   x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/gpu-config.sh" /usr/local/lib/gpu-config.sh
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/gpu-driver-install.sh" /usr/local/lib/gpu-driver-install.sh
   x sudo install -m 755 "${REPO_ROOT}/scripts/gpu-drivers/gpu-drivers" /usr/local/bin/gpu-drivers
   if sudo visudo -cf "${REPO_ROOT}/scripts/gpu-drivers/zz-gpu-drivers" >/dev/null 2>&1; then
     x sudo install -m 0440 -o root -g root "${REPO_ROOT}/scripts/gpu-drivers/zz-gpu-drivers" /etc/sudoers.d/zz-gpu-drivers
@@ -346,10 +348,13 @@ function setup_gpu_drivers(){
               x sudo pacman -S --needed --noconfirm "${_repo[@]}"
               # 32-bit GL needs the multilib repo; best-effort so a non-multilib host doesn't abort the install.
               [[ ${#_lib32[@]} -gt 0 ]] && install_optional_gpu_packages "${_lib32[@]}"
+              if [[ "$NVIDIA_DRIVER_FAMILY" == nvidia-open ]]; then
+                gpu_nvidia_ensure_modules || flush_failures
+              fi
             else
               # Frozen legacy branch (nvidia-580xx/470xx/390xx) — only present if [mainstream] prebuilt it.
-              # The *-dkms packages build against the kernel, so linux-headers + dkms must be present first.
-              x sudo pacman -S --needed --noconfirm linux-headers dkms
+              # The *-dkms packages build against the kernel, so every installed kernel's headers + dkms must be present first.
+              gpu_nvidia_kernel_toolchain || true
               # Try the legacy branch; if unavailable, fall back to nouveau and leave a breadcrumb.
               if sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
                 # These branches ship no VA-API driver of their own, so every
@@ -359,6 +364,7 @@ function setup_gpu_drivers(){
                   nvidia-580xx|nvidia-470xx)
                     try sudo pacman -S --needed --noconfirm libva-nvidia-driver libva-utils ;;
                 esac
+                gpu_nvidia_ensure_modules || flush_failures
               else
                 # A legacy edition boots on a branch the online repos do not
                 # carry, so the resolve failing is the normal repair case
@@ -366,6 +372,7 @@ function setup_gpu_drivers(){
                 # the repair; nouveau is only for a machine with nothing.
                 if pacman -Q "${NVIDIA_LOCAL_PKGS[0]}" >/dev/null 2>&1; then
                   echo -e "${STY_CYAN}[$0]: ${NVIDIA_DRIVER_FAMILY} is already installed; keeping it.${STY_RST}"
+                  gpu_nvidia_ensure_modules || flush_failures
                 else
                   echo -e "${STY_YELLOW}[$0]: Legacy NVIDIA branch ${NVIDIA_DRIVER_FAMILY} unavailable — falling back to nouveau.${STY_RST}"
                   x sudo pacman -S --needed --noconfirm xf86-video-nouveau mesa
