@@ -175,6 +175,12 @@ hl.config({
     animations = {
         enabled = false,
     },
+    -- Hyprland's own "what is new" and donation windows would open over the
+    -- login screen after an upgrade.
+    ecosystem = {
+        no_update_news  = true,
+        no_donation_nag = true,
+    },
 })
 
 hl.window_rule({ match = { class = "^(sddm-greeter-qt6)$" }, fullscreen = true })
