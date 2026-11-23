@@ -485,7 +485,7 @@ Item {
                     readonly property int workspaceId: root.workspaceGroup * root.workspacesShown + index + 1
                     readonly property vector4d radii: root.workspaceRadii(root.getWsColumn(workspaceId), root.getWsRow(workspaceId))
                     visible: hasPreviews && root.windows.some(window => window.mapped && !window.hidden && window.workspace.id === workspaceId)
-                    screenName: root.screen.name
+                    screenName: root.screen?.name ?? ""
                     previewScale: root.scale
                     originX: root.previewReserved[0]
                     originY: root.previewReserved[1]

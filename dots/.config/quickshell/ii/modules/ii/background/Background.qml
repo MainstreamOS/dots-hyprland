@@ -39,7 +39,7 @@ Variants {
         required property var modelData
 
         // Hide when fullscreen
-        property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(workspace => workspace.monitor && workspace.monitor.name == monitor.name)
+        property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(workspace => workspace.monitor && workspace.monitor.name == monitor?.name)
         property bool hasFullscreenWindow: HyprlandData.activeWorkspaceHasFullscreen(modelData.name)
         visible: GlobalStates.screenLocked || !hasFullscreenWindow || !Config?.options.background.hideWhenFullscreen
 
@@ -553,7 +553,7 @@ Variants {
                 smooth: true
                 mipmap: true
 
-                property int effectiveWorkspaceId: GlobalStates.screenLocked ? 1 : (bgRoot.monitor.activeWorkspace?.id ?? 1)
+                property int effectiveWorkspaceId: GlobalStates.screenLocked ? 1 : (bgRoot.monitor?.activeWorkspace?.id ?? 1)
                 property int workspaceIndex: effectiveWorkspaceId - 1
                 property real middleFraction: 0.5
                 property real fraction: {

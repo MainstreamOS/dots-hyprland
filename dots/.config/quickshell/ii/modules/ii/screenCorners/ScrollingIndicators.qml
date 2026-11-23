@@ -42,7 +42,7 @@ Scope {
         Scope {
             id: output
             required property ShellScreen modelData
-            readonly property var monitor: HyprlandData.monitors.find(m => m.name === modelData.name)
+            readonly property var monitor: HyprlandData.monitors.find(m => m.name === modelData?.name)
             readonly property var workspace: HyprlandData.workspaceById[monitor?.activeWorkspace?.id]
             readonly property bool enabled: root.enabled && monitor?.dpmsStatus !== false
                 && !HyprlandData.isSpecialWorkspace(monitor?.specialWorkspace) && ["scrolling", "monocle"].includes(workspace?.tiledLayout) && !workspace.hasfullscreen
@@ -53,7 +53,7 @@ Scope {
             readonly property var reserved: monitor?.reserved ?? [0, 0, 0, 0]
             readonly property var indicatorInsets: {
                 const insets = reserved.slice();
-                const dock = GlobalStates.dockWindows[modelData.name];
+                const dock = GlobalStates.dockWindows[modelData?.name];
                 if (dock?.visible && dock.reveal) {
                     const edge = dock.dockEdge === "left" ? 0 : dock.dockEdge === "right" ? 2 : -1;
                     if (edge >= 0) insets[edge] = Math.max(insets[edge],
@@ -63,8 +63,8 @@ Scope {
             }
             readonly property real left: (monitor?.x ?? 0) + reserved[0]
             readonly property real top: (monitor?.y ?? 0) + reserved[1]
-            readonly property real right: (monitor?.x ?? 0) + modelData.width - reserved[2]
-            readonly property real bottom: (monitor?.y ?? 0) + modelData.height - reserved[3]
+            readonly property real right: (monitor?.x ?? 0) + (modelData?.width ?? 0) - reserved[2]
+            readonly property real bottom: (monitor?.y ?? 0) + (modelData?.height ?? 0) - reserved[3]
             readonly property var nextWindows: {
                 const targets = [null, null, null, null];
                 const scores = [Infinity, Infinity, Infinity, Infinity];
@@ -134,11 +134,11 @@ Scope {
                     anchors { top: true; left: true }
                     margins {
                         left: indicator.modelData === 0 ? output.indicatorInsets[0] + 4 - indicator.shadowPadding
-                            : indicator.modelData === 1 ? output.modelData.width - output.indicatorInsets[2] - indicator.width - 4 + indicator.shadowPadding
-                            : (output.modelData.width + output.reserved[0] - output.reserved[2] - indicator.width) / 2
+                            : indicator.modelData === 1 ? (output.modelData?.width ?? 0) - output.indicatorInsets[2] - indicator.width - 4 + indicator.shadowPadding
+                            : ((output.modelData?.width ?? 0) + output.reserved[0] - output.reserved[2] - indicator.width) / 2
                         top: indicator.modelData === 2 ? output.reserved[1] + 4 - indicator.shadowPadding
-                            : indicator.modelData === 3 ? output.modelData.height - output.reserved[3] - indicator.height - 4 + indicator.shadowPadding
-                            : (output.modelData.height + output.reserved[1] - output.reserved[3] - indicator.height) / 2
+                            : indicator.modelData === 3 ? (output.modelData?.height ?? 0) - output.reserved[3] - indicator.height - 4 + indicator.shadowPadding
+                            : ((output.modelData?.height ?? 0) + output.reserved[1] - output.reserved[3] - indicator.height) / 2
                     }
                     exclusionMode: ExclusionMode.Ignore
                     exclusiveZone: -1
