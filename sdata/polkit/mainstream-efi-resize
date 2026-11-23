@@ -4,7 +4,8 @@
 # The original boot partition stays bootable until the replacement is verified.
 #
 # Usage: mainstream-efi-resize probe [target_mb] | plan | resize <target_mb> | recover | cancel,
-# printing JSON progress lines.
+# printing JSON progress lines. "mirror", run by a boot hook, brings the old partition's boot files
+# in step while it waits to be retired.
 
 set -euo pipefail
 export LC_ALL=C
@@ -910,6 +911,63 @@ retire_old_esp() {
     hand_over_esp_id "$mp" "$old_dev" "$dev" "$guid"
 }
 
+# While the old partition waits to be retired the firmware may still start it, and boot updates
+# only reach the one in use. This copies Mainstream's loaders, boot images and menu over to the old
+# one after such an update. Snapshot copies of boot images stay behind, as the old partition is the
+# small one. Runs from a boot hook, under the boot lock its caller holds, and never fails that caller.
+mirror_old_esp() {
+    local mp old guid uuid loader boot_id misses dev old_dev o mid problem=""
+    local -a ours=(--include='/EFI/' --include='/EFI/limine/' --include='/EFI/limine/**'
+        --include='/EFI/Linux/' --include='/EFI/Linux/mainstream_*.efi')
+    read_retire_state || return 0
+    exec 8>>"$RESIZE_LOCK" && flock -s -n 8 || return 0
+    dev="$(blkid -t "PARTUUID=$guid" -o device 2>/dev/null || true)"
+    [[ -b "$dev" && "$(esp_mount_source "$mp")" == "$dev" && -f "$mp/limine.conf" ]] || return 0
+    old_dev="$(blkid -t "PARTUUID=$old" -o device 2>/dev/null || true)"
+    mkdir -p /run/mainstream 2>/dev/null || true
+    if [[ ! -b "$old_dev" || "$old_dev" == "$dev" ]] || ! is_esp_partition "$old_dev" \
+        || findmnt -n -S "$old_dev" >/dev/null 2>&1; then
+        problem="could not be identified or is mounted"
+    elif ! o="$(mktemp -d /run/mainstream/old-esp.XXXXXX 2>/dev/null)" \
+        || ! mount -t vfat -o umask=0077 "$old_dev" "$o" 2>/dev/null; then
+        [[ -z "${o:-}" ]] || rmdir "$o" 2>/dev/null || true
+        problem="could not be mounted"
+    fi
+    if [[ -n "$problem" ]]; then
+        mirror_note "The old EFI partition ${problem}, so its boot files were not updated. Until the next restart, start this computer only from the new EFI partition."
+        return 0
+    fi
+    TMP_ESP_MNT="$o"
+    # Nothing of Mainstream's there means nothing that could be started out of step.
+    if [[ -f "$o/limine.conf" && -d "$o/EFI/limine" ]]; then
+        mid="$(tr -d '[:space:]' < /etc/machine-id 2>/dev/null || true)"
+        [[ ! "${mid,,}" =~ ^[0-9a-f]{32}$ ]] || ours+=(--include="/EFI/Linux/${mid,,}_*.efi")
+        # The default loader path can hold another system's loader.
+        if grep -aq 'Limine [0-9]' -- "$o/EFI/BOOT/BOOTX64.EFI" 2>/dev/null; then
+            ours+=(--include='/EFI/BOOT/' --include='/EFI/BOOT/BOOTX64.EFI')
+        fi
+        # The menu goes last and only after its images, so the old partition is never left with
+        # a menu that names images it does not hold.
+        if rsync -rltD --no-perms --no-owner --no-group --modify-window=2 --delete \
+                "${ours[@]}" --exclude='*' "$mp/" "$o/" >/dev/null 2>&1 \
+            && { cmp -s -- "$mp/limine.conf" "$o/limine.conf" \
+                || { cp -f -- "$mp/limine.conf" "$o/limine.conf.new" \
+                    && mv -f -- "$o/limine.conf.new" "$o/limine.conf"; }; } \
+            && sync -f -- "$o"; then
+            :
+        else
+            rm -f -- "$o/limine.conf.new"
+            mirror_note "The boot files on the old EFI partition ${old_dev} could not be updated; it may be full. Until the next restart, start this computer only from the new EFI partition."
+        fi
+    fi
+    umount "$o" 2>/dev/null && rmdir "$o" 2>/dev/null && TMP_ESP_MNT="" || true
+}
+
+mirror_note() {
+    log_note "$1"
+    printf '[efi-resize] %s\n' "$1"
+}
+
 # Retires the old partition when this start came from the new one. Any other start leaves both
 # partitions in place, so a firmware that ignores the new entry still finds the old loader. A start
 # the firmware says came from another partition puts the new entry first again, and the second such
@@ -1570,6 +1628,12 @@ cmd_resize() {
 }
 
 case "${1:-}" in
+    mirror)
+        [[ $EUID == 0 && -e "$RETIRE_STATE" && ! -e "$CUTOVER_STATE" && ! -e "$BUILD_STATE" ]] || exit 0
+        trap '[[ -z "$TMP_ESP_MNT" ]] || { umount "$TMP_ESP_MNT" 2>/dev/null; rmdir "$TMP_ESP_MNT" 2>/dev/null; } || true' EXIT
+        mirror_old_esp || true
+        exit 0
+        ;;
     probe)
         cmd_probe "${2:-2048}"
         ;;

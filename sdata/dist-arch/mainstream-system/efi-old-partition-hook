@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Boot hook (/etc/boot/hooks/post.d): after an EFI resize the old partition can still be
+# started until a restart retires it, so its boot files follow every change made on the
+# one in use. Never fails the update that ran it.
+[[ -e /var/lib/mainstream/efi-resize.retire && -x /usr/local/bin/mainstream-efi-resize ]] || exit 0
+/usr/local/bin/mainstream-efi-resize mirror || true

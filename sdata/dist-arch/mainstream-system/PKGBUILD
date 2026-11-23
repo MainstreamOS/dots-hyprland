@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=28
+pkgrel=29
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -79,6 +79,7 @@ source=(
   mainstream-hardware-quirks
   limine-remember-installed
   mainstream-limine-remember.service
+  efi-old-partition-hook
 )
 sha256sums=(
   SKIP SKIP SKIP
@@ -86,7 +87,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP
+  SKIP SKIP SKIP
 )
 
 build() {
@@ -177,6 +178,7 @@ package() {
   done
   install -Dm644 "$srcdir/paccache-uninstalled.conf" \
       "$pkgdir/usr/lib/systemd/system/paccache.service.d/50-mainstream-uninstalled.conf"
+  install -Dm755 "$srcdir/efi-old-partition-hook"        "$pkgdir/etc/boot/hooks/post.d/96-mainstream-efi-old"
   install -Dm755 "$srcdir/limine-remember-installed"     "$pkgdir/usr/lib/mainstream/limine-remember-installed"
   install -Dm644 "$srcdir/mainstream-limine-remember.service" \
       "$pkgdir/usr/lib/systemd/system/mainstream-limine-remember.service"
