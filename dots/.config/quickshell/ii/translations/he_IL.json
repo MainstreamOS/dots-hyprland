@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "מקוון | מודל של Google\nמודלי Gemini של Google עם מסלול חינמי: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "הכניסה הצליחה. המודלים שבמנוי זמינים כעת בבורר: יש להקליד /model כדי לבחור בין %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "הכניסה הצליחה. %1 זמינים כעת בבורר. ניתן להתאים את רמת החשיבה באמצעות /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "חיפוש באינטרנט עם מודל Gemini זה דורש פרויקט Google AI Studio עם חיוב מופעל. שאל שוב בלי חיפוש, או החלף מודל עם %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "חיפוש באינטרנט עם מודל Gemini זה דורש פרויקט Google AI Studio עם חיוב מופעל. שאל שוב בלי חיפוש, או החלף מודל עם %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "מערכת זו בגרסה %s, מתקדמת מהמהדורה האחרונה %s (ניתן להשתמש בדגל --force כדי להחיל אותה בכל זאת).",
+  "Could not add the group %s to the group shadow file": "לא ניתן להוסיף את הקבוצה %s לקובץ הצל של הקבוצות",
+  "Added the missing group shadow entries for %s": "נוספו הרשומות החסרות בקובץ הצל של הקבוצות עבור: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "דבר לא השתנה. העדכון חסום בגלל חבילות שעדכונן מעוכב במחשב זה: %s",
+  "All packages held back here: %s": "כל החבילות המעוכבות כאן: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "העיכובים מוגדרים בשורה IgnorePkg או IgnoreGroup בקובץ /etc/pacman.conf. יש להסיר את אלה שכבר אינם נחוצים, יחד עם החבילות השייכות להם, ואז להריץ שוב את העדכון."
 }

@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "ऑनलाइन | Google का मॉडल\nमुफ़्त स्तर वाले Google के Gemini मॉडल: %1।",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "साइन इन हो गया। सदस्यता के मॉडल अब चयनकर्ता में हैं: %1 में से चुनने के लिए /model लिखें।",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "साइन इन हो गया। %1 चयनकर्ता में हैं। /think से सोच का स्तर बदलें।",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "इस Gemini मॉडल से वेब खोज के लिए बिलिंग चालू वाला Google AI Studio प्रोजेक्ट चाहिए। बिना खोजे फिर पूछें, या %1 से मॉडल बदलें।"
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "इस Gemini मॉडल से वेब खोज के लिए बिलिंग चालू वाला Google AI Studio प्रोजेक्ट चाहिए। बिना खोजे फिर पूछें, या %1 से मॉडल बदलें।",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "यह सिस्टम %s पर है, जो नवीनतम रिलीज़ %s से आगे है (फिर भी उसे लागू करने के लिए --force)।",
+  "Could not add the group %s to the group shadow file": "समूह %s को समूह शैडो फ़ाइल में नहीं जोड़ सके",
+  "Added the missing group shadow entries for %s": "इन समूहों की छूटी हुई समूह शैडो प्रविष्टियाँ जोड़ी गईं: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "कुछ नहीं बदला। इस कंप्यूटर पर अपडेट से रोके गए इन पैकेज के कारण अपडेट रुका है: %s",
+  "All packages held back here: %s": "इस कंप्यूटर पर अपडेट से रोके गए सभी पैकेज: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "ये रोक /etc/pacman.conf की IgnorePkg या IgnoreGroup पंक्ति में लगी हैं। जिनकी अब ज़रूरत नहीं, उन्हें उनसे जुड़े पैकेज की रोक के साथ हटाएँ, फिर अपडेट दोबारा चलाएँ।"
 }

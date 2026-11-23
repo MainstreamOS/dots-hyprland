@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Çevrimiçi | Google'ın modeli\nÜcretsiz katmanı olan Google Gemini modelleri: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Oturum açıldı. Abonelik modelleri artık seçicide: %1 arasından seçim yapmak için /model yazın.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Oturum açıldı. %1 artık seçicide. Akıl yürütme düzeyini /think ile ayarlayın.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Bu Gemini modeliyle web araması, faturalandırması etkin bir Google AI Studio projesi gerektirir. Arama yapmadan tekrar sorun ya da %1 ile modeli değiştirin."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Bu Gemini modeliyle web araması, faturalandırması etkin bir Google AI Studio projesi gerektirir. Arama yapmadan tekrar sorun ya da %1 ile modeli değiştirin.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Bu sistem %s sürümünde ve en son sürüm olan %s sürümünden daha yeni (yine de uygulamak için --force kullanın).",
+  "Could not add the group %s to the group shadow file": "%s grubu, grup gölge parola dosyasına eklenemedi",
+  "Added the missing group shadow entries for %s": "Grup gölge parola dosyasındaki eksik kayıtlar şu gruplar için eklendi: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Hiçbir şey değiştirilmedi. Güncelleme, bu bilgisayarda güncellenmesi bekletilen paketler tarafından engelleniyor: %s",
+  "All packages held back here: %s": "Burada bekletilen tüm paketler: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Bekletmeler /etc/pacman.conf dosyasının IgnorePkg veya IgnoreGroup satırında ayarlanır. Artık gerekmeyenleri, onlarla ilişkili paketlerle birlikte kaldırın, ardından güncellemeyi yeniden çalıştırın."
 }

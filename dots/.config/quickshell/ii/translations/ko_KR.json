@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "온라인 | Google 모델\n무료 등급이 있는 Google의 Gemini 모델: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "로그인했습니다. 이제 구독 모델을 선택할 수 있습니다. /model로 %1 중에서 선택하세요.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "로그인했습니다. 이제 %1을(를) 선택할 수 있습니다. /think로 생각 수준을 조절하세요.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "이 Gemini 모델로 웹 검색을 하려면 결제를 켠 Google AI Studio 프로젝트가 필요합니다. 검색 없이 다시 요청하거나 %1(으)로 모델을 바꾸세요."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "이 Gemini 모델로 웹 검색을 하려면 결제를 켠 Google AI Studio 프로젝트가 필요합니다. 검색 없이 다시 요청하거나 %1(으)로 모델을 바꾸세요.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "이 시스템은 현재 %s 버전이며, 최신 릴리스인 %s 버전보다 앞서 있습니다(그래도 적용하려면 --force 사용).",
+  "Could not add the group %s to the group shadow file": "%s 그룹을 그룹 섀도 파일에 추가하지 못했습니다",
+  "Added the missing group shadow entries for %s": "누락된 그룹 섀도 항목을 추가했습니다: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "아무것도 바꾸지 않았습니다. 이 컴퓨터에서 업데이트하지 않도록 보류된 패키지 때문에 업데이트가 차단되었습니다: %s",
+  "All packages held back here: %s": "이 컴퓨터에서 보류된 모든 패키지: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "보류 설정은 /etc/pacman.conf 파일의 IgnorePkg 또는 IgnoreGroup 줄에 있습니다. 더 이상 필요 없는 항목을 함께 보류한 관련 패키지 항목과 같이 지운 다음 업데이트를 다시 실행하세요."
 }

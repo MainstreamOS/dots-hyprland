@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "En ligne | Modèle de Google\nLes modèles Gemini de Google avec une offre gratuite : %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Connecté. Les modèles de l'abonnement sont disponibles : tapez /model pour choisir entre %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Connecté. %1 sont disponibles dans le sélecteur. Ajustez le niveau de réflexion avec /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "La recherche web avec ce modèle Gemini nécessite un projet Google AI Studio avec la facturation activée. Reposez la question sans recherche, ou changez de modèle avec %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "La recherche web avec ce modèle Gemini nécessite un projet Google AI Studio avec la facturation activée. Reposez la question sans recherche, ou changez de modèle avec %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Ce système est en %s, en avance sur la dernière version stable %s (utilisez --force pour l'appliquer quand même).",
+  "Could not add the group %s to the group shadow file": "Impossible d'ajouter le groupe %s au fichier shadow des groupes",
+  "Added the missing group shadow entries for %s": "Entrées manquantes ajoutées au fichier shadow des groupes pour %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Rien n'a été modifié. La mise à jour est bloquée par des paquets dont la mise à jour est retenue sur cet ordinateur : %s",
+  "All packages held back here: %s": "Tous les paquets retenus ici : %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Les retenues sont définies sur la ligne IgnorePkg ou IgnoreGroup de /etc/pacman.conf. Supprimez celles dont vous n'avez plus besoin, ainsi que celles des paquets qui vont avec, puis relancez la mise à jour."
 }

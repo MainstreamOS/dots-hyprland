@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "En línea | Modelo de Google\nLos modelos Gemini de Google con un plan gratuito: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Sesión iniciada. Los modelos del plan ya están en el selector: escribe /model para elegir entre %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Sesión iniciada. %1 ya están en el selector. Ajusta el nivel de razonamiento con /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "La búsqueda web con este modelo de Gemini requiere un proyecto de Google AI Studio con la facturación activada. Pregunta de nuevo sin buscar o cambia de modelo con %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "La búsqueda web con este modelo de Gemini requiere un proyecto de Google AI Studio con la facturación activada. Pregunta de nuevo sin buscar o cambia de modelo con %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Este sistema está en %s, más adelante que la última versión publicada %s (usa --force para aplicarla de todos modos).",
+  "Could not add the group %s to the group shadow file": "No se pudo agregar el grupo %s al archivo shadow de grupos",
+  "Added the missing group shadow entries for %s": "Se agregaron las entradas faltantes del archivo shadow de grupos para %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "No se cambió nada. La actualización está bloqueada por paquetes que en esta computadora están retenidos para que no se actualicen: %s",
+  "All packages held back here: %s": "Todos los paquetes retenidos aquí: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Las retenciones se definen en la línea IgnorePkg o IgnoreGroup de /etc/pacman.conf. Quita las que ya no necesites, junto con las de los paquetes relacionados, y vuelve a ejecutar la actualización."
 }

@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Online | Model Google\nModel Gemini Google dengan paket gratis: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Sudah masuk. Model langganan kini tersedia di pemilih: ketik /model untuk memilih di antara %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Sudah masuk. %1 kini ada di pemilih. Sesuaikan tingkat pemikiran dengan /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Pencarian web dengan model Gemini ini memerlukan proyek Google AI Studio dengan penagihan yang diaktifkan. Tanyakan lagi tanpa pencarian, atau beralih model dengan %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Pencarian web dengan model Gemini ini memerlukan proyek Google AI Studio dengan penagihan yang diaktifkan. Tanyakan lagi tanpa pencarian, atau beralih model dengan %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Sistem ini berada di versi %s, lebih baru daripada rilis terbaru %s (gunakan --force untuk tetap menerapkannya).",
+  "Could not add the group %s to the group shadow file": "Tidak dapat menambahkan grup %s ke file shadow grup",
+  "Added the missing group shadow entries for %s": "Entri shadow grup yang belum ada telah ditambahkan untuk: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Tidak ada yang diubah. Pembaruan terhalang oleh paket yang ditahan agar tidak diperbarui di komputer ini: %s",
+  "All packages held back here: %s": "Semua paket yang ditahan di sini: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Penahanan diatur pada baris IgnorePkg atau IgnoreGroup di /etc/pacman.conf. Hapus yang tidak lagi Anda perlukan, beserta paket yang terkait dengannya, lalu jalankan pembaruan lagi."
 }

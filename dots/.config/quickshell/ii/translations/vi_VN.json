@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Trực tuyến | Model của Google\nCác model Gemini của Google có gói miễn phí: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Đã đăng nhập. Các model theo gói đã có trong bộ chọn: gõ /model để chọn giữa %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Đã đăng nhập. %1 đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Tìm kiếm web với model Gemini này yêu cầu một dự án Google AI Studio đã bật thanh toán. Hãy hỏi lại mà không dùng tìm kiếm, hoặc đổi model bằng %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Tìm kiếm web với model Gemini này yêu cầu một dự án Google AI Studio đã bật thanh toán. Hãy hỏi lại mà không dùng tìm kiếm, hoặc đổi model bằng %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Hệ thống này đang ở phiên bản %s, mới hơn bản phát hành mới nhất %s (dùng --force để vẫn áp dụng bản đó).",
+  "Could not add the group %s to the group shadow file": "Không thể thêm nhóm %s vào tệp shadow của nhóm",
+  "Added the missing group shadow entries for %s": "Đã thêm các mục còn thiếu trong tệp shadow của nhóm cho: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Chưa thay đổi gì. Bản cập nhật bị chặn bởi các gói đang bị giữ lại không cho cập nhật trên máy tính này: %s",
+  "All packages held back here: %s": "Tất cả các gói bị giữ lại ở đây: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Việc giữ lại được đặt ở dòng IgnorePkg hoặc IgnoreGroup trong /etc/pacman.conf. Hãy xóa những mục bạn không còn cần, cùng với các gói liên quan đến chúng, rồi cập nhật lại."
 }

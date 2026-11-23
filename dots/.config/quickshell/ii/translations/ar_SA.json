@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "عبر الإنترنت | نموذج Google\nنماذج Gemini من Google بفئة مجانية: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "تم تسجيل الدخول. نماذج الاشتراك متاحة الآن؛ اكتب /model للاختيار بين %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "تم الدخول. %1 متاحة الآن. اضبط مستوى التفكير باستخدام /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "يتطلب بحث الويب مع نموذج Gemini هذا مشروع Google AI Studio بفوترة مفعّلة. اسأل مجددًا دون بحث، أو بدّل النموذج باستخدام %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "يتطلب بحث الويب مع نموذج Gemini هذا مشروع Google AI Studio بفوترة مفعّلة. اسأل مجددًا دون بحث، أو بدّل النموذج باستخدام %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "هذا النظام عند %s، متقدم على أحدث إصدار %s (استخدم --force لتطبيقه على أي حال).",
+  "Could not add the group %s to the group shadow file": "تعذّرت إضافة المجموعة %s إلى ملف ظل المجموعات",
+  "Added the missing group shadow entries for %s": "أُضيفت المدخلات الناقصة في ملف ظل المجموعات للمجموعات: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "لم يتغير شيء. التحديث متوقف بسبب حزم مستثناة من التحديث على هذا الكمبيوتر: %s",
+  "All packages held back here: %s": "جميع الحزم المستثناة هنا: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "تُضبط الاستثناءات في سطر IgnorePkg أو IgnoreGroup في ملف /etc/pacman.conf. أزل ما لم تعد تحتاج إليه منها، مع الحزم المرتبطة بها، ثم شغّل التحديث مجددًا."
 }

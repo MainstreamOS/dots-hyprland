@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "オンライン | Google のモデル\n無料枠のある Google の Gemini モデル：%1。",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "サインインしました。プランのモデルを選べるようになりました。/model で %1 を切り替えられます。",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "サインインしました。%1 を選べるようになりました。/think で思考レベルを調整できます。",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "この Gemini モデルでウェブ検索を使うには、課金を有効にした Google AI Studio プロジェクトが必要です。検索なしでもう一度質問するか、%1 でモデルを切り替えてください。"
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "この Gemini モデルでウェブ検索を使うには、課金を有効にした Google AI Studio プロジェクトが必要です。検索なしでもう一度質問するか、%1 でモデルを切り替えてください。",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "このシステムは %s で、最新リリース %s より新しいバージョンです（それでも適用するには --force を使用）。",
+  "Could not add the group %s to the group shadow file": "グループ %s をグループのシャドウファイルに追加できませんでした",
+  "Added the missing group shadow entries for %s": "不足していたグループのシャドウエントリを追加しました：%s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "何も変更していません。このコンピューターで更新を保留するよう設定されているパッケージが、更新を妨げています：%s",
+  "All packages held back here: %s": "このコンピューターで保留されているすべてのパッケージ：%s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "保留の設定は /etc/pacman.conf の IgnorePkg または IgnoreGroup の行にあります。不要になった保留を、一緒に保留した関連パッケージの分も含めて外してから、更新を再実行してください。"
 }

@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Online | Model Google\nModele Gemini od Google z bezpłatnym poziomem dostępu: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Zalogowano. Modele subskrypcji są już na liście: wpisz /model, aby wybrać spośród %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Zalogowano. %1 są teraz na liście wyboru. Zmień poziom rozumowania za pomocą /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Wyszukiwanie w sieci w tym modelu Gemini wymaga projektu Google AI Studio z włączonymi rozliczeniami. Zapytaj ponownie bez wyszukiwania lub zmień model za pomocą %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Wyszukiwanie w sieci w tym modelu Gemini wymaga projektu Google AI Studio z włączonymi rozliczeniami. Zapytaj ponownie bez wyszukiwania lub zmień model za pomocą %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Ten system ma wersję %s, nowszą niż ostatnie wydanie %s (użyj --force, aby mimo to je zastosować).",
+  "Could not add the group %s to the group shadow file": "Nie udało się dodać grupy %s do pliku przesłoniętych haseł grup",
+  "Added the missing group shadow entries for %s": "Dodano brakujące wpisy w pliku przesłoniętych haseł grup dla: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Nic nie zmieniono. Aktualizację blokują pakiety, których aktualizowanie jest wstrzymane na tym komputerze: %s",
+  "All packages held back here: %s": "Wszystkie pakiety wstrzymane tutaj: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Wstrzymania ustawia się w wierszu IgnorePkg lub IgnoreGroup pliku /etc/pacman.conf. Usuń te, których już nie potrzebujesz, razem z powiązanymi z nimi pakietami, a potem powtórz aktualizację."
 }

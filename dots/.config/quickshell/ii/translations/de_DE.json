@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Online | Googles Modell\nGoogles Gemini-Modelle mit kostenloser Stufe: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Angemeldet. Die Abo-Modelle sind jetzt in der Auswahl: Mit /model wählst du zwischen %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Angemeldet. %1 sind jetzt in der Auswahl. Passe die Denkstufe mit /think an.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Die Websuche mit diesem Gemini-Modell erfordert ein Google AI Studio-Projekt mit aktivierter Abrechnung. Frag erneut ohne Suche oder wechsle mit %1 das Modell."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Die Websuche mit diesem Gemini-Modell erfordert ein Google AI Studio-Projekt mit aktivierter Abrechnung. Frag erneut ohne Suche oder wechsle mit %1 das Modell.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "Dieses System ist auf %s und damit neuer als die neueste Version %s (verwende --force, um sie trotzdem anzuwenden).",
+  "Could not add the group %s to the group shadow file": "Die Gruppe %s konnte nicht zur Gruppen-Shadow-Datei hinzugefügt werden",
+  "Added the missing group shadow entries for %s": "Fehlende Einträge in der Gruppen-Shadow-Datei hinzugefügt für %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Es wurde nichts geändert. Die Aktualisierung wird durch Pakete blockiert, die auf diesem Computer von Aktualisierungen zurückgehalten werden: %s",
+  "All packages held back here: %s": "Alle hier zurückgehaltenen Pakete: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Zurückgehaltene Pakete stehen in der Zeile IgnorePkg oder IgnoreGroup von /etc/pacman.conf. Entferne die Einträge, die du nicht mehr brauchst, zusammen mit denen der dazugehörigen Pakete, und führe die Aktualisierung dann erneut aus."
 }

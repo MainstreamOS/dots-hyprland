@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "線上 | Google 的模型\n提供免費方案的 Google Gemini 模型：%1。",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "已登入。方案模型已顯示在選擇器中，輸入 /model 可選擇 %1。",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "已登入。%1 已顯示在選擇器中。使用 /think 調整思考等級。",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "使用此 Gemini 模型進行網頁搜尋需要啟用計費的 Google AI Studio 專案。請不使用搜尋再問一次，或透過 %1 切換模型。"
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "使用此 Gemini 模型進行網頁搜尋需要啟用計費的 Google AI Studio 專案。請不使用搜尋再問一次，或透過 %1 切換模型。",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "此系統目前為 %s，比最新正式版本 %s 還新（若仍要套用該版本，請使用 --force）。",
+  "Could not add the group %s to the group shadow file": "無法將 %s 群組加入群組影子檔",
+  "Added the missing group shadow entries for %s": "已為下列群組補上缺少的群組影子項目：%s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "未做任何變更。此電腦上有套件被設定為不更新，因此更新無法進行：%s",
+  "All packages held back here: %s": "此電腦上所有設定為不更新的套件：%s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "這些不更新的設定位於 /etc/pacman.conf 的 IgnorePkg 或 IgnoreGroup 那一行。請移除不再需要的項目，連同與其相關的套件項目一併移除，然後再次執行更新。"
 }

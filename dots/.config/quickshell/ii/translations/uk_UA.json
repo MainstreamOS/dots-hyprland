@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "Онлайн | Модель Google\nМоделі Google Gemini з безкоштовним тарифом: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "Вхід виконано. Моделі за підпискою тепер доступні: введіть /model, щоб вибрати серед %1.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "Вхід виконано. %1 тепер доступні у виборі. Налаштуйте рівень міркувань через /think.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Для пошуку в інтернеті з цією моделлю Gemini потрібен проект Google AI Studio з увімкненою оплатою. Запитайте ще раз без пошуку або змініть модель командою %1."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "Для пошуку в інтернеті з цією моделлю Gemini потрібен проект Google AI Studio з увімкненою оплатою. Запитайте ще раз без пошуку або змініть модель командою %1.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "У цій системі встановлено версію %s, новішу за останній випуск %s (скористайтеся --force, щоб усе одно застосувати його).",
+  "Could not add the group %s to the group shadow file": "Не вдалося додати групу %s до файлу тіньових паролів груп",
+  "Added the missing group shadow entries for %s": "Додано відсутні записи до файлу тіньових паролів груп для: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "Нічого не змінено. Оновлення заблоковано пакунками, оновлення яких притримано на цьому комп’ютері: %s",
+  "All packages held back here: %s": "Усі притримані тут пакунки: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "Притримання задаються в рядку IgnorePkg або IgnoreGroup файлу /etc/pacman.conf. Приберіть ті, що вам більше не потрібні, разом із пов’язаними з ними пакунками, потім повторіть оновлення."
 }

@@ -3472,5 +3472,11 @@
   "Online | Google's model\nGoogle's Gemini models with a free tier: %1.": "برخط | مدل Google\nمدل‌های Gemini از Google با ردهٔ رایگان: %1.",
   "Signed in. The plan models are in the picker now: type /model to choose between %1.": "وارد شدید. مدل‌های اشتراک آماده‌اند: برای انتخاب بین %1، /model بنویسید.",
   "Signed in. %1 are in the picker now. Adjust thinking level with /think.": "وارد شدید. %1 آماده‌اند. با /think سطح تفکر را عوض کنید.",
-  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "جست‌وجوی وب با این مدل Gemini به پروژهٔ Google AI Studio با صورت‌حساب فعال نیاز دارد. بدون جست‌وجو دوباره بپرسید یا با %1 مدل را عوض کنید."
+  "Web search with this Gemini model needs a Google AI Studio project with billing turned on. Ask again without searching, or switch models with %1.": "جست‌وجوی وب با این مدل Gemini به پروژهٔ Google AI Studio با صورت‌حساب فعال نیاز دارد. بدون جست‌وجو دوباره بپرسید یا با %1 مدل را عوض کنید.",
+  "This system is at %s, ahead of the latest release %s (use --force to apply it anyway).": "این سیستم در %s است، جلوتر از آخرین نسخه %s (برای اعمال آن در هر حال --force بدهید).",
+  "Could not add the group %s to the group shadow file": "گروه %s به پروندهٔ سایهٔ گروه‌ها افزوده نشد",
+  "Added the missing group shadow entries for %s": "ورودی‌های جاافتاده در پروندهٔ سایهٔ گروه‌ها برای این گروه‌ها افزوده شد: %s",
+  "Nothing was changed. The update is blocked by packages that are held back from updating on this computer: %s": "چیزی عوض نشد. بسته‌هایی که در این رایانه از به‌روزرسانی نگه داشته شده‌اند جلوی به‌روزرسانی را گرفته‌اند: %s",
+  "All packages held back here: %s": "همهٔ بسته‌های نگه‌داشته‌شده در اینجا: %s",
+  "Holds are set on the IgnorePkg or IgnoreGroup line of /etc/pacman.conf. Remove the ones you no longer need, together with the packages that belong with them, then run the update again.": "نگه‌داشتن بسته‌ها در خط IgnorePkg یا IgnoreGroup پروندهٔ /etc/pacman.conf تنظیم می‌شود. مواردی را که دیگر لازم ندارید، همراه با بسته‌های مرتبط با آن‌ها، بردارید و سپس به‌روزرسانی را دوباره اجرا کنید."
 }
