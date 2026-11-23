@@ -759,7 +759,8 @@ print(json.dumps(result))
             "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
             "content = '" + escaped + "'\n" +
             "open(path, 'w').write(content)\n" +
-            "subprocess.run(['hyprctl', 'reload'])\n";
+            "subprocess.run(['hyprctl', 'reload'])\n" +
+            "subprocess.run(" + JSON.stringify(inViewCommand) + ")\n";
         Quickshell.execDetached(["python3", "-c", py]);
     }
 
@@ -1317,6 +1318,8 @@ except Exception:
         onExited: {
             displayConfigPage.parseMonitorsConf();
             displayConfigPage.scaleApplied();
+            inViewProc.running = false;
+            inViewProc.running = true;
             // If this reload was the tail of an Apply chain, raise the
             // revert banner now that the new mode is on screen. The
             // flag is consumed (cleared) here so unrelated reloads
@@ -1336,6 +1339,14 @@ except Exception:
                 displayConfigPage.contentY = 0;
             }
         }
+    }
+
+    // An output that goes off or starts duplicating another leaves this window, and the
+    // banner with it, on a workspace no screen shows. The script shows that workspace again.
+    readonly property var inViewCommand: ["bash", Quickshell.shellPath("scripts/settings/window-in-view.sh"), `${Quickshell.processId}`]
+    Process {
+        id: inViewProc
+        command: displayConfigPage.inViewCommand
     }
 
     Component.onCompleted: {
