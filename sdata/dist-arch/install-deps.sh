@@ -124,34 +124,31 @@ _is_kde_blocked() {
   return 1
 }
 
-# Temporarily adds IgnorePkg entries to /etc/pacman.conf so that makepkg's
-# own internal pacman calls also respect the KDE block, then restores the
-# original file afterward. This is the only way to cover makepkg -s/-i.
+# makepkg's own pacman calls only respect the KDE block when pacman.conf names
+# it. The hold is a marked pair of lines of its own, so it can be taken off
+# exactly, and an IgnorePkg line the person keeps is never touched.
+KDE_HOLD_MARK='# Mainstream setup: held while a package builds, removed when it ends'
+
 _pacman_conf_block_kde() {
-  if ! grep -q "^IgnorePkg" /etc/pacman.conf; then
-    sudo sed -i "s/^#IgnorePkg.*/IgnorePkg = ${KDE_IGNORE_ARG//,/ }/" /etc/pacman.conf
-    # If the line was completely absent (not just commented), append it
-    grep -q "^IgnorePkg" /etc/pacman.conf || \
-      sudo sed -i "/^\[options\]/a IgnorePkg = ${KDE_IGNORE_ARG//,/ }" /etc/pacman.conf
-  else
-    # Merge into the existing IgnorePkg line
-    local existing
-    existing=$(grep "^IgnorePkg" /etc/pacman.conf | sed 's/^IgnorePkg *= *//')
-    local merged="${existing} ${KDE_IGNORE_ARG//,/ }"
-    sudo sed -i "s/^IgnorePkg.*/IgnorePkg = ${merged}/" /etc/pacman.conf
-  fi
+  _pacman_conf_restore_kde
+  sudo sed -i "/^\[options\]/a ${KDE_HOLD_MARK}\nIgnorePkg = ${KDE_IGNORE_ARG//,/ }" /etc/pacman.conf
 }
 
+# Also clears a hold an interrupted earlier run left behind, in either form it
+# has been written in.
 _pacman_conf_restore_kde() {
-  # Remove only the KDE packages we added, restoring the original IgnorePkg line.
-  # Safest approach: remove the whole IgnorePkg line then re-add the original
-  # content minus our additions. If the line was absent originally, remove it.
-  local original_line="$1"
-  if [[ -z "$original_line" ]]; then
-    sudo sed -i "/^IgnorePkg/d" /etc/pacman.conf
-  else
-    sudo sed -i "s/^IgnorePkg.*/${original_line}/" /etc/pacman.conf
-  fi
+  sudo sed -i -e "/^${KDE_HOLD_MARK}\$/,+1d" \
+    -e "/^IgnorePkg = ${KDE_IGNORE_ARG//,/ }\$/d" /etc/pacman.conf
+}
+
+# The hold comes off before this returns, so nothing the caller does with a
+# failed build, exiting included, can leave it in place.
+makepkg_without_kde() {
+  local rc=0
+  _pacman_conf_block_kde
+  makepkg "$@" || rc=$?
+  _pacman_conf_restore_kde
+  return "$rc"
 }
 
 #####################################################################################
@@ -417,12 +414,6 @@ install-local-pkgbuild() {
     fi
   done
 
-  # Snapshot the current IgnorePkg line (may be empty) so we can restore it after makepkg.
-  # This ensures makepkg's own internal pacman -S calls also respect the KDE block.
-  local _orig_ignorepkg
-  _orig_ignorepkg=$(grep "^IgnorePkg" /etc/pacman.conf || true)
-  _pacman_conf_block_kde
-
   remove-previous-package-name .
 
   # man makepkg:
@@ -438,17 +429,14 @@ install-local-pkgbuild() {
     # Install recipes with declared replacements separately so pacman can remove
     # the conflicting package atomically. makepkg -i refuses that prompt under
     # --noconfirm, including existing Quickshell and Bibata cursor packages.
-    x makepkg -Afs --noconfirm
+    x makepkg_without_kde -Afs --noconfirm
     local built_packages=()
     mapfile -t built_packages < <(makepkg --packagelist)
     (( ${#built_packages[@]} > 0 )) || return 1
-    x sudo pacman -U --noconfirm --ask 4 "${built_packages[@]}"
+    x sudo pacman -U --noconfirm --ask 4 --ignore "$KDE_IGNORE_ARG" "${built_packages[@]}"
   else
-    x makepkg -Afsi --noconfirm
+    x makepkg_without_kde -Afsi --noconfirm
   fi
-
-  # Restore pacman.conf to its pre-call state
-  _pacman_conf_restore_kde "$_orig_ignorepkg"
 
   x popd
 }
