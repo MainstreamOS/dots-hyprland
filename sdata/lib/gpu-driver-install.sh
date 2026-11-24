@@ -285,6 +285,23 @@ _gpu_nvidia_ladder() {
     return "$rc"
 }
 
+# ── gpu_nvidia_modules_for_added_kernel <package> ───────────────────────────
+# gpu_nvidia_ensure_modules after that kernel was added beside the others.
+# Returns 1 when it is still without a module while another kernel has one:
+# the caller takes it back out, so what the ladder noted is not reported.
+# Otherwise the ladder's notes go to note_failure as usual.
+gpu_nvidia_modules_for_added_kernel() {
+    local kernel="$1" saved n notes=()
+    saved="$(declare -f note_failure)"
+    note_failure() { notes+=("$1"); }
+    gpu_nvidia_ensure_modules
+    unset -f note_failure
+    [[ -z "$saved" ]] || eval "$saved"
+    gpu_kernel_nvidia_ready "$kernel" || return 1
+    for n in "${notes[@]}"; do note_failure "$n"; done
+    return 0
+}
+
 # ── gpu_driver_run_report [<path>] ──────────────────────────────────────────
 # For a tool whose run is a complete repair: the breadcrumb then describes that
 # run alone, and a run with nothing to report leaves none behind.

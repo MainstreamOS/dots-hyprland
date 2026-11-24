@@ -531,6 +531,72 @@ if [[ "${SKIP_GPUDRIVERS}" != true ]]; then
   v setup_gpu_drivers
 fi
 
+# Mainstream's kernel is the default of a new install where a repository offers
+# it, as on the ISO. Arch's linux stays installed beside it as the fallback, and
+# a system on any other kernel is left as it is. Its boot default is set by
+# setup_mainstream_kernel_default once the boot loader is known.
+MAINSTREAM_KERNEL=linux-mainstream
+MAINSTREAM_KERNEL_ADDED=false
+# Room for its boot image beside the stock one's, and for the snapshot copies of both.
+MAINSTREAM_KERNEL_MIN_FREE_MIB=512
+LIMINE_LAST_ENTRY_VAR=/sys/firmware/efi/efivars/LimineLastBootedEntry-03884334-1756-4978-9c8c-86fb8998b4ea
+MAINSTREAM_KERNELS_HELPER=/usr/lib/mainstream/mainstream-kernels
+function setup_mainstream_kernel(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  local esp free failures
+  if [[ "$(pacman -Qq "$MAINSTREAM_KERNEL" 2>/dev/null)" == "$MAINSTREAM_KERNEL" ]]; then
+    echo -e "${STY_BLUE}[$0]: $MAINSTREAM_KERNEL is already installed; the boot menu's default is left as it is.${STY_RST}"
+    return 0
+  fi
+  # Existing installs are not switched. A first install is the firstrun of
+  # 3.files.sh (--firstrun, or no FIRSTRUN_FILE yet) on a system that does not
+  # already boot through Mainstream's Limine setup, which the ISO sets up
+  # without writing FIRSTRUN_FILE.
+  if [[ "${INSTALL_FIRSTRUN:-}" != true ]] && { [[ -f "$FIRSTRUN_FILE" ]] \
+     || grep -qE '^[[:space:]]*TARGET_OS_NAME=.*Mainstream OS' "${LIMINE_DEFAULT_FILE:-/etc/default/limine}" 2>/dev/null; }; then
+    echo -e "${STY_BLUE}[$0]: Kernels are left as they are on an existing install; Mainstream's kernel can be added in Settings > Gaming > Kernel.${STY_RST}"
+    return 0
+  fi
+  # By name: linux-t2 provides linux, and pacman -Q answers with a provider.
+  if [[ "$(pacman -Qq linux 2>/dev/null)" != linux ]]; then
+    echo -e "${STY_BLUE}[$0]: Arch's linux kernel is not installed, so $MAINSTREAM_KERNEL is not added.${STY_RST}"
+    return 0
+  fi
+  if ! pacman -Si "$MAINSTREAM_KERNEL" >/dev/null 2>&1 || ! pacman -Si "$MAINSTREAM_KERNEL-headers" >/dev/null 2>&1; then
+    echo -e "${STY_BLUE}[$0]: No repository offers $MAINSTREAM_KERNEL yet; Arch's kernel stays the only one.${STY_RST}"
+    return 0
+  fi
+  esp="$(bootctl --print-esp-path 2>/dev/null || true)"
+  [[ -n "$esp" ]] || esp="$([[ -d /boot/efi ]] && echo /boot/efi || echo /boot)"
+  free="$(df -Pm "$esp" 2>/dev/null | awk 'NR==2 {print $4}')" || free=""
+  if [[ ! "$free" =~ ^[0-9]+$ ]] || (( free < MAINSTREAM_KERNEL_MIN_FREE_MIB )); then
+    echo -e "${STY_YELLOW}[$0]: $esp has ${free:-unknown} MiB free and a second kernel needs $MAINSTREAM_KERNEL_MIN_FREE_MIB MiB; Arch's kernel stays the only one.${STY_RST}"
+    return 0
+  fi
+  echo -e "${STY_CYAN}[$0]: Installing $MAINSTREAM_KERNEL beside Arch's kernel...${STY_RST}"
+  if ! sudo pacman -S --needed --noconfirm "$MAINSTREAM_KERNEL" "$MAINSTREAM_KERNEL-headers"; then
+    echo -e "${STY_YELLOW}[$0]: $MAINSTREAM_KERNEL could not be installed; Arch's kernel stays the only one.${STY_RST}"
+    return 0
+  fi
+  # The prebuilt NVIDIA driver serves Arch's kernel alone, so this one needs the
+  # DKMS driver. One that ends up without a module comes back out.
+  failures=${#GPU_FAILURES[@]}
+  if gpu_detect && [[ "${HAS_NVIDIA:-false}" == true && "${SKIP_GPUDRIVERS:-false}" != true ]]; then
+    gpu_classify_nvidia_driver
+    gpu_nvidia_modules_for_added_kernel "$MAINSTREAM_KERNEL" || true
+  fi
+  if ! gpu_kernel_nvidia_ready "$MAINSTREAM_KERNEL"; then
+    echo -e "${STY_YELLOW}[$0]: No NVIDIA driver could be built for $MAINSTREAM_KERNEL, so it is removed again; Arch's kernel stays the only one.${STY_RST}"
+    sudo pacman -Rns --noconfirm "$MAINSTREAM_KERNEL" "$MAINSTREAM_KERNEL-headers" \
+      || echo -e "${STY_YELLOW}[$0]: $MAINSTREAM_KERNEL could not be removed; choose Arch's kernel in the boot menu.${STY_RST}"
+    return 0
+  fi
+  (( ${#GPU_FAILURES[@]} > failures )) && flush_failures
+  MAINSTREAM_KERNEL_ADDED=true
+}
+showfun setup_mainstream_kernel
+v setup_mainstream_kernel
+
 showfun install-python-packages
 v install-python-packages
 
@@ -933,6 +999,8 @@ function setup_limine_snapper(){
     p=y
   fi
   if [[ "$p" =~ ^[Yy]$ ]]; then
+    # Before the menu is built: its default entry is the first kernel it lists.
+    if $MAINSTREAM_KERNEL_ADDED; then _mainstream_kernel_boot_order; fi
     x sudo bash "${REPO_ROOT}/scripts/limine-snapper/setup-limine-snapper.sh" --yes
     # Deploy the non-interactive restore wrapper used by the settings recovery page.
     # Uses expect to handle /dev/tty prompts that pipe-based automation cannot reach.
@@ -945,6 +1013,28 @@ function setup_limine_snapper(){
   else
     echo -e "${STY_BLUE}[$0]: Skipping limine + snapper setup.${STY_RST}"
   fi
+}
+function _mainstream_kernel_boot_order(){
+  _limine_default_upsert "BOOT_ORDER" "\"$MAINSTREAM_KERNEL, *, *fallback, Snapshots\""
+}
+
+# Where the system boots through Mainstream's Limine setup, the kernel added by
+# setup_mainstream_kernel is listed first and started by default. Another boot
+# loader, or a run told to keep the current one, keeps its own default.
+function setup_mainstream_kernel_default(){
+  $MAINSTREAM_KERNEL_ADDED || return 0
+  if [[ "${SKIP_LIMINE:-false}" == true ]] || ! command -v limine-mkinitcpio >/dev/null 2>&1 \
+     || ! grep -qE '^[[:space:]]*TARGET_OS_NAME=.*Mainstream OS' "${LIMINE_DEFAULT_FILE:-/etc/default/limine}" 2>/dev/null; then
+    echo -e "${STY_BLUE}[$0]: $MAINSTREAM_KERNEL was added beside Arch's kernel. This system does not boot through Mainstream's Limine setup, so its boot default is unchanged. To start it, add a boot menu entry for it in that boot loader (with GRUB, run grub-mkconfig).${STY_RST}"
+    return 0
+  fi
+  _mainstream_kernel_boot_order
+  # A menu that already recorded the entry it started preselects that one.
+  if [[ -f "$LIMINE_LAST_ENTRY_VAR" && -x "$MAINSTREAM_KERNELS_HELPER" ]]; then
+    sudo "$MAINSTREAM_KERNELS_HELPER" next "$MAINSTREAM_KERNEL" \
+      || echo -e "${STY_YELLOW}[$0]: The boot menu still preselects the entry it started last; choose $MAINSTREAM_KERNEL there once.${STY_RST}"
+  fi
+  echo -e "${STY_CYAN}[$0]: $MAINSTREAM_KERNEL is the boot menu's default; Arch's kernel stays as the fallback entry.${STY_RST}"
 }
 function setup_update_helper(){
   # Install /usr/local/bin/mainstream-update-helper — the privileged
@@ -1011,7 +1101,7 @@ function teardown_pacman_nopasswd(){
 function _limine_default_upsert(){
   local key="$1"
   local value="$2"
-  local config_file="/etc/default/limine"
+  local config_file="${LIMINE_DEFAULT_FILE:-/etc/default/limine}"
   local _tmp
   local _line
   local _found=false
@@ -1313,6 +1403,9 @@ v setup_updatems_system
 
 showfun setup_limine_snapper
 v setup_limine_snapper
+
+showfun setup_mainstream_kernel_default
+v setup_mainstream_kernel_default
 
 # setup_plymouth runs after setup_limine_snapper so /boot/limine.conf exists
 # when we patch kernel_cmdline with splash/silencing args.

@@ -29,7 +29,7 @@ ContentSection {
             name: "linux-mainstream",
             icon: "developer_board",
             shown: Translation.tr("Mainstream"),
-            about: Translation.tr("Mainstream's build of the same kernel version.")
+            about: Translation.tr("Mainstream's build of the same kernel version. New installs start it by default.")
         },
         {
             name: "linux-mainstream-performance",

@@ -499,6 +499,58 @@ kernel $STOCK linux module; kernel $MS linux-mainstream
 CASES=$((CASES + 1))
 chk_str errexit "$(set -euo pipefail; gpu_nvidia_ensure_modules >/dev/null 2>&1; echo done)" done
 
+# ── whether a kernel can be started without losing the driver ───────────────
+reset; CASES=$((CASES + 6))
+kernel $STOCK linux module; kernel $MS linux-mainstream
+chk_str ready-other-has-one "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" no
+chk_str ready-stock "$(gpu_kernel_nvidia_ready linux && echo yes || echo no)" yes
+chk_str ready-not-installed "$(gpu_kernel_nvidia_ready linux-mainstream-performance && echo yes || echo no)" no
+: > "$K/$MS/nvidia.ko"
+chk_str ready-both "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" yes
+reset; kernel $STOCK linux; kernel $MS linux-mainstream
+chk_str ready-none-has-one "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" yes
+reset; kernel $STOCK linux; kernel $MS linux-mainstream module
+chk_str ready-only-new-has-one "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" yes
+
+# ── a kernel just added beside Arch's ───────────────────────────────────────
+added_once() { CASES=$((CASES + 1)); CALLS=(); GPU_FAILURES=(); gpu_nvidia_modules_for_added_kernel linux-mainstream > "$TMP/out" 2>&1; RC=$?; OUT="$(<"$TMP/out")"; }
+NVIDIA_DRIVER_FAMILY=nvidia-open
+# Two kernels, both get a module: the second through the DKMS swap.
+reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS linux-mainstream headers
+added_once
+chk_str added-ok-rc "$RC" 0
+chk_str added-ok-both "$(gpu_kernels_missing_nvidia)" ""
+chk_str added-ok-swapped "$(in_set nvidia-open-dkms "$INSTALLED" && echo yes)" yes
+chk_str added-ok-no-notes "${#GPU_FAILURES[@]}" 0
+# Offline: the DKMS driver cannot be fetched, so the new kernel has none while
+# Arch's keeps its prebuilt one. The caller removes the kernel; no notes.
+reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS linux-mainstream headers
+NO_FETCH=nvidia-open-dkms
+added_once
+chk_str added-offline-rc "$RC" 1
+chk_str added-offline-notes-dropped "${#GPU_FAILURES[@]}" 0
+chk_str added-offline-stock-kept "$(in_set nvidia-open "$INSTALLED" && [[ -e "$K/$STOCK/nvidia.ko" ]] && echo yes)" yes
+# The build fails for the new kernel: the prebuilt driver comes back for Arch's.
+reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS linux-mainstream headers
+DKMS_FAIL=" $MS "
+added_once
+chk_str added-buildfail-rc "$RC" 1
+chk_str added-buildfail-notes-dropped "${#GPU_FAILURES[@]}" 0
+chk_str added-buildfail-stock-kept "$([[ -e "$K/$STOCK/nvidia.ko" ]] && echo yes)" yes
+# The ladder's notes still reach note_failure when the kernel stays: here no
+# kernel ends up with a module, so starting the new one loses nothing.
+reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux; kernel $MS linux-mainstream headers
+PREBUILT_STALE=1; NO_FETCH=nvidia-open-dkms
+added_once
+chk_str added-none-rc "$RC" 0
+has added-none-noted "${GPU_FAILURES[*]:-}" "nvidia-open-dkms is not obtainable"
+chk_str added-note-failure-restored "$(declare -f note_failure | head -1)" "note_failure () "
+NVIDIA_DRIVER_FAMILY=nvidia-open
+
 CASES=$((CASES + 1))
 chk_str nothing-escaped "$(cat "$TMP/escaped" 2>/dev/null)" ""
 

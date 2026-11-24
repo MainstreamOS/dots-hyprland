@@ -668,6 +668,22 @@ gpu_kernels_missing_nvidia() {
         nvidia_module_present "$rel" || printf '%s %s\n' "$rel" "$base"
     done < <(gpu_installed_kernels)
 }
+# ── gpu_kernel_nvidia_ready <package> ───────────────────────────────────────
+# Whether that kernel can be started without losing the NVIDIA driver: it has
+# a module, or no installed kernel has one. Fails when it is not installed.
+gpu_kernel_nvidia_ready() {
+    local rel base found=false others=false
+    while read -r rel base; do
+        [[ -n "$rel" ]] || continue
+        if [[ "$base" == "$1" ]]; then
+            found=true
+            nvidia_module_present "$rel" && return 0
+        elif nvidia_module_present "$rel"; then
+            others=true
+        fi
+    done < <(gpu_installed_kernels)
+    [[ $found == true && $others == false ]]
+}
 
 # ── nvidia_write_qs_hint <user_home> ────────────────────────────────────────
 # Ship the QS_DISABLE_DMABUF escape hatch as a commented, opt-in line. It cures

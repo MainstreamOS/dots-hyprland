@@ -991,6 +991,64 @@ rm -rf "$T_EFIVARS"
 check "remove succeeds on a system without UEFI" run_helper remove "$PLAIN"
 mkdir -p "$T_EFIVARS"
 
+# The default entry ./setup writes as a path names the removed kernel's entry.
+T_CONF="$ESP_T/limine.conf"
+write_conf() {  # $1 = the default_entry value
+    printf 'timeout: 5\nremember_last_entry: yes\ndefault_entry: %s\n\n/+Mainstream OS\\\\\n    //linux\n        protocol: efi\n    //Snapshots\n' "$1" >"$T_CONF"
+}
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+write_conf "Mainstream OS\\\\/$PLAIN"
+check "remove succeeds when the default entry names the kernel" run_helper remove "$PLAIN"
+check "the default entry is pointed at the standard kernel in the same block" \
+    grep -qxF 'default_entry: Mainstream OS\\/linux' "$T_CONF"
+check "only that line changes" test "$(grep -c '' "$T_CONF")" = 8 -a "$(grep -c "$PLAIN" "$T_CONF")" = 0
+check "the menu is changed after the removal" \
+    test "$(grep -c '^pacman -Rns' "$T_STATE/calls.log")" = 1
+check "no checksum is enrolled where the setting is off" test "$(calls '^limine-enroll-config')" = 0
+refute "no work file is left beside the menu" test -e "$T_CONF.mainstream-kernels"
+printf 'ENABLE_ENROLL_LIMINE_CONFIG=yes\n' >>"$T_ROOT/etc/default/limine"
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+write_conf "Mainstream OS\\\\/$PLAIN"
+check "remove succeeds with the menu's checksum enrolled" run_helper remove "$PLAIN"
+check "the new checksum is enrolled" test "$(calls '^limine-enroll-config')" = 1
+grep -v '^ENABLE_ENROLL_LIMINE_CONFIG=' "$T_ROOT/etc/default/limine" >"$TMP_BASE/limine.new"
+mv "$TMP_BASE/limine.new" "$T_ROOT/etc/default/limine"
+for value in 2 "Mainstream OS\\\\/linux" "Mainstream OS\\\\/$PERF"; do
+    t_reset
+    t_install "$PLAIN" "$PLAIN-headers" "$PERF" "$PERF-headers"
+    write_conf "$value"
+    cp "$T_CONF" "$TMP_BASE/conf.before"; : >"$T_LOG"
+    check "remove succeeds with default_entry: $value" run_helper remove "$PLAIN"
+    check "a default entry that is a number or another kernel is left alone ($value)" cmp -s "$T_CONF" "$TMP_BASE/conf.before"
+    refute "and nothing says it was changed ($value)" grep -q "default entry names" "$T_LOG"
+done
+# An entry body that mentions the kernel is not the setting.
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+write_conf "Mainstream OS\\\\/$PLAIN"
+printf '    //x\n        default_entry: Mainstream OS/%s\n' "$PLAIN" >>"$T_CONF"
+check "remove succeeds with the name inside an entry" run_helper remove "$PLAIN"
+check "only the header line is changed" test "$(grep -c "/$PLAIN" "$T_CONF")" = 1 -a "$(grep -c '^default_entry: Mainstream OS.*/linux$' "$T_CONF")" = 1
+# Arch's kernel removed by hand earlier: nothing to point at.
+t_reset
+grep -vxF linux "$T_STATE/installed" >"$T_STATE/installed.new"; mv "$T_STATE/installed.new" "$T_STATE/installed"
+t_install "$PLAIN" "$PLAIN-headers" "$PERF"
+write_conf "Mainstream OS\\\\/$PLAIN"
+cp "$T_CONF" "$TMP_BASE/conf.before"
+check "remove succeeds without the standard kernel" run_helper remove "$PLAIN"
+check "the default entry is left as it is without the standard kernel" cmp -s "$T_CONF" "$TMP_BASE/conf.before"
+# A menu that is a symlink is not written through.
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+write_conf "Mainstream OS\\\\/$PLAIN"
+mv "$T_CONF" "$TMP_BASE/conf.target"; ln -s "$TMP_BASE/conf.target" "$T_CONF"
+check "remove succeeds with a symlinked menu" run_helper remove "$PLAIN"
+check "a symlinked menu is not written" grep -qF "/$PLAIN" "$TMP_BASE/conf.target"
+check "nor replaced" test -L "$T_CONF"
+rm -f "$T_CONF"
+
 # 4.5 next
 t_reset
 t_install "$PLAIN" "$PLAIN-headers" "$PERF" "$PERF-headers"

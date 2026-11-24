@@ -3598,5 +3598,6 @@
   "Could not read %s; Steam's default Proton is unchanged.": "Could not read %s; Steam's default Proton is unchanged.",
   "Could not update %s; Steam's default Proton is unchanged.": "Could not update %s; Steam's default Proton is unchanged.",
   "Installed Proton Mainstream for Steam": "Installed Proton Mainstream for Steam",
-  "Could not install Proton Mainstream; the next update tries again": "Could not install Proton Mainstream; the next update tries again"
+  "Could not install Proton Mainstream; the next update tries again": "Could not install Proton Mainstream; the next update tries again",
+  "Mainstream's build of the same kernel version. New installs start it by default.": "Mainstream's build of the same kernel version. New installs start it by default."
 }
