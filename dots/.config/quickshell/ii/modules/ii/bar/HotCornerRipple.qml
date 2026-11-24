@@ -247,6 +247,11 @@ Variants {
                         const localY = at.y - (win?.screen?.y ?? 0);
                         if (localX < 0 || localY < 0 || localX >= triggerArea.width || localY >= triggerArea.height)
                             return;
+                        // The change can be reported after the entry it caused.
+                        if (triggerArea.screensSettling) {
+                            triggerArea.awaitingExit = true;
+                            return;
+                        }
                         root.action?.act();
                     }
                 }
@@ -268,6 +273,33 @@ Variants {
             // fresh approach and opens again what was just closed. Coming back
             // has to mean coming back.
             property bool awaitingExit: false
+
+            // A screen that appears, goes or moves can leave the pointer in this
+            // corner without the person having taken it there. For a moment after
+            // such a change an entry does not count; leaving and coming back does.
+            property bool screensSettling: true
+            Timer {
+                id: screensSettleTimer
+                interval: 3000
+                running: true
+                onTriggered: triggerArea.screensSettling = false
+            }
+            function noteScreenChange(): void {
+                triggerArea.screensSettling = true;
+                screensSettleTimer.restart();
+            }
+            Connections {
+                target: Quickshell
+                function onScreensChanged() {
+                    triggerArea.noteScreenChange();
+                }
+            }
+            Connections {
+                target: ripplePanel.modelData
+                function onGeometryChanged() {
+                    triggerArea.noteScreenChange();
+                }
+            }
 
             // Only a trigger of "off" disables the corner, not a missing
             // scrolloverview plugin: `GlobalStates.scrollOverviewEnabled` re-polls via
@@ -308,6 +340,10 @@ Variants {
                     // pointer is being pushed against an edge to pan the view,
                     // not taken to a corner on purpose.
                     if (triggerArea.magnifying) return;
+                    if (triggerArea.screensSettling) {
+                        triggerArea.awaitingExit = true;
+                        return;
+                    }
                     // An entry is not proof the pointer arrived. A focus grab
                     // refreshes pointer focus across every surface it lists,
                     // this panel among them, so Hyprland synthesises an enter
