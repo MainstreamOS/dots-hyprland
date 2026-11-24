@@ -117,6 +117,54 @@ ensure_mainstream_system() {
     fi
 }
 
+# Steam rewrites config.vdf as it exits, so a change made while it runs is lost.
+# Matched by process name: pgrep -f would also match any command line that
+# merely mentions steam.
+_steam_running() {
+    local comm name
+    for comm in /proc/[0-9]*/comm; do
+        [[ -O "${comm%/comm}" ]] || continue
+        read -r name < "$comm" 2>/dev/null || continue
+        [[ "$name" == steam ]] && return 0
+    done
+    return 1
+}
+
+# Once updatems-system has installed Proton Mainstream, it replaces the
+# GE-Proton the installer made Steam's default. Once only, and only over that
+# or no default at all: a tool the person picked is theirs. Steam running
+# means waiting for the next update.
+PROTON_DEFAULT_STATE="$HOME/.local/state/mainstream/proton-mainstream-default"
+proton_mainstream_default() {
+    [[ -e "$PROTON_DEFAULT_STATE" ]] && return 0
+    pacman -Qq proton-mainstream >/dev/null 2>&1 || return 0
+    local patcher="$CLONE_DIR/sdata/lib/steam-compat-default.py"
+    [[ -f "$patcher" ]] || return 0
+    local store="$HOME/.local/share/Steam"
+    [[ -f "$HOME/.steam/root/config/config.vdf" ]] && store="$HOME/.steam/root"
+    local cfg="$store/config/config.vdf" current rc=0
+    _steam_running && return 0
+    if ! current=$(python3 "$patcher" get "$cfg" 2>/dev/null); then
+        warn "$(tf "Could not read %s; Steam's default Proton is unchanged." "$cfg")"
+        return 0
+    fi
+    case "$current" in
+        ""|GE-Proton*)
+            python3 "$patcher" set "$cfg" proton-mainstream >/dev/null 2>&1 || rc=$?
+            # No CompatToolMapping yet: nothing to change, so ask again next time.
+            [[ $rc -eq 2 ]] && return 0
+            if [[ $rc -ne 0 ]]; then
+                warn "$(tf "Could not update %s; Steam's default Proton is unchanged." "$cfg")"
+                return 0
+            fi
+            ok "$(t "Steam now runs games with Proton Mainstream by default")"
+            ;;
+    esac
+    mkdir -p "${PROTON_DEFAULT_STATE%/*}" \
+        && printf '%s %s\n' "$(date -Iseconds)" "${current:-none}" > "$PROTON_DEFAULT_STATE"
+    return 0
+}
+
 # Refuse root — the dotfiles install is per-user.
 [[ $EUID -ne 0 ]] || die "updatems must not run as root; run as your user account."
 
@@ -166,6 +214,9 @@ if [[ ! -d "$CLONE_DIR/.git" ]]; then
 fi
 
 cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
+
+# On every run, released or not, since Steam may be open during one of them.
+[[ $DRY_RUN -eq 1 ]] || proton_mainstream_default
 
 # A clone that has lost an object cannot be fetched into, and every later run
 # dies on the same fetch, so the update path stays closed until somebody deletes

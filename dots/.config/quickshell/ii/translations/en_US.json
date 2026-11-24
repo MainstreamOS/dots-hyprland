@@ -3593,5 +3593,10 @@
   "Removing…": "Removing…",
   "Install the %1 kernel? The download is about %2 MB. It is added to the boot menu beside the kernels you have.": "Install the %1 kernel? The download is about %2 MB. It is added to the boot menu beside the kernels you have.",
   "Install the %1 kernel? It is added to the boot menu beside the kernels you have.": "Install the %1 kernel? It is added to the boot menu beside the kernels you have.",
-  "Remove the %1 kernel? The other kernels stay installed.": "Remove the %1 kernel? The other kernels stay installed."
+  "Remove the %1 kernel? The other kernels stay installed.": "Remove the %1 kernel? The other kernels stay installed.",
+  "Steam now runs games with Proton Mainstream by default": "Steam now runs games with Proton Mainstream by default",
+  "Could not read %s; Steam's default Proton is unchanged.": "Could not read %s; Steam's default Proton is unchanged.",
+  "Could not update %s; Steam's default Proton is unchanged.": "Could not update %s; Steam's default Proton is unchanged.",
+  "Installed Proton Mainstream for Steam": "Installed Proton Mainstream for Steam",
+  "Could not install Proton Mainstream; the next update tries again": "Could not install Proton Mainstream; the next update tries again"
 }

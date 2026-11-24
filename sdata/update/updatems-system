@@ -593,6 +593,21 @@ if getent group gamemode >/dev/null 2>&1; then
     done < /etc/passwd
 fi
 
+# ── Proton Mainstream ──────────────────────────────────────────────────────
+# Mainstream's own Proton, which pacman keeps current from here on. Installs
+# from before it existed only have the GE-Proton the installer downloaded.
+# updatems makes it Steam's default for people still on that one. Optional,
+# so a failure here does not fail the update.
+if command -v steam >/dev/null 2>&1 \
+   && ! pacman -Qq proton-mainstream >/dev/null 2>&1 \
+   && pacman -Si proton-mainstream >/dev/null 2>&1; then
+    if _pacman_needed proton-mainstream; then
+        ok "$(t "Installed Proton Mainstream for Steam")"
+    else
+        warn "$(t "Could not install Proton Mainstream; the next update tries again")"
+    fi
+fi
+
 # ── Firewall zone ──────────────────────────────────────────────────────────
 # Installs from before 2.0.0 carry the zone without the printer discovery
 # services, so adding a printer still stops at a firewall prompt. Only the
