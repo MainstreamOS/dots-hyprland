@@ -6,6 +6,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
+import qs.modules.settings.kernel
 import qs.modules.settings.security
 
 ContentPage {
@@ -261,6 +262,8 @@ ContentPage {
             }
         }
     }
+
+    KernelSection {}
 
     AntiCheatSection {}
 

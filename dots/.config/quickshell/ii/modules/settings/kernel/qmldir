@@ -1,0 +1,2 @@
+module qs.modules.settings.kernel
+KernelSection 1.0 KernelSection.qml

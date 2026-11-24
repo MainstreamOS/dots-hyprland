@@ -1,0 +1,513 @@
+#!/usr/bin/env bash
+# mainstream-kernels: privileged helper for the Kernel section in Settings > Gaming.
+# Installed at /usr/lib/mainstream/mainstream-kernels and invoked via pkexec
+# (polkit action org.mainstreamos.kernels).
+#
+# Subcommands:
+#   install <kernel>    linux-mainstream or linux-mainstream-performance, with its
+#                       headers, from a repository
+#   remove <kernel>     one of those two
+#   next <kernel>       linux or one of those two: the kernel the boot menu starts
+#                       at the next start
+#
+# A kernel is always named by its package and never by a file path.
+#
+# Exit codes:
+#   0   success
+#   1   general error (one-line human reason on stderr: "mainstream-kernels: <reason>")
+#   2   bad usage, or a kernel this helper does not handle
+#   3   precondition not met (started from a snapshot, or a boot setup this helper
+#       cannot change)
+#   4   the package transaction failed
+#   5   this processor cannot run the performance kernel
+#   6   the EFI partition does not have room for another kernel, or the room could
+#       not be measured
+#   7   the kernel is installed, but the graphics driver could not be built for it
+#   8   remove refused (the standard kernel, the running kernel, a kernel that is
+#       not installed, or the only kernel)
+#   9   the boot menu's choice cannot be stored on this system
+#   10  another change is running (kernel, Secure Boot, update, or package manager)
+#   11  no repository offers the kernel
+#   12  next refused: the kernel has no graphics driver while another kernel has one
+
+set -uo pipefail
+umask 022
+PATH=/usr/bin
+export PATH LC_ALL=C
+
+# Test harness root & mock binary override: strictly ignored when invoked via
+# pkexec (which strips environment variables and sets PKEXEC_UID). The mock
+# directory replaces /usr/bin, so a tool with no stand-in is missing, never real.
+ROOT=""
+if [[ -z ${PKEXEC_UID:-} && -n ${MAINSTREAM_KERNELS_TEST_ROOT:-} ]]; then
+    ROOT=${MAINSTREAM_KERNELS_TEST_ROOT%/}
+    if [[ -n ${MAINSTREAM_KERNELS_TEST_BIN:-} ]]; then
+        PATH=${MAINSTREAM_KERNELS_TEST_BIN}
+    fi
+fi
+
+ROOT_MOUNT="${ROOT:-/}"
+
+LIMINE_DEFAULT="$ROOT/etc/default/limine"
+LOG_DIR="$ROOT/var/log/mainstream"
+LOG="$LOG_DIR/mainstream-kernels.log"
+LOCK_DIR="$ROOT/run/lock"
+LOCK_FILE="$LOCK_DIR/mainstream-kernels.lock"
+# The locks of the other things that change boot files or packages.
+SECURITY_LOCK="$LOCK_DIR/mainstream-system-security.lock"
+UPDATE_LOCK="$LOCK_DIR/mainstream-update.lock"
+PACMAN_LOCK="$ROOT/var/lib/pacman/db.lck"
+EFIVARS_DIR="$ROOT/sys/firmware/efi/efivars"
+# Where Limine records the entry it started, which it preselects at the next start.
+LAST_ENTRY_VAR="$EFIVARS_DIR/LimineLastBootedEntry-03884334-1756-4978-9c8c-86fb8998b4ea"
+MODULES_DIR="$ROOT/usr/lib/modules"
+CPUINFO="$ROOT/proc/cpuinfo"
+GPU_LIB="$ROOT/usr/local/lib/gpu-config.sh"
+GPU_INSTALL_LIB="$ROOT/usr/local/lib/gpu-driver-install.sh"
+
+VERBS=(install remove next)
+STANDARD_KERNEL=linux
+PERFORMANCE_KERNEL=linux-mainstream-performance
+MAINSTREAM_KERNELS=(linux-mainstream "$PERFORMANCE_KERNEL")
+
+ROOT_FSTYPE=""
+ROOT_SUBVOL=""
+ESP=""
+ENTRY=""
+ENTRY_ATTRS=""
+
+log() {
+    local msg=$*
+    [[ -L $LOG ]] && return 0
+    [[ -d $LOG_DIR ]] || mkdir -p -m 755 -- "$LOG_DIR" 2>/dev/null || return 0
+    printf '%s %s\n' "$(date '+%F %T')" "${msg//[[:cntrl:]]/?}" >>"$LOG" 2>/dev/null || true
+}
+
+die() {  # $1 = exit code, $2... = message
+    local code=$1 msg
+    shift
+    msg=$*
+    log "failed ($code): $msg"
+    printf 'mainstream-kernels: %s\n' "${msg//[[:cntrl:]]/?}" >&2
+    exit "$code"
+}
+
+refuse_symlinks() {
+    local p
+    for p in "$@"; do
+        [[ -L $p ]] && die 1 "refusing to work through symlink $p"
+    done
+    return 0
+}
+
+is_one_of() {  # $1 = word, $2... = the words it may be
+    local word=$1 w
+    shift
+    for w in "$@"; do
+        [[ $w == "$word" ]] && return 0
+    done
+    return 1
+}
+
+detect_root_info() {
+    local src="" fstype=""
+    read -r src fstype < <(findmnt -n -o SOURCE,FSTYPE "$ROOT_MOUNT" 2>/dev/null | head -n1) || true
+    ROOT_SUBVOL=""
+    if [[ $src == *\[*\] ]]; then
+        ROOT_SUBVOL=${src#*\[}
+        ROOT_SUBVOL=${ROOT_SUBVOL%\]}
+    fi
+    ROOT_FSTYPE="$fstype"
+}
+
+# A snapshot started from the boot menu runs on the read-only snapshot itself or on an
+# overlay above it; packages changed there do not last, while the EFI partition and
+# the firmware keep the change.
+require_installed_system() {
+    detect_root_info
+    if [[ $ROOT_FSTYPE == overlay || $ROOT_SUBVOL =~ (^|/)(@|@?\.)snapshots/[0-9]+/snapshot$ ]]; then
+        die 3 "started from a snapshot; restart into the installed system first"
+    fi
+}
+
+# The boot image and the menu entry of a kernel are made by these tools' package hooks.
+require_limine_tools() {
+    local tool
+    for tool in limine-update limine-mkinitcpio limine-enroll-config; do
+        command -v "$tool" >/dev/null 2>&1 || \
+            die 3 "this system does not use Mainstream's Limine boot tools ($tool is missing)"
+    done
+}
+
+limine_setting() {
+    local key=$1 f line val=""
+    for f in "$ROOT"/usr/share/limine-entry-tool.d/*.conf \
+             "$ROOT/etc/limine-entry-tool.conf" \
+             "$ROOT"/etc/limine-entry-tool.d/*.conf \
+             "$LIMINE_DEFAULT"; do
+        [[ -f $f ]] || continue
+        while IFS= read -r line || [[ -n $line ]]; do
+            [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+            [[ ${BASH_REMATCH[1]} == "$key" ]] || continue
+            val=${BASH_REMATCH[2]}
+            val=${val%\"}
+            val=${val#\"}
+        done <"$f"
+    done
+    printf '%s' "$val"
+}
+
+find_esp() {
+    ESP=""
+    local p cfg
+    cfg=$(limine_setting ESP_PATH)
+    if [[ -n ${cfg// /} ]]; then
+        if [[ -d "$ROOT$cfg" ]]; then
+            ESP="$ROOT$cfg"
+            return 0
+        fi
+    fi
+    for p in /boot/efi /efi /boot /limine; do
+        [[ -d "$ROOT$p" ]] || continue
+        if [[ -z $ROOT ]]; then
+            if [[ $(findmnt -no FSTYPE -M "$p" 2>/dev/null | head -n1) == vfat ]]; then
+                ESP="$p"
+                return 0
+            fi
+        else
+            if [[ -d "$ROOT$p/EFI" || -f "$ROOT$p/limine.conf" ]]; then
+                ESP="$ROOT$p"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+# pacman -Q also answers for a package that only provides the name.
+pkg_installed() {
+    [[ $(pacman -Qq -- "$1" 2>/dev/null) == "$1" ]]
+}
+
+pkg_in_repo() {
+    pacman -Si -- "$1" >/dev/null 2>&1
+}
+
+# The package of the kernel that is running. Its module tree is gone once the package
+# was updated or removed under it, and the release still ends in the package's name.
+running_kernel() {
+    local rel base=""
+    rel=$(uname -r 2>/dev/null) || rel=""
+    if [[ -n $rel && -r "$MODULES_DIR/$rel/pkgbase" ]]; then
+        IFS= read -r base <"$MODULES_DIR/$rel/pkgbase" || true
+    fi
+    if [[ -z $base ]]; then
+        case $rel in
+            *-mainstream-performance) base=$PERFORMANCE_KERNEL ;;
+            *-mainstream) base=linux-mainstream ;;
+            *-arch[0-9]*) base=$STANDARD_KERNEL ;;
+        esac
+    fi
+    printf '%s' "$base"
+}
+
+# Every kernel this system can start, one package name per line: a module tree with a
+# kernel image and the name of the package that owns it.
+installed_kernels() {
+    local d base
+    for d in "$MODULES_DIR"/*/; do
+        [[ -f "${d}vmlinuz" && -r "${d}pkgbase" ]] || continue
+        base=""
+        IFS= read -r base <"${d}pkgbase" || true
+        [[ -n $base ]] && printf '%s\n' "$base"
+    done
+    return 0
+}
+
+kernel_has_nvidia_module() {  # $1 = kernel package
+    local d base f
+    for d in "$MODULES_DIR"/*/; do
+        [[ -f "${d}vmlinuz" && -r "${d}pkgbase" ]] || continue
+        base=""
+        IFS= read -r base <"${d}pkgbase" || true
+        [[ $base == "$1" ]] || continue
+        for f in "${d}"updates/dkms/nvidia.ko* "${d}"extramodules/nvidia.ko* \
+                 "${d}"kernel/drivers/video/nvidia.ko*; do
+            [[ -f $f ]] && return 0
+        done
+    done
+    return 1
+}
+
+# The performance kernel is built for x86-64-v3.
+cpu_runs_performance_kernel() {
+    local line flags="" flag
+    [[ -r $CPUINFO ]] || return 1
+    while IFS= read -r line; do
+        if [[ $line == flags* ]]; then
+            flags=" ${line#*:} "
+            break
+        fi
+    done <"$CPUINFO"
+    for flag in avx avx2 bmi1 bmi2 f16c fma movbe xsave; do
+        [[ $flags == *" $flag "* ]] || return 1
+    done
+    [[ $flags == *" abm "* || $flags == *" lzcnt "* ]]
+}
+
+# The size in bytes of what the boot menu starts for the standard kernel: its one
+# image, or its kernel and initramfs where the system does not build single images.
+standard_image_bytes() {
+    local f size best=0 total=0 d
+    for f in "$ESP"/EFI/Linux/*_"$STANDARD_KERNEL".efi "$ESP/EFI/Linux/$STANDARD_KERNEL.efi"; do
+        [[ -f $f ]] || continue
+        size=$(stat -c %s -- "$f" 2>/dev/null) || continue
+        [[ $size =~ ^[0-9]+$ ]] && (( size > best )) && best=$size
+    done
+    if (( best == 0 )); then
+        for d in "$ESP"/*/"$STANDARD_KERNEL"/; do
+            [[ -d $d ]] || continue
+            total=0
+            for f in "$d"*; do
+                [[ -f $f ]] || continue
+                size=$(stat -c %s -- "$f" 2>/dev/null) || continue
+                [[ $size =~ ^[0-9]+$ ]] && total=$((total + size))
+            done
+            (( total > best )) && best=$total
+        done
+    fi
+    (( best > 0 )) || return 1
+    printf '%s' "$best"
+}
+
+# The snapshot tooling keeps a copy of each boot image, so a kernel takes its image
+# twice. 32 MiB stays free for the next image an update builds.
+require_esp_room() {
+    local image avail need
+    find_esp || die 6 "could not find the EFI partition, so its free space cannot be checked"
+    image=$(standard_image_bytes) || \
+        die 6 "could not find the standard kernel's boot image on the EFI partition, so the room for another kernel cannot be checked"
+    avail=$(df -B1 --output=avail -- "$ESP" 2>/dev/null | tail -n1 | tr -d '[:space:]')
+    [[ $avail =~ ^[0-9]+$ ]] || die 6 "could not read the free space on the EFI partition"
+    need=$((image * 2 + 32 * 1024 * 1024))
+    if (( avail < need )); then
+        die 6 "the EFI partition has $((avail / 1048576)) MiB free and another kernel needs $(((need + 1048575) / 1048576)) MiB"
+    fi
+    log "EFI partition: $((avail / 1048576)) MiB free, $(((need + 1048575) / 1048576)) MiB needed"
+}
+
+# Four bytes of attributes, then the entry's path in the menu, ended by a zero byte.
+read_last_entry() {
+    ENTRY=""
+    ENTRY_ATTRS=""
+    [[ -f $LAST_ENTRY_VAR && ! -L $LAST_ENTRY_VAR ]] || return 1
+    ENTRY=$(tail -c +5 -- "$LAST_ENTRY_VAR" 2>/dev/null | tr -d '\0') || return 1
+    ENTRY_ATTRS=$(head -c 4 -- "$LAST_ENTRY_VAR" 2>/dev/null | od -An -tx1) || return 1
+    [[ -n $ENTRY && $ENTRY_ATTRS =~ ^(\ [0-9a-f]{2}){4}$ ]]
+}
+
+# Whether the recorded entry is a kernel of the installed system, which is the only
+# kind of entry whose place in the menu says where another kernel's entry is.
+entry_is_installed_kernel() {
+    [[ $ENTRY == */Snapshots/* ]] && return 1
+    [[ $ENTRY == ?*/?* ]] || return 1
+    # shellcheck disable=SC2046
+    is_one_of "${ENTRY##*/}" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" $(installed_kernels)
+}
+
+# efivarfs marks its files immutable and takes a variable in one write.
+write_last_entry() {  # $1 = the entry's path in the menu
+    local new=$1 got
+    chattr -i -- "$LAST_ENTRY_VAR" 2>/dev/null || true
+    # shellcheck disable=SC2059
+    { printf "${ENTRY_ATTRS// /\\x}"; printf '%s\0' "$new"; } \
+        | dd of="$LAST_ENTRY_VAR" bs=4096 iflag=fullblock status=none 2>/dev/null || return 1
+    got=$(tail -c +5 -- "$LAST_ENTRY_VAR" 2>/dev/null | tr -d '\0') || return 1
+    [[ $got == "$new" ]]
+}
+
+# The driver packages build for the kernels they find, and the prebuilt driver serves
+# the standard kernel alone, so every installed kernel is checked for a module.
+# Returns 1 when a kernel is left without one.
+nvidia_modules_for_all_kernels() {
+    local lib
+    for lib in "$GPU_LIB" "$GPU_INSTALL_LIB"; do
+        if [[ ! -f $lib || -L $lib ]]; then
+            log "install: ${lib#"$ROOT"} is missing, so no graphics driver step was run"
+            printf 'mainstream-kernels: %s is missing, so the NVIDIA driver was not checked for the new kernel\n' \
+                "${lib#"$ROOT"}" >&2
+            return 0
+        fi
+    done
+    # In a subshell: the libraries set many variables and are not written for this
+    # helper's own settings.
+    (
+        set +u
+        GPU_SUDO=""
+        GPU_DB_REFRESH=false
+        # shellcheck source=/dev/null
+        source "$GPU_LIB" || exit 1
+        # shellcheck source=/dev/null
+        source "$GPU_INSTALL_LIB" || exit 1
+        gpu_detect || exit 0
+        [[ ${HAS_NVIDIA:-false} == true ]] || exit 0
+        echo "NVIDIA card found; checking the driver for every installed kernel."
+        gpu_classify_nvidia_driver
+        gpu_nvidia_ensure_modules
+    ) </dev/null >>"$LOG" 2>&1
+}
+
+# ── Subcommands ──────────────────────────────────────────────────────────────
+
+cmd_install() {
+    (( $# == 1 )) || die 2 "usage: install <kernel>"
+    local kernel=$1
+    is_one_of "$kernel" "${MAINSTREAM_KERNELS[@]}" || \
+        die 2 "not a kernel that can be installed here"
+
+    require_installed_system
+    require_limine_tools
+    if [[ $kernel == "$PERFORMANCE_KERNEL" ]] && ! cpu_runs_performance_kernel; then
+        die 5 "this processor cannot run $kernel, which needs AVX2 and the rest of x86-64-v3"
+    fi
+    require_esp_room
+    pkg_in_repo "$kernel" && pkg_in_repo "$kernel-headers" || \
+        die 11 "no repository offers $kernel and $kernel-headers yet"
+
+    # The headers always come with the kernel: they are what lets DKMS drivers build
+    # for it, and a later driver install must not find them missing.
+    log "install: pacman -S --needed --noconfirm $kernel $kernel-headers"
+    pacman -S --needed --noconfirm "$kernel" "$kernel-headers" </dev/null >>"$LOG" 2>&1 || \
+        die 4 "$kernel could not be installed; see $LOG"
+    pkg_installed "$kernel" || die 4 "$kernel is not installed after the transaction; see $LOG"
+
+    if ! nvidia_modules_for_all_kernels; then
+        die 7 "$kernel is installed, but the graphics driver could not be built for it; keep using the kernel you are on (see $LOG)"
+    fi
+    log "install: $kernel installed"
+}
+
+cmd_remove() {
+    (( $# == 1 )) || die 2 "usage: remove <kernel>"
+    local kernel=$1 other others=0 was_next=0 parent=""
+    local -a pkgs
+    is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
+        die 2 "not a kernel that can be removed here"
+    [[ $kernel != "$STANDARD_KERNEL" ]] || \
+        die 8 "the standard kernel stays installed as the fallback"
+
+    require_installed_system
+    require_limine_tools
+    pkg_installed "$kernel" || die 8 "$kernel is not installed"
+    [[ $(running_kernel) != "$kernel" ]] || \
+        die 8 "$kernel is the kernel running now; restart with another kernel first"
+    while IFS= read -r other; do
+        [[ -n $other && $other != "$kernel" ]] && others=$((others + 1))
+    done < <(installed_kernels)
+    (( others > 0 )) || die 8 "removing $kernel would leave this system with no kernel"
+
+    if read_last_entry && entry_is_installed_kernel && [[ ${ENTRY##*/} == "$kernel" ]]; then
+        was_next=1
+        parent=${ENTRY%/*}
+    fi
+
+    pkgs=("$kernel")
+    pkg_installed "$kernel-headers" && pkgs+=("$kernel-headers")
+    log "remove: pacman -Rns --noconfirm ${pkgs[*]}"
+    pacman -Rns --noconfirm "${pkgs[@]}" </dev/null >>"$LOG" 2>&1 || \
+        die 4 "$kernel could not be removed; see $LOG"
+
+    # The menu would otherwise preselect an entry that is gone.
+    if (( was_next )); then
+        if ! pkg_installed "$STANDARD_KERNEL"; then
+            log "remove: the boot menu remembered $kernel and the standard kernel is not installed; the record is left as it is"
+        elif write_last_entry "$parent/$STANDARD_KERNEL"; then
+            log "remove: the boot menu starts $STANDARD_KERNEL next"
+        else
+            log "remove: could not point the boot menu back at $STANDARD_KERNEL"
+            printf 'mainstream-kernels: %s was removed, but the boot menu could not be pointed back at the standard kernel\n' \
+                "$kernel" >&2
+        fi
+    fi
+    log "remove: $kernel removed"
+}
+
+cmd_next() {
+    (( $# == 1 )) || die 2 "usage: next <kernel>"
+    local kernel=$1 target other have_module=0
+    is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
+        die 2 "not a kernel that can be chosen here"
+
+    require_installed_system
+    pkg_installed "$kernel" && is_one_of "$kernel" $(installed_kernels) || \
+        die 9 "$kernel is not installed"
+    [[ -d $EFIVARS_DIR ]] || \
+        die 9 "this computer does not start through UEFI, so the choice cannot be stored; choose the kernel in the boot menu"
+    read_last_entry || \
+        die 9 "the boot menu has not recorded the entry it started, so the choice cannot be stored; choose the kernel in the boot menu"
+    [[ $ENTRY != */Snapshots/* ]] || \
+        die 9 "the boot menu remembers a snapshot; restart into the installed system first"
+    entry_is_installed_kernel || \
+        die 9 "the boot menu remembers an entry that is not a kernel of this system; choose the kernel in the boot menu"
+
+    # A kernel with no NVIDIA module on a machine whose other kernels have one would
+    # start without graphics.
+    if ! kernel_has_nvidia_module "$kernel"; then
+        while IFS= read -r other; do
+            [[ -n $other ]] && kernel_has_nvidia_module "$other" && have_module=1
+        done < <(installed_kernels)
+        (( ! have_module )) || \
+            die 12 "the graphics driver is not built for $kernel; keep using the kernel you are on"
+    fi
+
+    target="${ENTRY%/*}/$kernel"
+    if [[ $target == "$ENTRY" ]]; then
+        log "next: the boot menu already starts $kernel next"
+        return 0
+    fi
+    write_last_entry "$target" || die 1 "could not store the choice in the firmware"
+    log "next: the boot menu starts \"$target\" next (was \"$ENTRY\")"
+}
+
+take_lock() {  # $1 = file descriptor, $2 = lock file, $3 = what holds it
+    local fd=$1 file=$2
+    # In braces: a redirection on a bare exec stays for the rest of the run, and every
+    # reason printed after it would be lost.
+    { eval "exec $fd>>\"\$file\""; } 2>/dev/null || die 1 "could not open lock file $file"
+    flock -n "$fd" || die 10 "$3 is still running; try again when it has finished"
+    # Held by this shell alone: a child that outlives it must not keep the lock.
+    { enable -f /usr/lib/bash/fdflags fdflags && fdflags -s +cloexec "$fd"; } 2>/dev/null || true
+}
+
+main() {
+    local verb=${1:-}
+    (( $# )) && shift
+
+    if [[ -z $ROOT && $EUID -ne 0 ]]; then
+        die 1 "must be run as root (via pkexec)"
+    fi
+
+    refuse_symlinks "$LOG" "$LOCK_FILE" "$SECURITY_LOCK" "$UPDATE_LOCK"
+    mkdir -p -m 755 -- "$LOG_DIR" "$LOCK_DIR" 2>/dev/null || true
+    log "invoked: $verb $* (uid=${PKEXEC_UID:-$EUID})"
+
+    is_one_of "$verb" "${VERBS[@]}" || \
+        die 2 "usage: mainstream-kernels $(IFS='|'; printf '%s' "${VERBS[*]}") <kernel>"
+
+    # A snapshot keeps the package lock of the transaction it was taken in, so this
+    # reason comes before the busy ones.
+    require_installed_system
+
+    take_lock 9 "$LOCK_FILE" "another kernel change"
+    take_lock 8 "$SECURITY_LOCK" "a Secure Boot change"
+    take_lock 7 "$UPDATE_LOCK" "a system update"
+    [[ ! -e $PACMAN_LOCK ]] || \
+        die 10 "another package change is still running; try again when it has finished"
+
+    "cmd_$verb" "$@"
+    exit 0
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
+fi

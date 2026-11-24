@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=31
+pkgrel=32
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -86,6 +86,8 @@ source=(
   mainstream-hardware-quirks
   system-security
   org.mainstreamos.system-security.policy
+  mainstream-kernels
+  org.mainstreamos.kernels.policy
   limine-signed-copies
   mainstream-secure-boot-restore.service
   limine-remember-installed
@@ -98,7 +100,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -202,4 +204,7 @@ package() {
       "$pkgdir/usr/lib/systemd/system/mainstream-limine-remember.service"
   install -Dm644 "$srcdir/org.mainstreamos.system-security.policy" \
       "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.system-security.policy"
+  install -Dm755 "$srcdir/mainstream-kernels"            "$pkgdir/usr/lib/mainstream/mainstream-kernels"
+  install -Dm644 "$srcdir/org.mainstreamos.kernels.policy" \
+      "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.kernels.policy"
 }

@@ -62,7 +62,8 @@ Singleton {
     }
 
     readonly property bool stateKnown: root.loaded && !root.probeFailed
-    readonly property bool canChangeBoot: root.stateKnown && root.helper && !root.busy && root.unsupportedReason === ""
+    readonly property bool canChangeBoot: root.stateKnown && root.helper && !root.busy && !SystemKernels.busy
+        && root.unsupportedReason === ""
     readonly property string pendingPill: root.probeFailed ? Translation.tr("Unknown") : Translation.tr("Checking…")
 
     // Kept here so it survives the page being rebuilt on a theme change.
@@ -236,7 +237,7 @@ Singleton {
     }
 
     function runHelper(action, scope) {
-        if (root.busy)
+        if (root.busy || SystemKernels.busy)
             return;
         root.clearError();
         root.clearStatus();

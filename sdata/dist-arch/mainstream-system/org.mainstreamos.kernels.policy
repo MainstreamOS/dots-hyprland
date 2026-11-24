@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for the Kernel section in Settings > Gaming.
+    Installing or removing a kernel changes packages and boot images, and
+    choosing the kernel for the next start changes a firmware variable, so it
+    always takes an administrator's password. auth_admin_keep lets the choice
+    right after an install share that prompt; inactive and remote sessions get
+    nothing, and no rules file grants this without a password.
+-->
+<policyconfig>
+  <vendor>Mainstream OS</vendor>
+  <vendor_url>https://mainstreamos.org</vendor_url>
+
+  <action id="org.mainstreamos.kernels">
+    <description>Manage kernels</description>
+    <message>Authentication is required to install, remove or choose a kernel</message>
+    <icon_name>system-software-install</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/mainstream/mainstream-kernels</annotate>
+  </action>
+</policyconfig>

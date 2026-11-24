@@ -297,7 +297,7 @@ ContentSection {
                     visible: !secureBootCard.confirmingReboot
                     materialIcon: "restart_alt"
                     caption: Translation.tr("Reboot to UEFI Setup")
-                    enabled: !SystemSecurity.busy && SystemSecurity.unsupportedReason === ""
+                    enabled: !SystemSecurity.busy && !SystemKernels.busy && SystemSecurity.unsupportedReason === ""
                     onClicked: root.togglePanel("firmware-reboot")
                 }
             },
@@ -306,7 +306,7 @@ ContentSection {
                 prompt: Translation.tr("Restart this computer into UEFI setup now? Save any open work first.")
                 actionIcon: "restart_alt"
                 actionText: Translation.tr("Reboot now")
-                actionEnabled: !SystemSecurity.busy
+                actionEnabled: !SystemSecurity.busy && !SystemKernels.busy
                 onCanceled: root.closePanel()
                 onConfirmed: {
                     root.closePanel();

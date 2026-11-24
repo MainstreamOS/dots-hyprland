@@ -387,7 +387,7 @@ ApplicationWindow {
             return true;
         if (root.appsUsed && (DefaultApps.busyRole !== "" || AutostartApps.busyId !== ""))
             return true;
-        if (root.securityUsed && SystemSecurity.busy)
+        if (root.securityUsed && (SystemSecurity.busy || SystemKernels.busy))
             return true;
         const focused = root.activeFocusItem;
         if (focused !== searchField && root.isTextEntry(focused) && focused.text.length > 0)
@@ -502,8 +502,10 @@ ApplicationWindow {
     onActiveChanged: {
         if (active)
             root.checkFiles();
-        if (root.securityUsed)
+        if (root.securityUsed) {
             SystemSecurity.paused = !active;
+            SystemKernels.paused = !active;
+        }
     }
     onCurrentPageChanged: root.restartRefused = false
 
@@ -543,15 +545,19 @@ ApplicationWindow {
     // A successful run's record goes once the Update page has marked it seen and the window
     // closes (not restarts); a run still going, or one that failed, has no mark and stays.
     onClosing: close => {
-        // Closing now would cut short a change to the boot files.
-        if (root.securityUsed && SystemSecurity.busy) {
+        // Closing now would cut short a change to the boot files or a kernel install.
+        if (root.securityUsed && (SystemSecurity.busy || SystemKernels.busy)) {
             close.accepted = false;
-            SystemSecurity.closeRefused = true;
+            const section = SystemKernels.busy ? "kernel" : "secureBoot";
+            if (SystemKernels.busy)
+                SystemKernels.closeRefused = true;
+            else
+                SystemSecurity.closeRefused = true;
             const gaming = root.pageIndex("GamingConfig.qml");
             if (gaming === root.currentPage && pageLoader.status === Loader.Ready) {
-                pageLoader.item.scrollToSection("secureBoot");
+                pageLoader.item.scrollToSection(section);
             } else {
-                root.pendingSettingsSection = "secureBoot";
+                root.pendingSettingsSection = section;
                 root.requestPage(gaming);
             }
             return;
