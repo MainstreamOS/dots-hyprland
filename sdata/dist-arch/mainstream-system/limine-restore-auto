@@ -36,7 +36,7 @@ expect {
     -re {Your input:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "y\r"; exp_continue }
     -re {Enter snapshot description[^\n]*$}         { answer "\r";  exp_continue }
     -re {Description for backup subvolume[^\n]*:(?:\s|\e\[[0-9;?]*[A-Za-z])*$} { answer "\r";  exp_continue }
-    -re {type \[ID\][^\n]*cancel[^\n]*$}            { answer "c\r"; exp_continue }
+    -re {type \[ID\][^\n]*cancel[^\n]*(?:\n[^\n]*Choice:[^\n]*)?$} { answer "c\r"; exp_continue }
     -re {unused files\? \[y/N\]:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "n\r"; exp_continue }
     -re {[Rr]eboot[^\n]*\[y/N\][^\n]*$}             { answer "n\r"; exp_continue }
     -re {Close the terminal[^\n]*\[y/N\]:(?:[ \t]|\e\[[0-9;?]*[A-Za-z])+$} { answer "y\r"; exp_continue }
