@@ -38,12 +38,15 @@ info() { printf '%s%s==>%s %s\n' "$(_ts)" "$c_g$c_b" "$c_0" "$*"; }
 step() { printf '%s%s  ->%s %s\n' "$(_ts)" "$c_b" "$c_0" "$*"; }
 warn() { printf '%s%swarning:%s %s\n' "$(_ts)" "$c_y$c_b" "$c_0" "$*" >&2; }
 die()  { printf '%s%serror:%s %s\n' "$(_ts)" "$c_r$c_b" "$c_0" "$*" >&2; exit 1; }
+# ENOSPC's number, so the system update and Welcome can say a full disk is why.
+readonly NOSPACE_RC=28
+die_nospace() { printf '%s%serror:%s %s\n' "$(_ts)" "$c_r$c_b" "$c_0" "$*" >&2; exit "$NOSPACE_RC"; }
 
 check_free() {  # path  need_gib  what
   local avail
   avail=$(df -BG --output=avail "$1" 2>/dev/null | tail -1 | tr -dc '0-9')
   [[ -n $avail ]] || return 0
-  (( avail >= $2 )) || die "not enough free space for $3: need ~$2 GB, have ${avail} GB on $(df --output=target "$1" 2>/dev/null | tail -1). Free some space and re-run."
+  (( avail >= $2 )) || die_nospace "not enough free space for $3: need ~$2 GB, have ${avail} GB on $(df --output=target "$1" 2>/dev/null | tail -1). Free some space and re-run."
 }
 
 confirm() {
@@ -86,12 +89,19 @@ download; by default this asks for your real name and email.
 
 ${c_b}Updating${c_0}
 Resolve is built into a local package, so 'pacman -Syu' never updates it (see
-'pacman -Qm'). Re-run this script to update; it exits immediately when there is
-nothing newer to install. A weekly user timer checks for you and notifies; turn
-it off in Settings -> Updates, or with (mask, not disable — the timer is enabled
-by a packaged symlink, which 'disable' does not touch):
+'pacman -Qm'). Mainstream's system update (Settings -> Updates) runs this script
+when a newer release is out, unless Advanced -> Skip DaVinci Resolve is on.
+Re-run this script to update by hand; it exits immediately when there is nothing
+newer to install. A weekly user timer also checks and notifies; turn it off with
+(mask, not disable — the timer is enabled by a packaged symlink, which 'disable'
+does not touch):
 
   systemctl --user mask --now mainstream-resolve-update-check.timer
+
+${c_b}Exit codes${c_0}
+  0   installed, updated, or already current
+  28  not enough free disk space (the message says how much is needed)
+  1   any other error
 
 ${c_b}--check exit codes${c_0}
   0   up to date, nothing installed, or a beta is installed (nothing to do)
@@ -512,7 +522,29 @@ fi
 ARCHIVE="${ARCH_BASE}_${VER}_Linux.zip"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/mainstream-resolve"
 ZIP="$CACHE_DIR/$ARCHIVE"
+PKG_KEEP_DIR="$CACHE_DIR/packages"
 mkdir -p "$CACHE_DIR"
+
+# Each download is 10 GB or more and only ever builds its own version, so the
+# ones this run supersedes go before the new one needs the room. -maxdepth 1
+# -type f keeps this away from the build.?????? trees and from packages/.
+if ! (( KEEP )); then
+  _pruned=0
+  while IFS= read -r -d '' _old_zip; do
+    [[ $_old_zip == "$ZIP" ]] && continue
+    rm -f "$_old_zip" && _pruned=$(( _pruned + 1 ))
+  done < <(find "$CACHE_DIR" -maxdepth 1 -type f -name 'DaVinci_Resolve*_Linux.zip' -print0 2>/dev/null)
+  (( _pruned )) && step "removed $_pruned superseded download(s) from $CACHE_DIR"
+fi
+# A finished build keeps the new package and the newest one before it, so any
+# older one would go afterwards anyway; removing it now leaves the build more room.
+_stale=()
+while IFS= read -r -d '' _f; do _stale+=("${_f#* }"); done \
+  < <(find "$PKG_KEEP_DIR" -maxdepth 1 -type f -name '*.pkg.tar.zst' -printf '%T@ %p\0' 2>/dev/null \
+      | sort -zrn | tail -zn +2)
+if (( ${#_stale[@]} )); then
+  rm -f "${_stale[@]}" && step "removed ${#_stale[@]} older package(s) kept for rollback"
+fi
 
 if [[ -f $ZIP ]] && bsdtar -tf "$ZIP" >/dev/null 2>&1; then
   info "Reusing cached download: ${c_b}${ZIP}${c_0}"
@@ -726,7 +758,13 @@ WRAPPER
 PKGBUILD
 
 wait_for_package_manager
-( cd "$BUILD_DIR" && makepkg -si "${NOCONFIRM[@]}" ) || die "makepkg failed."
+if ! ( cd "$BUILD_DIR" && makepkg -si "${NOCONFIRM[@]}" ); then
+  # A disk that filled up partway reads as a failed build, so look before saying which.
+  _left=$(df -BG --output=avail "$BUILD_DIR" 2>/dev/null | tail -1 | tr -dc '0-9')
+  [[ -n $_left ]] && (( _left < 2 )) \
+    && die_nospace "the disk filled up while building the package (${_left} GB left on $(df --output=target "$BUILD_DIR" 2>/dev/null | tail -1)). Free some space and re-run."
+  die "makepkg failed."
+fi
 FINISHED=1
 
 # Keep the package that was just built, so a bad Resolve release can be undone
@@ -734,7 +772,6 @@ FINISHED=1
 # not in cleanup(), because the trap deletes BUILD_DIR. Two generations: the one
 # just installed and the one it replaced, which is as far back as a rollback is
 # ever useful and still costs ~6 GB.
-PKG_KEEP_DIR="$CACHE_DIR/packages"
 save_built_package() {
   local built=() f kept=0
   while IFS= read -r -d '' f; do built+=("$f"); done \
@@ -760,19 +797,6 @@ save_built_package() {
   step "Roll back with: ${c_b}sudo pacman -U ${PKG_KEEP_DIR}/<file>.pkg.tar.zst${c_0}"
 }
 save_built_package
-
-# Each of these is 10 GB or more and nothing else ever removes them. Only the
-# download just used survives. -maxdepth 1 -type f keeps this away from the
-# build.?????? trees, which have their own sweep and PID-owner guard, and from
-# packages/ next door.
-if ! (( KEEP )); then
-  _pruned=0
-  while IFS= read -r -d '' _old_zip; do
-    [[ $_old_zip == "$ZIP" ]] && continue
-    rm -f "$_old_zip" && _pruned=$(( _pruned + 1 ))
-  done < <(find "$CACHE_DIR" -maxdepth 1 -type f -name 'DaVinci_Resolve*_Linux.zip' -print0 2>/dev/null)
-  (( _pruned )) && step "removed $_pruned superseded download(s) from $CACHE_DIR"
-fi
 
 # Resolve's bundled libcurl has /etc/pki/tls/certs/ca-bundle.crt compiled in as
 # its CA file — the Red Hat path, which Arch doesn't have. curl 7.82 gives up as

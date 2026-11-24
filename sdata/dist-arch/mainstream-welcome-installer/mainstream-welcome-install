@@ -331,6 +331,8 @@ install_resolve() {  # "" | --studio   [install|update]
   rm -f "$SUDOERS_TMP"
   log "$name installer exited: $rc"
   if (( rc == 0 )); then notify "$name $done_" "Launch it from your apps."
+  elif (( rc == 28 )); then
+    notify "$name $failed" "There is not enough free disk space to build it. Free some space in your home folder, then try again." critical; return 1
   else notify "$name $failed" "See the log: $LOGFILE" critical; return 1; fi
 }
 

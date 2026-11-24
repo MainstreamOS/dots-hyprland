@@ -49,6 +49,8 @@ ContentPage {
     // offered. 3 after the marker: it starts a kernel no longer installed.
     readonly property string bootBrokenMarker: "@@MAINSTREAM-UPDATE-BOOT-BROKEN"
     property bool bootBroken: false
+    readonly property string resolveNoSpaceMarker: "@@MAINSTREAM-UPDATE-RESOLVE-NOSPACE"
+    property bool resolveNoSpace: false
     property bool bootOldKernel: false
     // Kept apart so a replayed record cannot silence a fresh prediction: rebootPredicted
     // is what a run started now would do; rebootVerdict is a finished run's.
@@ -94,6 +96,8 @@ ContentPage {
     readonly property bool flagSkipDotfiles: Config.options.updates.advanced.skipDotfiles
     readonly property bool flagSkipExtras: Config.options.updates.advanced.skipExtras
     readonly property bool flagSkipFirmware: Config.options.updates.advanced.skipFirmware
+    readonly property bool flagSkipResolve: Config.options.updates.advanced.skipResolve
+    property bool resolveInstalled: false
     readonly property bool flagAutoRebuildQuickshell: Config.options.updates.advanced.autoRebuildQuickshell
     readonly property bool flagEdge: Config.options.updates.advanced.edge
     property string customArgs: ""
@@ -121,6 +125,7 @@ ContentPage {
         if (flagSkipDotfiles && !finishing) args.push("--skip-dotfiles");
         if (flagSkipExtras)            args.push("--skip-extras");
         if (flagSkipFirmware)          args.push("--skip-firmware");
+        if (flagSkipResolve)           args.push("--skip-resolve");
         if (flagAutoRebuildQuickshell) args.push("--auto-rebuild-quickshell");
         if (flagEdge)                  args.push("--edge");
         if (customArgs.trim().length > 0) {
@@ -139,6 +144,8 @@ ContentPage {
             lines.push((flagSkipAur     ? "✗" : "✓") + "  AUR                (yay -Sua)");
         lines.push((flagSkipFlatpak     ? "✗" : "✓") + "  Flatpak            (flatpak update --system + --user)");
         lines.push((flagSkipDotfiles    ? "✗" : "✓") + "  Mainstream dots    (updatems — on remote tag bump)");
+        if (resolveInstalled)
+            lines.push((flagSkipResolve ? "✗" : "✓") + "  DaVinci Resolve    (install-davinci-resolve)");
         lines.push((flagSkipExtras      ? "✗" : "✓") + "  Developer extras   (topgrade — cargo, pipx, npm, nix, ...)");
         lines.push((flagAutoRebuildQuickshell ? "✓" : "✗") + "  Quickshell ABI check + rebuild if needed");
         return lines.join("\n");
@@ -153,6 +160,7 @@ ContentPage {
         rebootPredicted = false;
         bootBroken = false;
         bootOldKernel = false;
+        resolveNoSpace = false;
         recordPredatesBoot = false;
         userStopped = false;
         replaying = false;
@@ -266,7 +274,7 @@ ContentPage {
             root.outputText += "\n\n" + Translation.tr("Authentication failed — wrong password. Try again.");
             return;
         }
-        // 100: snap or extras failed, or [mainstream] was switched off; shown as
+        // 100: snap, extras or DaVinci Resolve failed, or [mainstream] was switched off; shown as
         // success since the summary says so. 101: dotfiles failed, never a success.
         if (exitCode === 3) {
             root.outputText += "\n\n" + Translation.tr("Another update was already running, so this one did not start.");
@@ -288,6 +296,8 @@ ContentPage {
         } else {
             root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
         }
+        if (root.resolveNoSpace)
+            root.outputText += "\n" + Translation.tr("DaVinci Resolve was not updated because there is not enough free disk space to build the new version. Free some space in your home folder, then run the update again. The version you have keeps working.");
         if (root.bootBroken)
             root.outputText += "\n\n" + root.bootBrokenText();
         if (root.rebootRequired)
@@ -364,6 +374,10 @@ ContentPage {
         if (broken !== -1) {
             root.bootBroken = true;
             root.bootOldKernel = line.substring(broken + root.bootBrokenMarker.length).trim() === "3";
+            return;
+        }
+        if (line.indexOf(root.resolveNoSpaceMarker) !== -1) {
+            root.resolveNoSpace = true;
             return;
         }
         // An older helper without that line still prints step banners or ">>> " refusals, which
@@ -637,6 +651,15 @@ ContentPage {
         running: true
         onExited: (exitCode, exitStatus) => {
             root.aurHelperPresent = (exitCode === 0);
+        }
+    }
+
+    Process {
+        id: resolveCheck
+        command: ["sh", "-c", "pacman -Qq davinci-resolve-studio davinci-resolve davinci-resolve-studio-beta davinci-resolve-beta 2>/dev/null | grep -q ."]
+        running: true
+        onExited: (exitCode, exitStatus) => {
+            root.resolveInstalled = (exitCode === 0);
         }
     }
 
@@ -1138,7 +1161,26 @@ ContentPage {
             ConfigRow {
                 uniform: true
                 ConfigSwitch {
-                    visible: root.aurHelperPresent
+                    enabled: root.resolveInstalled
+                    buttonIcon: "movie_edit"
+                    text: Translation.tr("Skip DaVinci Resolve")
+                    checked: root.flagSkipResolve
+                    onCheckedChanged: Config.options.updates.advanced.skipResolve = checked
+                    StyledToolTip {
+                        text: Translation.tr("Leave DaVinci Resolve as it is when updating. It is built on this computer from Blackmagic's download, so a new version means an 11 GB download and a long build. Turn this on to update it yourself instead.")
+                    }
+                }
+                ConfigSwitch {
+                    buttonIcon: "lightbulb"
+                    text: Translation.tr("Disable tips")
+                    checked: Config.options.updates.disableTips
+                    onCheckedChanged: Config.options.updates.disableTips = checked
+                }
+            }
+            ConfigRow {
+                visible: root.aurHelperPresent
+                uniform: true
+                ConfigSwitch {
                     buttonIcon: "block"
                     text: Translation.tr("Disable AUR (yay/paru)")
                     checked: root.flagSkipAur
@@ -1148,14 +1190,7 @@ ContentPage {
                     }
                 }
                 Item {
-                    visible: !root.aurHelperPresent
                     Layout.fillWidth: true
-                }
-                ConfigSwitch {
-                    buttonIcon: "lightbulb"
-                    text: Translation.tr("Disable tips")
-                    checked: Config.options.updates.disableTips
-                    onCheckedChanged: Config.options.updates.disableTips = checked
                 }
             }
 

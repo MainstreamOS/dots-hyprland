@@ -3599,5 +3599,21 @@
   "Could not update %s; Steam's default Proton is unchanged.": "Could not update %s; Steam's default Proton is unchanged.",
   "Installed Proton Mainstream for Steam": "Installed Proton Mainstream for Steam",
   "Could not install Proton Mainstream; the next update tries again": "Could not install Proton Mainstream; the next update tries again",
-  "Mainstream's build of the same kernel version. New installs start it by default.": "Mainstream's build of the same kernel version. New installs start it by default."
+  "Mainstream's build of the same kernel version. New installs start it by default.": "Mainstream's build of the same kernel version. New installs start it by default.",
+  "Skip DaVinci Resolve": "Skip DaVinci Resolve",
+  "Leave DaVinci Resolve as it is when updating. It is built on this computer from Blackmagic's download, so a new version means an 11 GB download and a long build. Turn this on to update it yourself instead.": "Leave DaVinci Resolve as it is when updating. It is built on this computer from Blackmagic's download, so a new version means an 11 GB download and a long build. Turn this on to update it yourself instead.",
+  "DaVinci Resolve was not updated because there is not enough free disk space to build the new version. Free some space in your home folder, then run the update again. The version you have keeps working.": "DaVinci Resolve was not updated because there is not enough free disk space to build the new version. Free some space in your home folder, then run the update again. The version you have keeps working.",
+  "DaVinci Resolve: skipped (per --skip-resolve)": "DaVinci Resolve: skipped (per --skip-resolve)",
+  "DaVinci Resolve: waiting for the system packages, which were held back.": "DaVinci Resolve: waiting for the system packages, which were held back.",
+  "DaVinci Resolve: deferred, because the system package update failed.": "DaVinci Resolve: deferred, because the system package update failed.",
+  "DaVinci Resolve (install-davinci-resolve)": "DaVinci Resolve (install-davinci-resolve)",
+  "Updating DaVinci Resolve from %s to %s. It downloads about 11 GB from Blackmagic and builds on this computer, which takes a while.": "Updating DaVinci Resolve from %s to %s. It downloads about 11 GB from Blackmagic and builds on this computer, which takes a while.",
+  "DaVinci Resolve was not updated: there is not enough free disk space to build the new version. The line above says how much it needs. Free some space in your home folder, then run the update again. The version you have keeps working.": "DaVinci Resolve was not updated: there is not enough free disk space to build the new version. The line above says how much it needs. Free some space in your home folder, then run the update again. The version you have keeps working.",
+  "DaVinci Resolve did not update. The version you have keeps working, and the lines above say what went wrong.": "DaVinci Resolve did not update. The version you have keeps working, and the lines above say what went wrong.",
+  "A beta of DaVinci Resolve is installed. Betas are updated by hand.": "A beta of DaVinci Resolve is installed. Betas are updated by hand.",
+  "DaVinci Resolve %s is up to date.": "DaVinci Resolve %s is up to date.",
+  "Could not check for a new DaVinci Resolve because Blackmagic's site did not answer. The rest of the update is not affected.": "Could not check for a new DaVinci Resolve because Blackmagic's site did not answer. The rest of the update is not affected.",
+  "not enough free disk space": "not enough free disk space",
+  "could not check for a new version": "could not check for a new version",
+  "DaVinci Resolve:": "DaVinci Resolve:"
 }

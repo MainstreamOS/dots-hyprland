@@ -15,6 +15,7 @@
 #   --skip-dotfiles            skip the updatems dotfiles refresh
 #   --skip-extras              skip the topgrade pass
 #   --skip-firmware            pass --disable firmware to topgrade (polkit prompts time out)
+#   --skip-resolve             leave DaVinci Resolve as it is
 #   --edge                     updatems takes the branch instead of the newest release
 #   --auto-rebuild-quickshell  after all steps, rebuild Quickshell on an ABI mismatch
 #
@@ -22,7 +23,7 @@
 #   0    everything succeeded or was skipped
 #   101  the dotfiles did not update; the machine is still on its old release
 #   102  the dotfiles updated, but updatems-system did not finish
-#   100  completed with errors: snap, extras or browser media controls failed, or [mainstream] was switched off
+#   100  completed with errors: snap, extras, DaVinci Resolve or browser media controls failed, or [mainstream] was switched off
 #   105  held: the EFI partition is too full to rebuild the boot image safely; no package changed
 #   106  the boot menu would not start the system and could not be repaired; do not restart
 #   107  Hyprland's Lua configs must be installed before upgrading to 0.57
@@ -321,6 +322,7 @@ SKIP_DOTFILES=0
 EDGE=0
 SKIP_EXTRAS=0
 SKIP_FIRMWARE=0
+SKIP_RESOLVE=0
 AUTO_REBUILD_QS=0
 TOPGRADE_EXTRA_ARGS=()
 # Everything after a bare -- goes to topgrade as is: the page sends the Advanced
@@ -340,6 +342,7 @@ for arg in "$@"; do
         --skip-dotfiles)            SKIP_DOTFILES=1 ;;
         --skip-extras)              SKIP_EXTRAS=1 ;;
         --skip-firmware)            SKIP_FIRMWARE=1 ;;
+        --skip-resolve)             SKIP_RESOLVE=1 ;;
         --edge)                     EDGE=1 ;;
         --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
         --*)
@@ -369,12 +372,14 @@ QT_PIN_HELD=0
 TOPGRADE_RC=0
 ANTIGRAVITY_RC=0
 BROWSER_MEDIA_RC=0
+RESOLVE_RC=0
 AUR_NOTE=""
 FLATPAK_NOTE=""
 SNAP_NOTE=""
 DOTFILES_NOTE=""
 TOPGRADE_NOTE=""
 ANTIGRAVITY_NOTE=""
+RESOLVE_NOTE=""
 AGY_BIN=""
 AG_DESKTOP_INSTALLED=0
 MAINSTREAM_REPO_OFFLINE=0
@@ -642,17 +647,20 @@ elif [[ "$SKIP_AUR" -eq 0 ]]; then
         exit 107
     fi
     BOOT_TOUCHED=1
+    # Resolve's AUR recipes need Blackmagic's download put in place by hand, so
+    # they always fail here; step 5c updates Resolve instead.
+    _resolve_pkgs=davinci-resolve,davinci-resolve-studio,davinci-resolve-beta,davinci-resolve-studio-beta
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     if command -v yay >/dev/null 2>&1; then
         echo "  $(t "AUR packages — yay -Sua")"
         echo "═══════════════════════════════════════════════════════════"
-        user_step 0 env HOME="$ORIG_HOME" yay -Sua --noconfirm
+        user_step 0 env HOME="$ORIG_HOME" yay -Sua --noconfirm --ignore "$_resolve_pkgs"
         AUR_RC=$?
     elif command -v paru >/dev/null 2>&1; then
         echo "  $(t "AUR packages — paru -Sua")"
         echo "═══════════════════════════════════════════════════════════"
-        user_step 0 env HOME="$ORIG_HOME" paru -Sua --noconfirm
+        user_step 0 env HOME="$ORIG_HOME" paru -Sua --noconfirm --ignore "$_resolve_pkgs"
         AUR_RC=$?
     else
         echo "  $(t "AUR: no helper (yay/paru) installed — skipping")"
@@ -802,11 +810,68 @@ elif [[ "$SKIP_DOTFILES" -ne 0 ]]; then
     echo "── $(t "Dotfiles: skipped (per --skip-dotfiles)")"
 fi
 
-# ── 5c. Boot menu, after the last step that can rebuild the boot image ─────
+# ── 5c. DaVinci Resolve ─────────────────────────────────────────────────────
+# Built on this computer from Blackmagic's download, so pacman never offers a new
+# version. install-davinci-resolve judges what is out of date, as for the weekly
+# notice, and a beta is left alone.
+RESOLVE_PKG=$(pacman -Qq davinci-resolve-studio davinci-resolve davinci-resolve-studio-beta \
+    davinci-resolve-beta 2>/dev/null | head -n1)
+RESOLVE_BIN=$(command -v install-davinci-resolve 2>/dev/null || true)
+if [[ -z "$RESOLVE_PKG" || -z "$RESOLVE_BIN" ]]; then
+    RESOLVE_NOTE=absent
+elif [[ "$SKIP_RESOLVE" -ne 0 ]]; then
+    echo ""
+    echo "── $(t "DaVinci Resolve: skipped (per --skip-resolve)")"
+elif [[ "$BOOT_HELD" -eq 1 ]]; then
+    echo ""
+    echo "── $(t "DaVinci Resolve: waiting for the system packages, which were held back.")"
+    RESOLVE_NOTE=held
+elif [[ "$PKG_STEP_FAILED" -eq 1 ]]; then
+    echo ""
+    echo "── $(t "DaVinci Resolve: deferred, because the system package update failed.")"
+    RESOLVE_NOTE=deferred
+else
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  $(t "DaVinci Resolve (install-davinci-resolve)")"
+    echo "═══════════════════════════════════════════════════════════"
+    _rs_json=$(runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+        timeout 60 "$RESOLVE_BIN" --check --json 2>/dev/null 8>&- 9>&-)
+    _rs_check=$?
+    _rs_installed=$(jq -r '.installed // empty' <<<"$_rs_json" 2>/dev/null)
+    _rs_latest=$(jq -r '.latest // empty' <<<"$_rs_json" 2>/dev/null)
+    if [[ "$_rs_check" -eq 10 ]]; then
+        echo "── $(tf "Updating DaVinci Resolve from %s to %s. It downloads about 11 GB from Blackmagic and builds on this computer, which takes a while." "$_rs_installed" "$_rs_latest")"
+        _rs_args=(-y --anon)
+        [[ "$RESOLVE_PKG" == davinci-resolve-studio ]] && _rs_args=(--studio "${_rs_args[@]}")
+        BOOT_TOUCHED=1
+        user_step 0 env HOME="$ORIG_HOME" "$RESOLVE_BIN" "${_rs_args[@]}"
+        RESOLVE_RC=$?
+        # 28: install-davinci-resolve found too little free disk space.
+        if [[ "$RESOLVE_RC" -eq 28 ]]; then
+            RESOLVE_NOTE=nospace
+            echo "@@MAINSTREAM-UPDATE-RESOLVE-NOSPACE"
+            echo ""
+            echo ">>> $(t "DaVinci Resolve was not updated: there is not enough free disk space to build the new version. The line above says how much it needs. Free some space in your home folder, then run the update again. The version you have keeps working.")"
+        elif [[ "$RESOLVE_RC" -ne 0 ]]; then
+            echo ""
+            echo ">>> $(t "DaVinci Resolve did not update. The version you have keeps working, and the lines above say what went wrong.")"
+        fi
+    elif [[ "$_rs_check" -eq 0 && "$RESOLVE_PKG" == *-beta ]]; then
+        echo "── $(t "A beta of DaVinci Resolve is installed. Betas are updated by hand.")"
+    elif [[ "$_rs_check" -eq 0 ]]; then
+        echo "── $(tf "DaVinci Resolve %s is up to date." "$_rs_installed")"
+    else
+        RESOLVE_NOTE=unchecked
+        echo "── $(t "Could not check for a new DaVinci Resolve because Blackmagic's site did not answer. The rest of the update is not affected.")"
+    fi
+fi
+
+# ── 5d. Boot menu, after the last step that can rebuild the boot image ─────
 # Before the extras, which can run for hours, so the answer is not held back.
 boot_postcheck
 
-# ── 5d. Browser media controls ──────────────────────────────────────────────
+# ── 5e. Browser media controls ──────────────────────────────────────────────
 # A Flatpak browser sees none of mpris-hyprland's files, so the package's helper
 # keeps a copy inside each one it supports.
 BROWSER_SETUP=/usr/lib/mpris-hyprland/setup-browsers
@@ -1048,7 +1113,8 @@ fi
 
 # ── 8. Summary + exit code ──────────────────────────────────────────────────
 # The summary is for reading; the page relies on the exit code and markers.
-# $3 marks a step that did not run: "absent" (its tool is not installed), "deferred" or "held".
+# $3 marks a step that did not run: "absent" (its tool is not installed), "deferred" or "held";
+# "nospace" and "unchecked" are DaVinci Resolve's.
 status_for() {
     local skip="$1" rc="$2" note="${3:-}"
     if [[ "$skip" -eq 1 ]]; then
@@ -1061,6 +1127,10 @@ status_for() {
         echo "$(t "deferred (system update failed)")"
     elif [[ "$note" == held ]]; then
         echo "$(t "waiting for the system packages")"
+    elif [[ "$note" == nospace ]]; then
+        echo "$(t "not enough free disk space")"
+    elif [[ "$note" == unchecked ]]; then
+        echo "$(t "could not check for a new version")"
     elif [[ "$rc" -eq 0 ]]; then
         echo "$(t "ok")"
     else
@@ -1091,6 +1161,9 @@ if [[ "$QT_PIN_HELD" -eq 1 ]]; then
 else
     printf "  %-30s %s\n" "$(t "Dotfiles (updatems):")"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC" "$DOTFILES_NOTE")"
     printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC" "$DOTFILES_NOTE")"
+fi
+if [[ "$RESOLVE_NOTE" != absent ]]; then
+    printf "  %-30s %s\n" "$(t "DaVinci Resolve:")"              "$(status_for "$SKIP_RESOLVE"  "$RESOLVE_RC" "$RESOLVE_NOTE")"
 fi
 printf "  %-30s %s\n" "$(t "Developer extras (topgrade):")"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC" "$TOPGRADE_NOTE")"
 if [[ -n "$AGY_BIN" || "$AG_DESKTOP_INSTALLED" -eq 1 ]]; then
@@ -1124,9 +1197,9 @@ if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
     echo ">>>     sudo mainstream-keyring-repair"
 fi
 
-# Primary failures (pacman, AUR, flatpak) return their own code. Snap, extras and
-# browser media controls are soft: 100, which the page shows as success while the
-# summary marks the step.
+# Primary failures (pacman, AUR, flatpak) return their own code. Snap, DaVinci
+# Resolve, extras and browser media controls are soft: 100, which the page shows
+# as success while the summary marks the step.
 # The Qt pin hold comes first so the page can say why the desktop did not update.
 # Only a boot menu that would not start the system outranks it.
 if [[ "$BOOT_RC" == 1 ]]; then exit 106; fi
@@ -1138,6 +1211,7 @@ if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$F
 if [[ "$SKIP_SNAP"     -ne 1 ]] && [[ "$SNAP_RC"         -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_RC"     -ne 0 ]]; then exit 101;            fi
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 102;            fi
+if [[ "$SKIP_RESOLVE"  -ne 1 ]] && [[ "$RESOLVE_RC"      -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$TOPGRADE_RC"     -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$ANTIGRAVITY_RC"  -ne 0 ]]; then exit 100;            fi
 if [[ "$BROWSER_MEDIA_RC" -ne 0 ]]; then exit 100; fi

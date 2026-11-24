@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # mainstream-resolve-update-check — tell the user when a newer DaVinci Resolve is
 # out. Resolve is built into a local pacman package, so 'pacman -Syu' never sees
-# it and nothing else would ever mention a new release.
+# it; Mainstream's system update installs a new release, and this tells the user
+# about one between updates.
 #
 # Nothing is installed unless the user presses the notification's Install button.
 # Pressing it hands off to 'mainstream-welcome-install resolve-update' through
@@ -65,8 +66,8 @@ and to turn it back on:
 'mask', not 'disable': the package enables the timer by shipping a symlink in
 /usr/lib/systemd/user/timers.target.wants/, and 'disable' only ever removes
 symlinks from the user's own config, so against a packaged one it exits 0 and
-changes nothing. Masking is also what the Resolve section of Settings ->
-Updates toggles, so the two agree.
+changes nothing. Settings -> Updates -> Advanced -> Skip DaVinci Resolve is
+separate: it only leaves Resolve out of the system update.
 EOF
 }
 

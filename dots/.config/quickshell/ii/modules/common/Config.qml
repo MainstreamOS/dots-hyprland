@@ -1453,6 +1453,7 @@ Singleton {
                     property bool skipExtras: false
                     // Firmware updates can prompt polkit and time out unattended.
                     property bool skipFirmware: true
+                    property bool skipResolve: false
                     property bool autoRebuildQuickshell: true
                     property bool edge: false
                 }
