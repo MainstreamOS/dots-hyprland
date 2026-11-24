@@ -1,3 +1,4 @@
 # Under memory pressure, pages used in the last 100 ms stay in memory; the OOM
 # killer steps in instead of the desktop thrashing.
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
+# "w-": a read-only /sys, as in a chroot during an install, is not an error.
+w- /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
