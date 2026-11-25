@@ -63,11 +63,13 @@ DENYLIST=(
     sddm plymouth mkinitcpio limine efibootmgr
     limine-snapper-sync limine-mkinitcpio-hook snapper
     networkmanager wpa_supplicant pipewire pipewire-pulse pipewire-alsa wireplumber
-    mesa nvidia-open nvidia-utils vulkan-radeon vulkan-intel intel-media-driver
+    mesa nvidia-open nvidia-open-dkms dkms nvidia-utils vulkan-radeon vulkan-intel intel-media-driver
     xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
     polkit hyprpolkitagent seatd
     bash zsh sudo systemd dbus
     linux linux-firmware linux-headers
+    linux-mainstream linux-mainstream-headers
+    linux-mainstream-performance linux-mainstream-performance-headers
 )
 
 # App bundles: mainstream-* metas that represent one user-facing app
