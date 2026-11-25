@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=34
+pkgrel=35
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -94,6 +94,7 @@ source=(
   mainstream-limine-remember.service
   efi-old-partition-hook
   mglru.tmpfiles
+  memory.sysctl
 )
 sha256sums=(
   SKIP SKIP SKIP
@@ -101,7 +102,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -176,6 +177,7 @@ package() {
   install -Dm644 "$srcdir/sharing.tmpfiles"              "$pkgdir/usr/lib/tmpfiles.d/mainstream-sharing.conf"
   install -Dm644 "$srcdir/update-sudoers.tmpfiles"       "$pkgdir/usr/lib/tmpfiles.d/mainstream-update.conf"
   install -Dm644 "$srcdir/mglru.tmpfiles"                "$pkgdir/usr/lib/tmpfiles.d/mainstream-mglru.conf"
+  install -Dm644 "$srcdir/memory.sysctl"                 "$pkgdir/usr/lib/sysctl.d/zz-mainstream-memory.conf"
   install -Dm644 "$srcdir/smb.conf"                      "$pkgdir/usr/share/mainstream/samba/smb.conf"
   install -Dm644 "$srcdir/MainstreamHome.xml"            "$pkgdir/usr/lib/firewalld/zones/MainstreamHome.xml"
   install -Dm644 "$srcdir/mainstream-lan4.xml"           "$pkgdir/usr/lib/firewalld/ipsets/mainstream-lan4.xml"

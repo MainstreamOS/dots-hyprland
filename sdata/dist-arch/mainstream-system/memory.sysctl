@@ -1,0 +1,16 @@
+# Memory tuning for swap on compressed RAM (zram). Named to sort last, so it
+# wins over the dirty-page ratios that older installs wrote.
+
+# One page per swap-in fault: zram has no seek to save, and each extra page
+# costs a separate decompression.
+vm.page-cluster = 0
+
+# Cap unwritten data at 64 MiB and 256 MiB instead of a share of RAM, which on
+# a large machine lets gigabytes pile up and then flush in stalls.
+vm.dirty_background_bytes = 67108864
+vm.dirty_bytes = 268435456
+
+# Reclaim in the background with a wider free margin instead of stalling
+# programs in direct reclaim, and no reclaim bursts from fragmentation.
+vm.watermark_boost_factor = 0
+vm.watermark_scale_factor = 125
