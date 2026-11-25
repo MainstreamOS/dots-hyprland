@@ -18,11 +18,47 @@ PROFILES = [
     ('gaming', 'Gaming · Starts in Steam'),
     ('os-only', 'OS only · The Mainstream desktop'),
 ]
+APP_SOURCES = [
+    ('native', 'Native packages · Recommended'),
+    ('flatpak', 'Flatpak · For apps that have one'),
+]
+KERNELS = [
+    ('linux-mainstream', 'Mainstream kernel · Recommended'),
+    ('linux-mainstream-performance', 'Mainstream performance kernel · Needs a CPU from about 2015 or newer'),
+    ('linux', "Arch's linux kernel"),
+]
+# The order ./setup prefers them in, which the flags keep.
+KERNEL_ORDER = ['linux-mainstream-performance', 'linux-mainstream', 'linux']
+PROTON_ORDER = ['mainstream', 'ge', 'cachyos']
 DISK_MODES = [
     ('alongside', 'Install alongside · Use existing unallocated space'),
     ('erase', 'Erase disk · Replace everything on the selected drive'),
 ]
 ENTER = (curses.KEY_ENTER, '\n', '\r')
+
+
+def cpu_runs_x86_64_v3(cpuinfo='/proc/cpuinfo'):
+    """Same flag test as cpu_runs_performance_kernel in mainstream-kernels."""
+    try:
+        with open(cpuinfo, encoding='utf-8', errors='replace') as file:
+            line = next((line for line in file if line.startswith('flags')), '')
+    except OSError:
+        return False
+    flags = set(line.partition(':')[2].split())
+    return ({'avx', 'avx2', 'bmi1', 'bmi2', 'f16c', 'fma', 'movbe', 'xsave'} <= flags
+            and bool({'abm', 'lzcnt'} & flags))
+
+
+def install_options(state, selected):
+    options = ['--profile', state['profile']]
+    if state['profile'] == 'custom':
+        kernels = [kernel for kernel in KERNEL_ORDER if kernel in state['kernels']] or ['linux-mainstream']
+        # Catalog items named with ':' are choices, never packages.
+        protons = [proton for proton in PROTON_ORDER if f'proton:{proton}' in selected]
+        options += ['--app-source', state['app_source'], '--kernel', ','.join(kernels),
+                    '--proton', ','.join(protons) or 'none',
+                    '--apps', ','.join(sorted(app for app in selected if ':' not in app))]
+    return options
 
 
 class Back(Exception):
@@ -163,8 +199,10 @@ def collect(screen, groups, selected):
     state = {}
     step = 0
     while True:
-        apps = list(groups) if state.get('profile') == 'custom' else []
-        steps = ['profile', 'mode', 'disk', *apps, 'encryption', 'username', 'password', 'review']
+        custom = state.get('profile') == 'custom'
+        choices = ['app_source', 'kernels'] if custom else []
+        apps = list(groups) if custom else []
+        steps = ['profile', 'mode', 'disk', *choices, *apps, 'encryption', 'username', 'password', 'review']
         key = steps[step]
         try:
             if key == 'profile':
@@ -182,6 +220,20 @@ def collect(screen, groups, selected):
                     continue
                 state[key] = ui.choose('Choose a drive', 'Choose a drive by its model and size.', drives, state.get(key))
                 state['disk_label'] = dict(drives)[state[key]]
+            elif key == 'app_source':
+                state[key] = ui.choose('App source', 'Choose whether apps install as native packages or as Flatpaks.',
+                                       APP_SOURCES, state.get(key))
+            elif key == 'kernels':
+                kernels = state.setdefault(key, {'linux-mainstream'})
+                details = 'Choose one or more kernels to install.'
+                while True:
+                    ui.choose('Kernel', details, KERNELS, checked=kernels)
+                    if 'linux-mainstream-performance' not in kernels or cpu_runs_x86_64_v3():
+                        break
+                    kernels.discard('linux-mainstream-performance')
+                    kernels.add('linux-mainstream')
+                    details = ('This CPU does not support x86-64-v3, which the performance kernel needs, '
+                               'so the Mainstream kernel is checked instead.')
             elif key in apps:
                 ui.choose(key, f'Custom apps · {apps.index(key) + 1} of {len(apps)} categories',
                           groups[key], checked=selected)
@@ -207,8 +259,12 @@ def collect(screen, groups, selected):
                 label = dict(PROFILES)[state['profile']].split(' · ')[0]
                 summary = f'{label} · {disk_action} {state["disk_label"]} · Account: {state["username"]}'
                 summary += ' · Encrypted' if state['encryption'] else ' · Unencrypted'
+                if custom:
+                    summary += f' · {dict(APP_SOURCES)[state["app_source"]].split(" · ")[0]}'
+                    names = [dict(KERNELS)[kernel].split(' · ')[0] for kernel, _ in KERNELS if kernel in state['kernels']]
+                    summary += f' · {", ".join(names) or dict(KERNELS)["linux-mainstream"].split(" · ")[0]}'
                 if apps:
-                    count = len(selected)
+                    count = sum(':' not in app for app in selected)
                     summary += f' · {count} {"app" if count == 1 else "apps"} selected'
                 if ui.choose('Ready to install', summary, [(False, 'Go back'), (True, 'Install Mainstream')]):
                     return state
@@ -240,10 +296,7 @@ def main(staging, network):
     (staging / 'diskseq').write_text(sequence + '\n')
     (staging / 'credentials.json').write_text(json.dumps(creds))
     (staging / 'username').write_text(state['username'] + '\n')
-    options = ['--profile', state['profile']]
-    if state['profile'] == 'custom':
-        options += ['--apps', ','.join(sorted(selected))]
-    (staging / 'options').write_text('\n'.join(options) + '\n')
+    (staging / 'options').write_text('\n'.join(install_options(state, selected)) + '\n')
 
 
 if __name__ == '__main__':

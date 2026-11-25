@@ -403,8 +403,21 @@ install-local-pkgbuild() {
       fi
       if ! sudo flatpak install --system --noninteractive --assumeyes \
               flathub "$dep"; then
-        printf "${STY_RED}[$0]: ERROR: Failed to install Flatpak '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
-        MS_INSTALL_MISSING_PACKAGES+=("$dep")
+        # A Flatpak the chosen app source swapped in falls back to its native
+        # package, as the ISO's installer does.
+        local native=""
+        if [[ " ${MS_SWAPPED_FLATPAKS[*]-} " == *" $dep "* && -r "$REPO_ROOT/sdata/lib/app-variants.sh" ]]; then
+          # shellcheck source=sdata/lib/app-variants.sh
+          source "$REPO_ROOT/sdata/lib/app-variants.sh"
+          native=$(app_variant_swap native "$dep")
+        fi
+        if [[ -n $native && $native != "$dep" ]] \
+            && retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$native"; then
+          printf "${STY_YELLOW}[$0]: Installed the native package '%s' in place of Flatpak '%s'.${STY_RST}\n" "$native" "$dep"
+        else
+          printf "${STY_RED}[$0]: ERROR: Failed to install Flatpak '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
+          MS_INSTALL_MISSING_PACKAGES+=("$dep")
+        fi
       fi
       continue
     fi

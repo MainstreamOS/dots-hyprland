@@ -533,9 +533,12 @@ fi
 
 # Mainstream's kernel is the default of a new install where a repository offers
 # it, as on the ISO. Arch's linux stays installed beside it as the fallback, and
-# a system on any other kernel is left as it is. Its boot default is set by
-# setup_mainstream_kernel_default once the boot loader is known.
-MAINSTREAM_KERNEL=linux-mainstream
+# a system on any other kernel is left as it is. A Custom install can choose
+# several kernels; the first of performance, mainstream that is added becomes the
+# boot default (MAINSTREAM_KERNEL), set by setup_mainstream_kernel_default once
+# the boot loader is known.
+MAINSTREAM_KERNEL_CHOICES=${MS_INSTALL_KERNELS-linux-mainstream}
+MAINSTREAM_KERNEL=""
 MAINSTREAM_KERNEL_ADDED=false
 # Room for its boot image beside the stock one's, and for the snapshot copies of both.
 MAINSTREAM_KERNEL_MIN_FREE_MIB=512
@@ -543,9 +546,19 @@ LIMINE_LAST_ENTRY_VAR=/sys/firmware/efi/efivars/LimineLastBootedEntry-03884334-1
 MAINSTREAM_KERNELS_HELPER=/usr/lib/mainstream/mainstream-kernels
 function setup_mainstream_kernel(){
   [[ "$OS_GROUP_ID" == "arch" ]] || return 0
-  local esp free failures
-  if [[ "$(pacman -Qq "$MAINSTREAM_KERNEL" 2>/dev/null)" == "$MAINSTREAM_KERNEL" ]]; then
-    echo -e "${STY_BLUE}[$0]: $MAINSTREAM_KERNEL is already installed; the boot menu's default is left as it is.${STY_RST}"
+  local kernel
+  local -a chosen=() kernels=()
+  read -ra chosen <<< "$MAINSTREAM_KERNEL_CHOICES"
+  for kernel in linux-mainstream-performance linux-mainstream; do
+    [[ " ${chosen[*]} " == *" $kernel "* ]] || continue
+    if [[ "$kernel" == linux-mainstream-performance ]] && ! cpu_runs_x86_64_v3; then
+      echo -e "${STY_YELLOW}[$0]: This CPU does not support x86-64-v3, which the performance kernel needs; adding linux-mainstream instead.${STY_RST}"
+      kernel=linux-mainstream
+    fi
+    [[ " ${kernels[*]} " == *" $kernel "* ]] || kernels+=("$kernel")
+  done
+  if (( ${#kernels[@]} == 0 )); then
+    echo -e "${STY_BLUE}[$0]: Arch's linux kernel was chosen, so no Mainstream kernel is added.${STY_RST}"
     return 0
   fi
   # Existing installs are not switched. A first install is the firstrun of
@@ -559,40 +572,54 @@ function setup_mainstream_kernel(){
   fi
   # By name: linux-t2 provides linux, and pacman -Q answers with a provider.
   if [[ "$(pacman -Qq linux 2>/dev/null)" != linux ]]; then
-    echo -e "${STY_BLUE}[$0]: Arch's linux kernel is not installed, so $MAINSTREAM_KERNEL is not added.${STY_RST}"
+    echo -e "${STY_BLUE}[$0]: Arch's linux kernel is not installed, so ${kernels[*]} is not added.${STY_RST}"
     return 0
   fi
-  if ! pacman -Si "$MAINSTREAM_KERNEL" >/dev/null 2>&1 || ! pacman -Si "$MAINSTREAM_KERNEL-headers" >/dev/null 2>&1; then
-    echo -e "${STY_BLUE}[$0]: No repository offers $MAINSTREAM_KERNEL yet; Arch's kernel stays the only one.${STY_RST}"
-    return 0
+  for kernel in "${kernels[@]}"; do
+    # One already in from an earlier run still counts for the boot default.
+    if [[ "$(pacman -Qq "$kernel" 2>/dev/null)" == "$kernel" ]]; then
+      gpu_kernel_nvidia_ready "$kernel" || continue
+    else
+      _add_mainstream_kernel "$kernel" || continue
+    fi
+    MAINSTREAM_KERNEL_ADDED=true
+    [[ -n "$MAINSTREAM_KERNEL" ]] || MAINSTREAM_KERNEL=$kernel
+  done
+}
+# Adds one Mainstream kernel beside Arch's; returns 1 when it is not added.
+function _add_mainstream_kernel(){
+  local kernel=$1 esp free failures
+  if ! pacman -Si "$kernel" >/dev/null 2>&1 || ! pacman -Si "$kernel-headers" >/dev/null 2>&1; then
+    echo -e "${STY_BLUE}[$0]: No repository offers $kernel yet, so it is not added.${STY_RST}"
+    return 1
   fi
   esp="$(bootctl --print-esp-path 2>/dev/null || true)"
   [[ -n "$esp" ]] || esp="$([[ -d /boot/efi ]] && echo /boot/efi || echo /boot)"
   free="$(df -Pm "$esp" 2>/dev/null | awk 'NR==2 {print $4}')" || free=""
   if [[ ! "$free" =~ ^[0-9]+$ ]] || (( free < MAINSTREAM_KERNEL_MIN_FREE_MIB )); then
-    echo -e "${STY_YELLOW}[$0]: $esp has ${free:-unknown} MiB free and a second kernel needs $MAINSTREAM_KERNEL_MIN_FREE_MIB MiB; Arch's kernel stays the only one.${STY_RST}"
-    return 0
+    echo -e "${STY_YELLOW}[$0]: $esp has ${free:-unknown} MiB free and another kernel needs $MAINSTREAM_KERNEL_MIN_FREE_MIB MiB, so $kernel is not added.${STY_RST}"
+    return 1
   fi
-  echo -e "${STY_CYAN}[$0]: Installing $MAINSTREAM_KERNEL beside Arch's kernel...${STY_RST}"
-  if ! sudo pacman -S --needed --noconfirm "$MAINSTREAM_KERNEL" "$MAINSTREAM_KERNEL-headers"; then
-    echo -e "${STY_YELLOW}[$0]: $MAINSTREAM_KERNEL could not be installed; Arch's kernel stays the only one.${STY_RST}"
-    return 0
+  echo -e "${STY_CYAN}[$0]: Installing $kernel beside Arch's kernel...${STY_RST}"
+  if ! sudo pacman -S --needed --noconfirm "$kernel" "$kernel-headers"; then
+    echo -e "${STY_YELLOW}[$0]: $kernel could not be installed.${STY_RST}"
+    return 1
   fi
   # The prebuilt NVIDIA driver serves Arch's kernel alone, so this one needs the
   # DKMS driver. One that ends up without a module comes back out.
   failures=${#GPU_FAILURES[@]}
   if gpu_detect && [[ "${HAS_NVIDIA:-false}" == true && "${SKIP_GPUDRIVERS:-false}" != true ]]; then
     gpu_classify_nvidia_driver
-    gpu_nvidia_modules_for_added_kernel "$MAINSTREAM_KERNEL" || true
+    gpu_nvidia_modules_for_added_kernel "$kernel" || true
   fi
-  if ! gpu_kernel_nvidia_ready "$MAINSTREAM_KERNEL"; then
-    echo -e "${STY_YELLOW}[$0]: No NVIDIA driver could be built for $MAINSTREAM_KERNEL, so it is removed again; Arch's kernel stays the only one.${STY_RST}"
-    sudo pacman -Rns --noconfirm "$MAINSTREAM_KERNEL" "$MAINSTREAM_KERNEL-headers" \
-      || echo -e "${STY_YELLOW}[$0]: $MAINSTREAM_KERNEL could not be removed; choose Arch's kernel in the boot menu.${STY_RST}"
-    return 0
+  if ! gpu_kernel_nvidia_ready "$kernel"; then
+    echo -e "${STY_YELLOW}[$0]: No NVIDIA driver could be built for $kernel, so it is removed again.${STY_RST}"
+    sudo pacman -Rns --noconfirm "$kernel" "$kernel-headers" \
+      || echo -e "${STY_YELLOW}[$0]: $kernel could not be removed; choose Arch's kernel in the boot menu.${STY_RST}"
+    return 1
   fi
   (( ${#GPU_FAILURES[@]} > failures )) && flush_failures
-  MAINSTREAM_KERNEL_ADDED=true
+  return 0
 }
 showfun setup_mainstream_kernel
 v setup_mainstream_kernel

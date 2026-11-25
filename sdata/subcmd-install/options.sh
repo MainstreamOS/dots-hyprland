@@ -29,6 +29,11 @@ Options for install:
       --core                Alias of --skip-{fish,miscconf,fontconfig}
       --profile <profile>   Choose default, custom, gaming or os-only
       --apps <IDs>          Set the Custom app selection (comma-separated)
+      --app-source <src>    Custom installs: native or flatpak versions of apps
+      --kernel <kernels>    Custom installs: any of linux, linux-mainstream and
+                            linux-mainstream-performance (comma-separated)
+      --proton <protons>    Custom installs: any of mainstream, ge and cachyos
+                            (comma-separated), or none
       --list-apps           List app IDs for Custom installs
       --fresh               Start a new system install from the stock Arch USB
       --os-only             OS-only install: skip the default apps
@@ -61,7 +66,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-limine,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,profile:,apps:,list-apps,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-limine,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,profile:,apps:,app-source:,kernel:,proton:,list-apps,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -79,6 +84,9 @@ done
 #####################################################################################
 ## getopt Phase 2
 
+# The Custom choices come from flags or the choosers alone, never the environment.
+unset MS_INSTALL_APP_SOURCE MS_INSTALL_KERNELS MS_INSTALL_PROTONS
+MS_INSTALL_CHOICE_FLAGS=()
 eval set -- "$para"
 while true ; do
   case "$1" in
@@ -107,7 +115,10 @@ while true ; do
     --console) MS_INSTALL_PROFILE=gaming;shift;;
     --profile) MS_INSTALL_PROFILE=$2;shift 2;;
     --apps) MS_INSTALL_APPS=$2; MS_INSTALL_APPS_SET=true; shift 2;;
-    --list-apps) install_app_catalog; exit;;
+    --app-source) MS_INSTALL_APP_SOURCE=$2; MS_INSTALL_CHOICE_FLAGS+=("$1"); shift 2;;
+    --kernel) MS_INSTALL_KERNELS=$2; MS_INSTALL_CHOICE_FLAGS+=("$1"); shift 2;;
+    --proton) MS_INSTALL_PROTONS=$2; MS_INSTALL_CHOICE_FLAGS+=("$1"); shift 2;;
+    --list-apps) install_app_catalog | awk -F'\t' '$1 !~ /:/'; exit;;
     --exp-files) EXPERIMENTAL_FILES_SCRIPT=true;shift;;
     --via-nix) INSTALL_VIA_NIX=true;shift;;
     
@@ -126,6 +137,10 @@ done
 
 if [[ ${MS_INSTALL_APPS_SET:-false} == true && ${MS_INSTALL_PROFILE:-} != custom ]]; then
   printf '%s\n' '--apps requires --profile custom.' >&2
+  exit 1
+fi
+if (( ${#MS_INSTALL_CHOICE_FLAGS[@]} )) && [[ ${MS_INSTALL_PROFILE:-} != custom ]]; then
+  printf '%s requires --profile custom.\n' "${MS_INSTALL_CHOICE_FLAGS[0]}" >&2
   exit 1
 fi
 
