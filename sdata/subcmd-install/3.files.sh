@@ -683,15 +683,18 @@ function setup_console_mode(){
 }
 
 function _install_proton_mainstream(){
-  # Mainstream's own build, which system updates keep current. Until the
-  # repository offers it, GE-Proton stays the default.
-  pacman -Si proton-mainstream &>/dev/null || return 1
+  # Mainstream's own build, which system updates keep current. GE-Proton never
+  # stands in for it.
+  if ! pacman -Si proton-mainstream &>/dev/null; then
+    echo -e "${STY_YELLOW}[$0]: The repository does not offer Proton Mainstream, skipping it.${STY_RST}"
+    return 1
+  fi
   echo -e "${STY_CYAN}[$0]: Installing Proton Mainstream...${STY_RST}"
   if sudo pacman -S --needed --noconfirm proton-mainstream; then
     echo -e "${STY_GREEN}[$0]: Proton Mainstream installed.${STY_RST}"
     return 0
   fi
-  echo -e "${STY_YELLOW}[$0]: Could not install Proton Mainstream, using GE-Proton instead.${STY_RST}"
+  echo -e "${STY_YELLOW}[$0]: Could not install Proton Mainstream, skipping it.${STY_RST}"
   return 1
 }
 
@@ -808,6 +811,109 @@ print(m.group(1) if m else "")
   [[ -n "$tool_name" ]] || tool_name="$release_name"
 }
 
+function _install_proton_cachyos(){
+  # No package exists, so the latest release is unpacked once its published
+  # checksum matches. Sets the caller's tool_name; returns 1 when nothing was set.
+  echo -e "${STY_CYAN}[$0]: Checking for latest Proton CachyOS release...${STY_RST}"
+
+  local _missing=() cmd
+  for cmd in curl tar xz sha512sum python3; do
+    command -v "$cmd" &>/dev/null || _missing+=("$cmd")
+  done
+  if (( ${#_missing[@]} > 0 )); then
+    echo -e "${STY_RED}[$0]: Missing required tools: ${_missing[*]}, skipping Proton CachyOS.${STY_RST}"
+    return 1
+  fi
+
+  local api_url="https://api.github.com/repos/CachyOS/proton-cachyos/releases/latest"
+  local release_json
+  release_json=$(curl -fsSL --connect-timeout 15 --max-time 30 "$api_url") || {
+    echo -e "${STY_YELLOW}[$0]: GitHub API query failed, skipping Proton CachyOS (set a version in Steam later).${STY_RST}"
+    return 1
+  }
+
+  # The x86_64_v3 build is faster where the CPU runs it; every x86-64 CPU runs the other.
+  local levels="x86_64"
+  cpu_runs_x86_64_v3 && levels="x86_64_v3 x86_64"
+  local release_name="" tarball_url="" sum_url=""
+  IFS=$'\t' read -r release_name tarball_url sum_url < <(printf '%s' "$release_json" | python3 -c '
+import sys, json
+assets = {a.get("name"): a.get("browser_download_url") for a in json.load(sys.stdin).get("assets") or []}
+for level in sys.argv[1].split():
+    for asset in sorted(n for n in assets if n):
+        if asset.startswith("proton-cachyos-") and asset.endswith("-" + level + ".tar.xz"):
+            name = asset[:-len(".tar.xz")]
+            if assets[asset] and assets.get(name + ".sha512sum"):
+                print(name, assets[asset], assets[name + ".sha512sum"], sep="\t")
+                sys.exit(0)
+' "$levels" 2>/dev/null) || true
+  if [[ -z "$release_name" || -z "$tarball_url" || -z "$sum_url" ]]; then
+    echo -e "${STY_YELLOW}[$0]: No x86_64 Proton CachyOS archive with a checksum found, skipping.${STY_RST}"
+    return 1
+  fi
+  # The name becomes a folder that a failed run removes, so it must look like one.
+  if [[ ! "$release_name" =~ ^proton-cachyos-[0-9A-Za-z._-]+$ ]]; then
+    echo -e "${STY_YELLOW}[$0]: Unexpected Proton CachyOS release \"$release_name\", skipping.${STY_RST}"
+    return 1
+  fi
+  echo -e "${STY_CYAN}[$0]: Latest Proton CachyOS: $release_name${STY_RST}"
+
+  local compat_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+  local install_dir="$compat_dir/$release_name"
+  if [[ -f "$install_dir/compatibilitytool.vdf" ]]; then
+    echo -e "${STY_BLUE}[$0]: $release_name already installed, skipping download.${STY_RST}"
+  else
+    # Non-fatal like GE-Proton: a failed download skips rather than aborting the install.
+    mkdir -p "$compat_dir" || true
+    rm -rf "$compat_dir"/.proton-cachyos.*
+    local stage expected actual
+    if ! stage=$(mktemp -d "$compat_dir/.proton-cachyos.XXXXXX"); then
+      echo -e "${STY_YELLOW}[$0]: Could not create a Proton CachyOS download folder, skipping.${STY_RST}"
+      return 1
+    fi
+    echo -e "${STY_CYAN}[$0]: Downloading $release_name...${STY_RST}"
+    if ! curl -fsSL --connect-timeout 15 --max-time 60 -o "$stage/download.sha512sum" "$sum_url" \
+      || ! curl -fL --connect-timeout 15 --speed-limit 10240 --speed-time 60 \
+        --max-time 2400 --progress-bar \
+        -o "$stage/download.tar.xz" "$tarball_url"; then
+      echo -e "${STY_YELLOW}[$0]: Proton CachyOS download failed, skipping (set a Proton version in Steam later).${STY_RST}"
+      rm -rf "$stage"
+      return 1
+    fi
+    if ! read -r expected _ < "$stage/download.sha512sum" \
+      || [[ ! "$expected" =~ ^[0-9a-fA-F]{128}$ ]] \
+      || ! actual=$(sha512sum "$stage/download.tar.xz") \
+      || [[ "${actual%% *}" != "${expected,,}" ]]; then
+      echo -e "${STY_YELLOW}[$0]: $release_name does not match its published checksum, skipping.${STY_RST}"
+      rm -rf "$stage"
+      return 1
+    fi
+    echo -e "${STY_CYAN}[$0]: Extracting to $compat_dir...${STY_RST}"
+    if ! tar -xJf "$stage/download.tar.xz" -C "$stage" \
+      || [[ ! -f "$stage/$release_name/compatibilitytool.vdf" ]]; then
+      echo -e "${STY_YELLOW}[$0]: Proton CachyOS archive did not unpack to $release_name, skipping.${STY_RST}"
+      rm -rf "$stage"
+      return 1
+    fi
+    if ! { rm -rf "$install_dir" && mv "$stage/$release_name" "$install_dir"; }; then
+      echo -e "${STY_YELLOW}[$0]: Could not move $release_name into place, skipping.${STY_RST}"
+      rm -rf "$stage"
+      return 1
+    fi
+    rm -rf "$stage"
+    echo -e "${STY_GREEN}[$0]: Installed $release_name to $install_dir${STY_RST}"
+    record_installed "$install_dir" || true
+  fi
+
+  # Steam knows a tool by the name its compatibilitytool.vdf declares.
+  tool_name=$(python3 -c '
+import re, sys
+m = re.search(r"\"compat_tools\"\s*\{\s*\"([^\"]+)\"", open(sys.argv[1], errors="replace").read())
+print(m.group(1) if m else "")
+' "$install_dir/compatibilitytool.vdf" 2>/dev/null) || true
+  [[ -n "$tool_name" ]] || tool_name="$release_name"
+}
+
 function _steam_set_default(){
   # Sets the "0" (global default) CompatToolMapping entry only.
   # Existing per-game overrides and all other Steam settings are left alone.
@@ -831,19 +937,31 @@ function _steam_set_default(){
 }
 
 function setup_proton(){
-  # Installs Proton Mainstream, or GE-Proton when the repository does not
-  # offer it, and makes it Steam's global default. Safe to re-run.
+  # Every chosen Proton goes in; the first of mainstream, ge, cachyos that did
+  # becomes Steam's default, and an empty choice leaves Steam with its own.
   if ! command -v steam &>/dev/null; then
     echo -e "${STY_BLUE}[$0]: Steam not installed, skipping Proton.${STY_RST}"
     return 0
   fi
-  local steam_store="$HOME/.local/share/Steam" tool_name=""
-  if _install_proton_mainstream; then
-    tool_name=proton-mainstream
-  else
-    _install_ge_proton || return 0
+  local steam_store="$HOME/.local/share/Steam" tool_name="" default_tool="" proton
+  local -a chosen=()
+  read -ra chosen <<< "${MS_INSTALL_PROTONS-mainstream}"
+  if (( ${#chosen[@]} == 0 )); then
+    echo -e "${STY_BLUE}[$0]: No Proton was chosen; Steam keeps its own Proton.${STY_RST}"
+    return 0
   fi
-  _steam_set_default "$steam_store" "$tool_name"
+  for proton in mainstream ge cachyos; do
+    [[ " ${chosen[*]} " == *" $proton "* ]] || continue
+    tool_name=""
+    case $proton in
+      mainstream) _install_proton_mainstream && tool_name=proton-mainstream ;;
+      ge) _install_ge_proton || tool_name="" ;;
+      cachyos) _install_proton_cachyos || tool_name="" ;;
+    esac
+    [[ -n "$default_tool" || -z "$tool_name" ]] || default_tool=$tool_name
+  done
+  [[ -n "$default_tool" ]] || return 0
+  _steam_set_default "$steam_store" "$default_tool"
 
   # ── Link ~/.steam to the Steam data dir ────────────────────────────────────
   x mkdir -p "$HOME/.steam"

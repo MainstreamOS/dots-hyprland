@@ -181,6 +181,23 @@ function require_command() {
   fi
 }
 
+# Whether the CPU runs x86-64-v3 builds (the performance kernel, Proton CachyOS's
+# faster build). Same flag test as cpu_runs_performance_kernel in mainstream-kernels.
+function cpu_runs_x86_64_v3() {  # $1 = cpuinfo file, /proc/cpuinfo by default
+  local cpuinfo=${1:-/proc/cpuinfo} line flags="" flag
+  [[ -r $cpuinfo ]] || return 1
+  while IFS= read -r line; do
+    if [[ $line == flags* ]]; then
+      flags=" ${line#*:} "
+      break
+    fi
+  done <"$cpuinfo"
+  for flag in avx avx2 bmi1 bmi2 f16c fma movbe xsave; do
+    [[ $flags == *" $flag "* ]] || return 1
+  done
+  [[ $flags == *" abm "* || $flags == *" lzcnt "* ]]
+}
+
 # Enhanced: Sanitize file paths to prevent directory traversal
 function sanitize_path() {
   local path="$1"
