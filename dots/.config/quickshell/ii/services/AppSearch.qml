@@ -23,6 +23,17 @@ Singleton {
         "wpsoffice": "wps-office2019-kprometheus",
         "footclient": "foot",
     })
+    // Default dock pins name native entries. With only the Flatpak build
+    // installed, the pin stands for the Flatpak entry instead.
+    readonly property var flatpakPinAliases: ({
+        "chromium": "org.chromium.Chromium",
+        "spotify-launcher": "com.spotify.Client",
+    })
+    function flatpakPinEntryId(id) {
+        const alias = root.flatpakPinAliases[id];
+        if (!alias || DesktopEntries.byId(id) || !DesktopEntries.byId(alias)) return id;
+        return alias;
+    }
     property var regexSubstitutions: [
         {
             "regex": /^steam_app_(\d+)$/,
@@ -193,6 +204,9 @@ Singleton {
         const lowercased = str.toLowerCase();
         const lowered = DesktopEntries.byId(lowercased);
         if (lowered) return lowered;
+
+        const flatpakId = root.flatpakPinEntryId(str);
+        if (flatpakId !== str) return DesktopEntries.byId(flatpakId);
 
         const kebab = getKebabNormalizedAppName(str);
         const kebabEntry = DesktopEntries.byId(kebab);

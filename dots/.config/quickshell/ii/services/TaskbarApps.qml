@@ -55,8 +55,13 @@ Singleton {
     // ── Pin helpers ───────────────────────────────────────────────
     readonly property string folderPrefix: "folder:"
 
+    // A native pin and its Flatpak entry count as the same pin.
+    function samePin(a, b) {
+        return AppSearch.flatpakPinEntryId(a).toLowerCase() === AppSearch.flatpakPinEntryId(b).toLowerCase();
+    }
+
     function isPinned(appId) {
-        return Config.options.dock.pinnedApps.some(id => id.toLowerCase() === appId.toLowerCase());
+        return Config.options.dock.pinnedApps.some(id => root.samePin(id, appId));
     }
 
     function isFolderPinned(folderId) {
@@ -66,7 +71,7 @@ Singleton {
 
     function togglePin(appId) {
         if (root.isPinned(appId)) {
-            Config.options.dock.pinnedApps = Config.options.dock.pinnedApps.filter(id => id.toLowerCase() !== appId.toLowerCase())
+            Config.options.dock.pinnedApps = Config.options.dock.pinnedApps.filter(id => !root.samePin(id, appId))
         } else {
             Config.options.dock.pinnedApps = Config.options.dock.pinnedApps.concat([appId])
         }
@@ -114,8 +119,9 @@ Singleton {
                     });
                 }
             } else {
-                // Regular app entry
-                if (!map.has(appId.toLowerCase())) map.set(appId.toLowerCase(), ({
+                // Regular app entry, keyed by the entry its windows resolve to
+                const key = AppSearch.flatpakPinEntryId(appId).toLowerCase();
+                if (!map.has(key)) map.set(key, ({
                     pinned: true,
                     toplevels: [],
                     originalId: appId,

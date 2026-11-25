@@ -928,12 +928,15 @@ for directory in app_dirs:
     except OSError:
         pass
 
+# The shell shows these native pins as their Flatpak entry when only that is installed.
+flatpak_pins = {"chromium": "org.chromium.chromium", "spotify-launcher": "com.spotify.client"}
+
 def keep(app_id):
     if app_id.startswith("folder:"):
         return True
     if app_id.lower() in exempt:
         return True
-    return app_id.lower() in available
+    return app_id.lower() in available or flatpak_pins.get(app_id.lower()) in available
 
 pat = re.compile(r'(property\s+list<string>\s+pinnedApps\s*:\s*\[)(.*?)(\])', re.DOTALL)
 src = open(qml_path, encoding="utf-8").read()
