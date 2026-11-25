@@ -255,17 +255,17 @@ cpu_runs_performance_kernel() {
     [[ $flags == *" abm "* || $flags == *" lzcnt "* ]]
 }
 
-# The size in bytes of what the boot menu starts for the standard kernel: its one
-# image, or its kernel and initramfs where the system does not build single images.
-standard_image_bytes() {
-    local f size best=0 total=0 d
-    for f in "$ESP"/EFI/Linux/*_"$STANDARD_KERNEL".efi "$ESP/EFI/Linux/$STANDARD_KERNEL.efi"; do
+# The size in bytes of what the boot menu starts for kernel $1: its one image, or its
+# kernel and initramfs where the system does not build single images. 0 when none.
+kernel_image_bytes() {
+    local kernel=$1 f size best=0 total=0 d
+    for f in "$ESP"/EFI/Linux/*_"$kernel".efi "$ESP/EFI/Linux/$kernel.efi"; do
         [[ -f $f ]] || continue
         size=$(stat -c %s -- "$f" 2>/dev/null) || continue
         [[ $size =~ ^[0-9]+$ ]] && (( size > best )) && best=$size
     done
     if (( best == 0 )); then
-        for d in "$ESP"/*/"$STANDARD_KERNEL"/; do
+        for d in "$ESP"/*/"$kernel"/; do
             [[ -d $d ]] || continue
             total=0
             for f in "$d"*; do
@@ -276,6 +276,17 @@ standard_image_bytes() {
             (( total > best )) && best=$total
         done
     fi
+    printf '%s' "$best"
+}
+
+# The largest boot image of the installed kernels, which stands for the next one.
+largest_image_bytes() {
+    local kernel size best=0
+    while IFS= read -r kernel; do
+        [[ -n $kernel ]] || continue
+        size=$(kernel_image_bytes "$kernel")
+        (( size > best )) && best=$size
+    done < <(installed_kernels)
     (( best > 0 )) || return 1
     printf '%s' "$best"
 }
@@ -285,8 +296,8 @@ standard_image_bytes() {
 require_esp_room() {
     local image avail need
     find_esp || die 6 "could not find the EFI partition, so its free space cannot be checked"
-    image=$(standard_image_bytes) || \
-        die 6 "could not find the standard kernel's boot image on the EFI partition, so the room for another kernel cannot be checked"
+    image=$(largest_image_bytes) || \
+        die 6 "could not find an installed kernel's boot image on the EFI partition, so the room for another kernel cannot be checked"
     avail=$(df -B1 --output=avail -- "$ESP" 2>/dev/null | tail -n1 | tr -d '[:space:]')
     [[ $avail =~ ^[0-9]+$ ]] || die 6 "could not read the free space on the EFI partition"
     need=$((image * 2 + 32 * 1024 * 1024))

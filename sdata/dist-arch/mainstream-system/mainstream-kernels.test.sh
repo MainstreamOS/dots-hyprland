@@ -346,8 +346,12 @@ assert_jq "$json_3b" '
 ' "Scenario 3B: all three installed, the performance kernel running and started next"
 assert_eq "$(kernel_field "$json_3b" linux-mainstream version)" '"7.3.5-1"' "Scenario 3B: the installed version is read"
 assert_jq "$json_3b" '.kernels | all(.downloadBytes == null)' "Scenario 3B: an installed kernel has no download size"
-assert_jq "$json_3b" '.standardImageBytes == 37322752' \
-    "Scenario 3B: the standard kernel's boot image is measured, and no other kernel's"
+assert_jq "$json_3b" '.standardImageBytes == 99999999' \
+    "Scenario 3B: the largest boot image of the installed kernels is measured"
+truncate -s 123456789 "$S_ESP/EFI/Linux/mainstream_linux-zen.efi"
+assert_eq "$(probe ESP_CANDIDATES="$S_ESP" | jq -c '.standardImageBytes')" "99999999" \
+    "Scenario 3B: the image of a kernel that is not installed is not measured"
+rm "$S_ESP/EFI/Linux/mainstream_linux-zen.efi"
 
 # The running kernel's module tree is gone after its package was updated under it.
 mv "$S_MODULES/7.3.5-1-mainstream-performance" "$S_MODULES/7.3.6-1-mainstream-performance"
@@ -477,15 +481,25 @@ assert_jq "$(probe)" '.espFreeBytes == null and .standardImageBytes == null' \
 printf 'ESP_PATH="%s"\n' "$S_ESP" >"$S_ENV/limine-default"
 printf '123456789\n' >"$S_ENV/esp-avail"
 assert_jq "$(probe LIMINE_DEFAULT_CONF="$S_ENV/limine-default")" \
-    '.espFreeBytes == 123456789 and .standardImageBytes == 37322752' \
+    '.espFreeBytes == 123456789 and .standardImageBytes == 99999999' \
     "Scenario 3G: the EFI partition named in the Limine settings is measured"
-rm "$S_ESP/EFI/Linux/mainstream_linux.efi"
+# Without Arch's kernel the room is still known, from the kernels that are installed.
+mv "$S_MODULES/7.3.5-arch1-1" "$S_ENV/stock.aside"
+rm "$S_ESP/EFI/Linux/mainstream_linux-mainstream.efi"
+truncate -s 88888888 "$S_ESP/EFI/Linux/mainstream_linux-mainstream-performance.efi"
+assert_eq "$(probe ESP_CANDIDATES="$S_ESP" | jq -c '.standardImageBytes')" "88888888" \
+    "Scenario 3G: without Arch's kernel, the Mainstream kernels' images are measured"
+mv "$S_ENV/stock.aside" "$S_MODULES/7.3.5-arch1-1"
+rm "$S_ESP/EFI/Linux/mainstream_linux.efi" "$S_ESP/EFI/Linux/mainstream_linux-mainstream-performance.efi"
 mkdir -p "$S_ESP/0123abcd/linux" "$S_ESP/0123abcd/linux-mainstream"
 truncate -s 14000000 "$S_ESP/0123abcd/linux/vmlinuz-linux"
 truncate -s 20000000 "$S_ESP/0123abcd/linux/initramfs-linux.img"
-truncate -s 77000000 "$S_ESP/0123abcd/linux-mainstream/vmlinuz-linux-mainstream"
+truncate -s 30000000 "$S_ESP/0123abcd/linux-mainstream/vmlinuz-linux-mainstream"
 assert_eq "$(probe ESP_CANDIDATES="$S_ESP" | jq -c '.standardImageBytes')" "34000000" \
     "Scenario 3G: a kernel and initramfs kept apart are measured together"
+truncate -s 77000000 "$S_ESP/0123abcd/linux-mainstream/vmlinuz-linux-mainstream"
+assert_eq "$(probe ESP_CANDIDATES="$S_ESP" | jq -c '.standardImageBytes')" "77000000" \
+    "Scenario 3G: and the largest kernel's files set the size"
 
 printf '\n=== 4. Privileged Helper mainstream-kernels Tests ===\n'
 
@@ -556,6 +570,15 @@ t_reset() {  # back to a fresh system: the standard kernel alone, everything on 
     printf '7.3.5-arch1-1\n' >"$T_STATE/release"
     write_entry_var "$T_VAR" "$MENU_PARENT/linux"
     : >"$T_STATE/calls.log"
+}
+
+t_mainstream_only() {  # a Default install: the Mainstream kernel alone, and running
+    t_reset
+    rm -rf "${T_MODULES:?}"/*
+    : >"$T_STATE/installed"
+    t_install "$PLAIN" "$PLAIN-headers"
+    printf '7.3.5-arch1-1-mainstream\n' >"$T_STATE/release"
+    write_entry_var "$T_VAR" "$MENU_PARENT/$PLAIN"
 }
 
 # The helper runs on these tools and the stand-ins beside them alone: a package
@@ -787,9 +810,9 @@ expect_rc 6 "free space that cannot be read exits 6" run_helper install "$PLAIN"
 printf '%s\n' "$((900 * 1024 * 1024))" >"$T_STATE/esp_avail"
 mv "$ESP_T/EFI/Linux/mainstream_linux.efi" "$TMP_BASE/image.aside"
 truncate -s "$((500 * 1024 * 1024))" "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
-expect_rc 6 "install exits 6 when the standard kernel's boot image cannot be found" run_helper install "$PLAIN"
-check "another kernel's image is not taken for the standard kernel's" \
-    grep -q "could not find the standard kernel's boot image" <<<"$(reason_of install "$PLAIN")"
+expect_rc 6 "install exits 6 when no installed kernel's boot image can be found" run_helper install "$PLAIN"
+check "the image of a kernel that is not installed is not measured" \
+    grep -q "could not find an installed kernel's boot image" <<<"$(reason_of install "$PLAIN")"
 rm "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
 mkdir -p "$ESP_T/0123abcd/linux"
 truncate -s "$((16 * 1024 * 1024))" "$ESP_T/0123abcd/linux/vmlinuz-linux"
@@ -799,7 +822,21 @@ expect_rc 6 "a kernel and initramfs kept apart are measured together: one byte s
 printf '%s\n' "$NEEDED_BYTES" >"$T_STATE/esp_avail"
 check "a kernel and initramfs kept apart are measured together: exactly enough" run_helper install "$PLAIN"
 rm -rf "$ESP_T/0123abcd"
+# A Mainstream-only install has no boot image of Arch's kernel. The room comes from
+# the kernels it has.
+t_mainstream_only
+truncate -s "$IMAGE_BYTES" "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
+printf '%s\n' "$((NEEDED_BYTES - 1))" >"$T_STATE/esp_avail"
+expect_rc 6 "without Arch's kernel the Mainstream kernel's image is measured: one byte short" run_helper install "$PERF"
+printf '%s\n' "$NEEDED_BYTES" >"$T_STATE/esp_avail"
+check "without Arch's kernel the Mainstream kernel's image is measured: exactly enough" run_helper install "$PERF"
 mv "$TMP_BASE/image.aside" "$ESP_T/EFI/Linux/mainstream_linux.efi"
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+truncate -s "$((IMAGE_BYTES + 1024 * 1024))" "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
+expect_rc 6 "the largest image of the installed kernels sets the room" run_helper install "$PERF"
+rm "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
+printf '%s\n' "$((900 * 1024 * 1024))" >"$T_STATE/esp_avail"
 mv "$ESP_T" "$ESP_T.aside"
 t_reset
 expect_rc 6 "install exits 6 when the EFI partition cannot be found" run_helper install "$PLAIN"

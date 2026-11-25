@@ -134,26 +134,31 @@ fi
 if [[ -n $esp ]]; then
     avail=$(df -B1 --output=avail -- "$esp" 2>/dev/null | tail -n1 | tr -d '[:space:]')
     [[ $avail =~ ^[0-9]+$ ]] && esp_free=$avail
+    # The largest boot image of the installed kernels, measured as the helper does.
     # Only root can read most EFI partitions, so this is often not known here.
-    best=0
-    for image in "$esp"/EFI/Linux/*_"$STANDARD_KERNEL".efi "$esp/EFI/Linux/$STANDARD_KERNEL.efi"; do
-        [[ -f $image ]] || continue
-        size=$(stat -c %s -- "$image" 2>/dev/null) || continue
-        [[ $size =~ ^[0-9]+$ ]] && (( size > best )) && best=$size
-    done
-    if (( best == 0 )); then
-        for dir in "$esp"/*/"$STANDARD_KERNEL"/; do
-            [[ -d $dir ]] || continue
-            total=0
-            for image in "$dir"*; do
-                [[ -f $image ]] || continue
-                size=$(stat -c %s -- "$image" 2>/dev/null) || continue
-                [[ $size =~ ^[0-9]+$ ]] && total=$((total + size))
-            done
-            (( total > best )) && best=$total
+    largest=0
+    for base in "${installed_bases[@]}"; do
+        best=0
+        for image in "$esp"/EFI/Linux/*_"$base".efi "$esp/EFI/Linux/$base.efi"; do
+            [[ -f $image ]] || continue
+            size=$(stat -c %s -- "$image" 2>/dev/null) || continue
+            [[ $size =~ ^[0-9]+$ ]] && (( size > best )) && best=$size
         done
-    fi
-    (( best > 0 )) && standard_image=$best
+        if (( best == 0 )); then
+            for dir in "$esp"/*/"$base"/; do
+                [[ -d $dir ]] || continue
+                total=0
+                for image in "$dir"*; do
+                    [[ -f $image ]] || continue
+                    size=$(stat -c %s -- "$image" 2>/dev/null) || continue
+                    [[ $size =~ ^[0-9]+$ ]] && total=$((total + size))
+                done
+                (( total > best )) && best=$total
+            done
+        fi
+        (( best > largest )) && largest=$best
+    done
+    (( largest > 0 )) && standard_image=$largest
 fi
 
 # What installing kernel $1 with its headers would fetch, dependencies included. pacman
