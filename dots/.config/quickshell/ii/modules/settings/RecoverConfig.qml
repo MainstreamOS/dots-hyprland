@@ -38,6 +38,24 @@ ContentPage {
         onExited: (code) => root.snapshotsAvailable = (code === 0)
     }
 
+    // Boot entries are named for their kernel package; name the one the boot menu puts first.
+    property string kernelEntry: "linux"
+    Process {
+        id: kernelEntryProbe
+        running: true
+        command: ["sh", "-c",
+            "for k in linux-mainstream-performance linux-mainstream linux; do "
+            + "grep -qxF \"$k\" /usr/lib/modules/*/pkgbase 2>/dev/null && { echo \"$k\"; exit 0; }; "
+            + "done; cat /usr/lib/modules/*/pkgbase 2>/dev/null | head -n 1"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const name = this.text.trim();
+                if (name.length > 0)
+                    root.kernelEntry = name;
+            }
+        }
+    }
+
     function startRestore() {
         if (isRunning) return;
         if (passwordField.text.length === 0) {
@@ -206,7 +224,7 @@ ContentPage {
                     Layout.leftMargin: 8
                     wrapMode: Text.Wrap
                     textFormat: Text.RichText
-                    text: Translation.tr(`1. Use the <b>arrow keys</b> to find <b>"Snapshots"</b> in the boot menu<br>2. Press <b>Enter</b> to expand the list of available snapshots<br>3. Choose the snapshot taken <b>before the update</b><br>4. Press <b>Enter</b> to boot into that snapshot<br>5. Test your system — if issues persist, try an earlier snapshot<br>6. When satisfied, return here and run <b>Restore Snapshot</b> to make it permanent<br>7. Reboot and choose <b>"linux"</b>, the entry right under the Mainstream OS list`)
+                    text: Translation.tr(`1. Use the <b>arrow keys</b> to find <b>"Snapshots"</b> in the boot menu<br>2. Press <b>Enter</b> to expand the list of available snapshots<br>3. Choose the snapshot taken <b>before the update</b><br>4. Press <b>Enter</b> to boot into that snapshot<br>5. Test your system. If issues persist, try an earlier snapshot<br>6. When satisfied, return here and run <b>Restore Snapshot</b> to make it permanent<br>7. Reboot and choose <b>"%1"</b>, the entry right under the Mainstream OS list`).arg(root.kernelEntry)
                     font.pixelSize: Appearance.font.pixelSize.normal
                     color: Appearance.colors.colOnLayer1
                     lineHeight: 1.4
