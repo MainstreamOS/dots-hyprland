@@ -1,0 +1,80 @@
+# Apps that come both as a native package and as a Flatpak.
+#
+# Format: one pair per line, "native-package|flatpak-ref". Lines starting
+# with '#' and blank lines are ignored.
+#
+# Swap rule: with the Flatpak app source, a selected app found in the native
+# column installs as its Flatpak ref; with the native app source, a selected
+# app found in the Flatpak column installs as its native package. Anything not
+# listed installs as named.
+#
+# Read by the ISO build (copied into the image for the installer's packages
+# step) and by ./setup's Custom profile through sdata/lib/app-variants.sh,
+# both from the dotfiles checkout, so mainstream-extras does not ship it.
+#
+# Mainstream's own builds and the apps Gaming Mode relies on are left out on
+# purpose so they always install natively: steam, mainstream-nautilus,
+# gnome-disk-utility, gnome-software, mainstream-mpv, mainstream-obs,
+# mainstream-calendar, and the CLI and terminal apps.
+
+# Default apps
+chromium|org.chromium.Chromium
+resources|net.nokyan.Resources
+gnome-calculator|org.gnome.Calculator
+simple-scan|org.gnome.SimpleScan
+gnome-font-viewer|org.gnome.font-viewer
+impression|io.gitlab.adhami3310.Impression
+gnome-text-editor|org.gnome.TextEditor
+spotify-launcher|com.spotify.Client
+loupe|org.gnome.Loupe
+papers|org.gnome.Papers
+
+# Web browsers
+firefox|org.mozilla.firefox
+librewolf|io.gitlab.librewolf-community
+zen-browser-bin|app.zen_browser.zen
+
+# Development
+dbeaver|io.dbeaver.DBeaverCommunity
+
+# Media
+vlc|org.videolan.VLC
+rhythmbox|org.gnome.Rhythmbox3
+lollypop|org.gnome.Lollypop
+audacity|org.audacityteam.Audacity
+handbrake|fr.handbrake.ghb
+easyeffects|com.github.wwmm.easyeffects
+
+# Productivity
+libreoffice-fresh|org.libreoffice.LibreOffice
+obsidian|md.obsidian.Obsidian
+thunderbird|org.mozilla.Thunderbird
+okular|org.kde.okular
+evince|org.gnome.Evince
+xournalpp|com.github.xournalpp.xournalpp
+keepassxc|org.keepassxc.KeePassXC
+
+# System and utilities
+lact|io.github.ilya_zlobintsev.LACT
+flatseal|com.github.tchx84.Flatseal
+qbittorrent|org.qbittorrent.qBittorrent
+nextcloud-client|com.nextcloud.desktopclient.nextcloud
+gnome-boxes|org.gnome.Boxes
+
+# Gaming
+lutris|net.lutris.Lutris
+goverlay|io.github.benjamimgois.goverlay
+
+# Graphics and creative
+gimp|org.gimp.GIMP
+krita|org.kde.krita
+inkscape|org.inkscape.Inkscape
+darktable|org.darktable.Darktable
+kdenlive|org.kde.kdenlive
+blender|org.blender.Blender
+
+# Communication
+discord|com.discordapp.Discord
+signal-desktop|org.signal.Signal
+element-desktop|im.riot.Riot
+telegram-desktop|org.telegram.desktop
