@@ -43,6 +43,17 @@ _gpu_installed_nvidia_open_dkms() {
     command -v pacman >/dev/null 2>&1 || return 1
     [[ "$(pacman -Qq nvidia-open-dkms 2>/dev/null)" == nvidia-open-dkms ]]
 }
+# Whether kernels are installed and none of them is Arch's linux. The prebuilt
+# nvidia-open depends on linux by name, so asking for it here installs that kernel.
+_gpu_no_stock_kernel() {
+    local rel base any=false
+    while read -r rel base; do
+        [[ -n "$rel" ]] || continue
+        [[ "$base" == linux ]] && return 1
+        any=true
+    done < <(gpu_installed_kernels)
+    [[ $any == true ]]
+}
 
 # ── gpu_detect ──────────────────────────────────────────────────────────────
 # Single detection pass. Exports (true/false unless noted):
@@ -230,7 +241,10 @@ gpu_classify_nvidia_driver() {
             # The DKMS build conflicts with the prebuilt one, and pacman refuses
             # an unattended request for the prebuilt name on a machine that has
             # the DKMS build. The same family, under the package that is here.
-            if _gpu_installed_nvidia_open_dkms; then NVIDIA_REPO_PKGS[0]=nvidia-open-dkms; fi ;;
+            # Without Arch's kernel, DKMS builds it for the kernels that are.
+            if _gpu_installed_nvidia_open_dkms || _gpu_no_stock_kernel; then
+                NVIDIA_REPO_PKGS[0]=nvidia-open-dkms
+            fi ;;
         maxwell)
             _gpu_frozen_family 580xx ;;
         kepler)
@@ -618,10 +632,11 @@ gpu_target_kernel() {
         any="$n"
         [[ -r "$d/pkgbase" && "$(<"$d/pkgbase")" == "linux" ]] && stock="$n"
     done < <(_gpu_module_dirs | sort -V)
-    # The stock kernel by preference, since that is what an install lays down,
-    # but never at the cost of returning nothing: a machine booting linux-lts or
-    # linux-zen has a real kernel and a real driver, and answering "none" there
-    # would strip the configuration off a card that works.
+    # The stock kernel by preference where it is installed, since a system set
+    # up on Arch boots it, but never at the cost of returning nothing: a
+    # Mainstream-only install, or a machine booting linux-lts or linux-zen, has
+    # a real kernel and a real driver, and answering "none" there would strip
+    # the configuration off a card that works.
     printf '%s\n' "${stock:-$any}"
 }
 

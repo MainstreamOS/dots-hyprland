@@ -919,6 +919,27 @@ classify turing 580xx;  chk cls-open-dkms-frozen-wins NVIDIA_DRIVER_FAMILY nvidi
 classify prefermi "";   chk_str cls-open-dkms-nouveau "${NVIDIA_REPO_PKGS[0]}" xf86-video-nouveau
 FIX_OPEN_DKMS=no
 
+# Without Arch's kernel the prebuilt nvidia-open would install it, since it
+# depends on linux by name, so the DKMS build is asked for instead.
+NKDIR="$(mktemp -d)"
+nk() { mkdir -p "$NKDIR/$1"; : > "$NKDIR/$1/vmlinuz"; echo "$2" > "$NKDIR/$1/pkgbase"; }
+_gpu_module_dirs() { printf '%s\n' "$NKDIR"/*/; }
+nk 7.3.6-1-mainstream linux-mainstream
+classify turing "";     chk_str cls-mainstream-only "${NVIDIA_REPO_PKGS[0]}" nvidia-open-dkms
+chk cls-mainstream-only-family NVIDIA_DRIVER_FAMILY nvidia-open
+nk 7.3.6-1-mainstream-performance linux-mainstream-performance
+classify turing "";     chk_str cls-mainstream-both "${NVIDIA_REPO_PKGS[0]}" nvidia-open-dkms
+classify maxwell "";    chk_str cls-mainstream-maxwell "${NVIDIA_LOCAL_PKGS[0]}" nvidia-580xx-dkms
+nk 7.3.6-arch1-1 linux
+classify turing "";     chk_str cls-stock-beside-mainstream "${NVIDIA_REPO_PKGS[0]}" nvidia-open
+# A headers-only tree is no kernel, so it does not count as Arch's.
+rm -f "$NKDIR/7.3.6-arch1-1/vmlinuz"
+classify turing "";     chk_str cls-stock-headers-only "${NVIDIA_REPO_PKGS[0]}" nvidia-open-dkms
+rm -rf "$NKDIR"
+# No kernel to go by keeps the prebuilt pick, as gpu-drivers then installs linux.
+_gpu_module_dirs() { printf '%s\n' /nonexistent-xyz/*/; }
+classify turing "";     chk_str cls-no-kernel "${NVIDIA_REPO_PKGS[0]}" nvidia-open
+
 # ── resume=: only the swap in use, only beside a plain root ─────────────────
 # Hibernation writes all of memory to the swap, so a plain swap beside an
 # encrypted root leaves the keys on disk in the clear, and resume=PARTUUID=
