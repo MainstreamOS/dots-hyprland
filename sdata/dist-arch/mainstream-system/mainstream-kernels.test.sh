@@ -143,12 +143,14 @@ check "PKGBUILD installs the policy among the polkit actions" \
 # one that is not listed here, fails.
 PROBE_SHAPE='
     (type == "object") and
-    (keys == (["helper", "unsupportedReason", "uefi", "espFreeBytes", "standardImageBytes",
-               "nextKernel", "canChooseNext", "kernels"] | sort)) and
-    ([.helper, .uefi, .canChooseNext] | all(type == "boolean")) and
+    (keys == (["helper", "canChangeStandard", "unsupportedReason", "uefi", "espFreeBytes",
+               "standardImageBytes", "nextKernel", "canChooseNext", "installedKernels",
+               "kernels"] | sort)) and
+    ([.helper, .canChangeStandard, .uefi, .canChooseNext] | all(type == "boolean")) and
     (.unsupportedReason | IN("", "snapshot", "boot-tools")) and
     ([.espFreeBytes, .standardImageBytes] | all(type == "number" or type == "null")) and
     (.nextKernel | type == "string") and
+    (.installedKernels | type == "array" and all(type == "string")) and
     ([.kernels[].name] == ["linux", "linux-mainstream", "linux-mainstream-performance"]) and
     (.kernels | all(
         (keys == (["name", "installed", "version", "running", "available", "cpuSupported",
@@ -291,7 +293,7 @@ write_entry_var "$S_VAR" "$MENU_PARENT/linux"
 json_3a=$(probe KERNELS_HELPER="$HELPER_SCRIPT" EFIVARS_DIR="$S_ENV/efivars" ESP_CANDIDATES="$S_ESP")
 assert_jq "$json_3a" "$PROBE_SHAPE" "Scenario 3A: exactly the agreed fields"
 assert_jq "$json_3a" '
-    .helper == true and .unsupportedReason == "" and .uefi == true and
+    .helper == true and .canChangeStandard == true and .unsupportedReason == "" and .uefi == true and
     .nextKernel == "linux" and .canChooseNext == true and
     .espFreeBytes == 928555008 and .standardImageBytes == null
 ' "Scenario 3A: an installed UEFI system whose menu starts the standard kernel next"
@@ -307,6 +309,16 @@ assert_eq "$(kernel_field "$json_3a" linux-mainstream-performance downloadBytes)
     "Scenario 3A: packages the headers pull in are counted in the download"
 assert_jq "$json_3a" '.kernels | all(.installed == (.name == "linux"))' \
     "Scenario 3A: nothing else is installed"
+assert_jq "$json_3a" '.installedKernels == ["linux"]' \
+    "Scenario 3A: the standard kernel is the only kernel this system can start"
+
+# An older helper refuses to install or remove the standard kernel, and says so in its text.
+printf '#!/usr/bin/env bash\ndie 8 "the standard kernel stays installed as the fallback"\n' >"$S_ENV/old-helper"
+chmod +x "$S_ENV/old-helper"
+assert_jq "$(probe KERNELS_HELPER="$S_ENV/old-helper")" '.helper == true and .canChangeStandard == false' \
+    "Scenario 3A: an older helper cannot change the standard kernel"
+assert_jq "$(probe)" '.helper == false and .canChangeStandard == false' \
+    "Scenario 3A: with no helper, nothing can change the standard kernel"
 
 # What the install would fetch is not always known; the kernel stays on offer without a size.
 mv "$S_ENV/plan-linux-mainstream" "$S_ENV/plan.kept"
@@ -345,6 +357,8 @@ assert_jq "$json_3b" '
     .nextKernel == "linux-mainstream-performance" and .canChooseNext == true and .helper == false
 ' "Scenario 3B: all three installed, the performance kernel running and started next"
 assert_eq "$(kernel_field "$json_3b" linux-mainstream version)" '"7.3.5-1"' "Scenario 3B: the installed version is read"
+assert_jq "$json_3b" '(.installedKernels | sort) == ["linux", "linux-mainstream", "linux-mainstream-performance"]' \
+    "Scenario 3B: every kernel this system can start is listed"
 assert_jq "$json_3b" '.kernels | all(.downloadBytes == null)' "Scenario 3B: an installed kernel has no download size"
 assert_jq "$json_3b" '.standardImageBytes == 99999999' \
     "Scenario 3B: the largest boot image of the installed kernels is measured"
@@ -372,6 +386,8 @@ printf '7.3.5-arch1-1\n' >"$S_ENV/release"
 rm "$S_MODULES/7.3.5-arch1-1-mainstream/vmlinuz"
 assert_eq "$(kernel_field "$(probe)" linux-mainstream installed)" "false" \
     "Scenario 3B: a kernel package with no kernel image does not count as installed"
+assert_jq "$(probe)" '.installedKernels | index("linux-mainstream") == null' \
+    "Scenario 3B: and is not listed among the kernels this system can start"
 : >"$S_MODULES/7.3.5-arch1-1-mainstream/vmlinuz"
 
 # The NVIDIA module, where the DKMS driver and the prebuilt driver put it.
@@ -454,6 +470,8 @@ assert_eq "$(next_pair)" '["",false]' "Scenario 3E: an entry with an empty paren
 s_tree 6.12.1-1-lts linux-lts
 write_entry_var "$S_VAR" "$MENU_PARENT/linux-lts"
 assert_eq "$(next_pair)" '["linux-lts",true]' "Scenario 3E: another installed kernel is recognized as the one started next"
+assert_jq "$(probe)" '.installedKernels | index("linux-lts") != null' \
+    "Scenario 3E: a kernel that is none of the three is listed among the installed kernels"
 rm -rf "$S_MODULES/6.12.1-1-lts"
 assert_eq "$(next_pair)" '["",false]' "Scenario 3E: and no longer once it is gone"
 rm -f "$S_VAR"
@@ -500,6 +518,33 @@ assert_eq "$(probe ESP_CANDIDATES="$S_ESP" | jq -c '.standardImageBytes')" "3400
 truncate -s 77000000 "$S_ESP/0123abcd/linux-mainstream/vmlinuz-linux-mainstream"
 assert_eq "$(probe ESP_CANDIDATES="$S_ESP" | jq -c '.standardImageBytes')" "77000000" \
     "Scenario 3G: and the largest kernel's files set the size"
+
+# Scenario 3H: a Mainstream-only install, where Arch's kernel is on offer like the others.
+rm -rf "${S_MODULES:?}"/*
+s_tree 7.3.5-arch1-1-mainstream linux-mainstream
+printf 'linux-mainstream 7.3.5-1\nlinux-mainstream-headers 7.3.5-1\n' >"$S_ENV/installed"
+printf '7.3.5-arch1-1-mainstream\n' >"$S_ENV/release"
+cat >"$S_ENV/repo" <<'REPO_END'
+linux 151.12 MiB
+linux-headers 30.00 MiB
+linux-mainstream 150.00 MiB
+linux-mainstream-headers 30.50 MiB
+REPO_END
+printf 'linux 158460723\nlinux-headers 31457280\n' >"$S_ENV/plan-linux"
+json_3h=$(probe)
+assert_jq "$json_3h" "$PROBE_SHAPE" "Scenario 3H: exactly the agreed fields"
+assert_jq "$json_3h" '.kernels[0] == {
+    name: "linux", installed: false, version: "", running: false, available: true,
+    cpuSupported: true, downloadBytes: 189918003, driverMissing: false
+}' "Scenario 3H: Arch's kernel is on offer, with the size of it and its headers"
+assert_jq "$json_3h" '[.kernels[] | select(.installed) | .name] == ["linux-mainstream"]' \
+    "Scenario 3H: the Mainstream kernel is the one installed"
+assert_jq "$json_3h" '.installedKernels == ["linux-mainstream"]' \
+    "Scenario 3H: and the only kernel this system can start"
+grep -v '^linux-headers ' "$S_ENV/repo" >"$S_ENV/repo.new"
+mv "$S_ENV/repo.new" "$S_ENV/repo"
+assert_jq "$(probe)" '.kernels[0] | .available == false and .downloadBytes == null' \
+    "Scenario 3H: Arch's kernel is not on offer when its headers are not"
 
 printf '\n=== 4. Privileged Helper mainstream-kernels Tests ===\n'
 
@@ -569,6 +614,7 @@ t_reset() {  # back to a fresh system: the standard kernel alone, everything on 
         linux-mainstream-performance linux-mainstream-performance-headers >"$T_STATE/repo"
     printf '7.3.5-arch1-1\n' >"$T_STATE/release"
     write_entry_var "$T_VAR" "$MENU_PARENT/linux"
+    rm -f "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
     : >"$T_STATE/calls.log"
 }
 
@@ -579,6 +625,7 @@ t_mainstream_only() {  # a Default install: the Mainstream kernel alone, and run
     t_install "$PLAIN" "$PLAIN-headers"
     printf '7.3.5-arch1-1-mainstream\n' >"$T_STATE/release"
     write_entry_var "$T_VAR" "$MENU_PARENT/$PLAIN"
+    truncate -s "$IMAGE_BYTES" "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
 }
 
 # The helper runs on these tools and the stand-ins beside them alone: a package
@@ -744,7 +791,6 @@ for name in linux-lts linux-zen linux-mainstream-headers linux-mainstream-perfor
 done
 check "a refused name runs nothing" test ! -s "$T_STATE/calls.log"
 refute "a name with shell metacharacters is never run" test -e "$SENTINEL"
-expect_rc 2 "install refuses the standard kernel, which is always there" run_helper install linux
 check "a refused name changes no package" no_package_change
 check "the reason for a refusal reaches stderr as one line" \
     test "$(reason_of install linux-lts)" = "mainstream-kernels: not a kernel that can be installed here"
@@ -825,7 +871,6 @@ rm -rf "$ESP_T/0123abcd"
 # A Mainstream-only install has no boot image of Arch's kernel. The room comes from
 # the kernels it has.
 t_mainstream_only
-truncate -s "$IMAGE_BYTES" "$ESP_T/EFI/Linux/mainstream_linux-mainstream.efi"
 printf '%s\n' "$((NEEDED_BYTES - 1))" >"$T_STATE/esp_avail"
 expect_rc 6 "without Arch's kernel the Mainstream kernel's image is measured: one byte short" run_helper install "$PERF"
 printf '%s\n' "$NEEDED_BYTES" >"$T_STATE/esp_avail"
@@ -931,12 +976,29 @@ for lib in gpu-config.sh gpu-driver-install.sh; do
 done
 echo false >"$T_STATE/has_nvidia"
 
+# Arch's kernel comes from Arch's repositories like the others come from theirs.
+t_mainstream_only
+check "install of Arch's kernel succeeds on a Mainstream-only system" run_helper install linux
+check "its transaction is Arch's kernel and its headers" \
+    test "$(grep -c '^pacman -S ' "$T_STATE/calls.log")" = 1 -a \
+         "$(grep -cx "pacman -S --needed --noconfirm linux linux-headers" "$T_STATE/calls.log")" = 1
+check "Arch's kernel and its headers are installed" test -f "$T_MODULES/7.3.5-arch1-1/vmlinuz" -a \
+    "$(grep -cxF -e linux -e linux-headers "$T_STATE/installed")" = 2
+check "the boot menu's record is left alone by installing Arch's kernel" entry_var_is "$T_VAR" "$MENU_PARENT/$PLAIN"
+t_mainstream_only
+write_cpuinfo "$T_ROOT/proc/cpuinfo" "${V3_FLAGS/ avx2/}"
+check "Arch's kernel installs on a processor without AVX2" run_helper install linux
+write_cpuinfo "$T_ROOT/proc/cpuinfo" "$V3_FLAGS"
+t_mainstream_only
+grep -vxF linux-headers "$T_STATE/repo" >"$T_STATE/repo.new"
+mv "$T_STATE/repo.new" "$T_STATE/repo"
+expect_rc 11 "install of Arch's kernel exits 11 when no repository offers its headers" run_helper install linux
+check "Arch's kernel is never installed without its headers on offer" no_package_change
+
 # 4.4 remove
 t_reset
 t_install "$PLAIN" "$PLAIN-headers" "$PERF" "$PERF-headers"
-expect_rc 8 "remove refuses the standard kernel" run_helper remove linux
-check "the reason says it stays as the fallback" \
-    grep -q '^mainstream-kernels: the standard kernel stays installed as the fallback$' <<<"$(reason_of remove linux)"
+expect_rc 8 "remove refuses Arch's kernel while it is the kernel running now" run_helper remove linux
 echo overlay >"$T_STATE/fstype"
 expect_rc 3 "remove started from a snapshot exits 3" run_helper remove "$PLAIN"
 echo btrfs >"$T_STATE/fstype"
@@ -958,6 +1020,24 @@ expect_rc 8 "the same for the performance kernel" run_helper remove "$PERF"
 mv "$T_MODULES/7.3.6-1-mainstream-performance" "$T_MODULES/7.3.5-1-mainstream-performance"
 check "the running kernel is never removed" no_package_change
 printf '7.3.5-arch1-1\n' >"$T_STATE/release"
+
+# Arch's kernel goes like the others once another kernel runs.
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+printf '7.3.5-arch1-1-mainstream\n' >"$T_STATE/release"
+check "remove of Arch's kernel succeeds while another kernel is running" run_helper remove linux
+check "the removal is Arch's kernel and its headers, and nothing else" \
+    test "$(grep -c '^pacman -R' "$T_STATE/calls.log")" = 1 -a \
+         "$(grep -cx "pacman -Rns --noconfirm linux linux-headers" "$T_STATE/calls.log")" = 1
+refute "Arch's kernel is gone" is_installed linux
+check "the boot menu goes to the Mainstream kernel" entry_var_is "$T_VAR" "$MENU_PARENT/$PLAIN"
+# The only kernel stays, Arch's too.
+t_reset
+printf '6.12.1-1-lts\n' >"$T_STATE/release"
+expect_rc 8 "remove refuses Arch's kernel when it is the only kernel" run_helper remove linux
+check "the reason says no kernel would be left" \
+    grep -q "^mainstream-kernels: removing linux would leave this system with no kernel$" <<<"$(reason_of remove linux)"
+check "the only kernel is never removed" no_package_change
 
 t_reset
 expect_rc 8 "remove refuses a kernel that is not installed" run_helper remove "$PLAIN"

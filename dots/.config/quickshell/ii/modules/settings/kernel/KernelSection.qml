@@ -5,8 +5,8 @@ import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.settings.security
 
-// Mainstream's own kernels beside the standard one, and which of them the
-// boot menu starts next.
+// The kernels Settings installs and removes, and which of them the boot menu
+// starts next.
 ContentSection {
     id: root
     objectName: "kernel"
@@ -23,7 +23,7 @@ ContentSection {
             name: "linux",
             icon: "shield",
             shown: Translation.tr("Standard"),
-            about: Translation.tr("Arch's kernel. It stays installed as the fallback.")
+            about: Translation.tr("Arch's kernel, as Arch ships it.")
         },
         {
             name: "linux-mainstream",
@@ -74,7 +74,7 @@ ContentSection {
         color: Appearance.colors.colSubtext
         font.pixelSize: Appearance.font.pixelSize.smaller
         wrapMode: Text.WordWrap
-        text: Translation.tr("Mainstream's own kernels install beside the standard one, and the boot menu lists every installed kernel. Nothing changes until you restart.")
+        text: Translation.tr("Each kernel installs beside the ones you have, and the boot menu lists every installed kernel. Nothing changes until you restart.")
     }
 
     ColumnLayout {
@@ -133,17 +133,30 @@ ContentSection {
             readonly property bool startsNext: SystemKernels.nextKernel === card.kernel
             readonly property bool confirmingInstall: root.openPanel === "install:" + card.kernel && !card.installed
             readonly property bool confirmingRemove: root.openPanel === "remove:" + card.kernel && card.installed
-            readonly property bool showInstall: !card.standard && !card.installed && !card.confirmingInstall
+            readonly property bool showInstall: !card.installed && !card.confirmingInstall
             readonly property bool showNext: card.installed && !card.startsNext
-            readonly property bool showRemove: !card.standard && card.installed && !card.confirmingRemove
+            readonly property bool showRemove: card.installed && !card.confirmingRemove
+            readonly property bool helperRefuses: card.standard && SystemKernels.helper && !SystemKernels.canChangeStandard
             // Why this kernel cannot be installed here, or nothing.
             readonly property string installBlocked: {
+                if (card.helperRefuses)
+                    return Translation.tr("Update Mainstream to install or remove this kernel.");
                 if (!card.info.cpuSupported)
                     return Translation.tr("This processor cannot run this kernel. It needs AVX2 (Intel from about 2013, AMD from about 2015).");
                 if (!card.info.available)
                     return Translation.tr("Not available yet.");
                 if (SystemKernels.roomShort)
                     return Translation.tr("The boot partition does not have room for another kernel.");
+                return "";
+            }
+            // Why this kernel cannot be removed here, or nothing.
+            readonly property string removeBlocked: {
+                if (!SystemKernels.othersInstalled(card.kernel))
+                    return Translation.tr("This is the only kernel installed.");
+                if (card.helperRefuses)
+                    return Translation.tr("Update Mainstream to install or remove this kernel.");
+                if (card.info.running)
+                    return Translation.tr("Restart with another kernel before removing this one.");
                 return "";
             }
             // Why the boot menu cannot be told to start this kernel, or nothing.
@@ -186,7 +199,7 @@ ContentSection {
 
             StyledText {
                 Layout.fillWidth: true
-                visible: SystemKernels.loaded && !card.standard && !card.installed && card.installBlocked.length > 0
+                visible: SystemKernels.loaded && !card.installed && card.installBlocked.length > 0
                 wrapMode: Text.WordWrap
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 color: Appearance.colors.colSubtext
@@ -204,11 +217,11 @@ ContentSection {
 
             StyledText {
                 Layout.fillWidth: true
-                visible: SystemKernels.loaded && !card.standard && card.installed && card.info.running
+                visible: SystemKernels.loaded && card.installed && card.removeBlocked.length > 0
                 wrapMode: Text.WordWrap
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 color: Appearance.colors.colSubtext
-                text: Translation.tr("Restart with another kernel before removing this one.")
+                text: card.removeBlocked
             }
 
             StyledText {
@@ -254,7 +267,7 @@ ContentSection {
                     caption: Translation.tr("Remove")
                     busyCaption: Translation.tr("Removing…")
                     busy: SystemKernels.busyAction === "remove" && SystemKernels.busyKernel === card.kernel
-                    enabled: SystemKernels.canChange && !card.info.running
+                    enabled: SystemKernels.canChange && card.removeBlocked.length === 0
                     onClicked: root.togglePanel("remove:" + card.kernel)
                 }
             }
@@ -282,7 +295,7 @@ ContentSection {
                     prompt: Translation.tr("Remove the %1 kernel? The other kernels stay installed.").arg(card.modelData.shown)
                     actionIcon: "delete"
                     actionText: Translation.tr("Remove")
-                    actionEnabled: SystemKernels.canChange && !card.info.running
+                    actionEnabled: SystemKernels.canChange && card.removeBlocked.length === 0
                     onCanceled: root.closePanel()
                     onConfirmed: {
                         root.closePanel();

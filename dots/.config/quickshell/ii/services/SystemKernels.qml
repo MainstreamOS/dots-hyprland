@@ -8,8 +8,8 @@ import Quickshell
 import Quickshell.Io
 
 /**
- * SystemKernels: Mainstream's own kernels beside Arch's, and which kernel the
- * boot menu starts next. Shown in Settings > Gaming.
+ * SystemKernels: the kernels Settings installs and removes, and which kernel
+ * the boot menu starts next. Shown in Settings > Gaming.
  *
  * scripts/security/kernel-status.sh reads unprivileged system state. Every
  * change runs through /usr/lib/mainstream/mainstream-kernels via pkexec.
@@ -31,6 +31,9 @@ Singleton {
     property bool probeFailed: false
     property string unsupportedReason: ""
     property bool helper: false
+    // Whether the helper installs and removes the standard kernel too. Older
+    // ones refuse it.
+    property bool canChangeStandard: false
     property bool uefi: false
     // -1 while not known. Only root can read most EFI partitions, so the size
     // of the boot image is often not known here and the helper checks it.
@@ -42,6 +45,9 @@ Singleton {
     property bool canChooseNext: false
     // One entry per kernel, as the probe prints them.
     property var kernels: []
+    // The package of every kernel this system can start, linux-lts and the
+    // like included, as the helper counts them before a removal.
+    property var installedKernels: []
 
     readonly property var unknownKernel: ({
         name: "",
@@ -60,6 +66,11 @@ Singleton {
                 return kernel;
         }
         return root.unknownKernel;
+    }
+
+    // The helper refuses to remove the last kernel.
+    function othersInstalled(name) {
+        return root.installedKernels.some(base => base !== name);
     }
 
     function label(name) {
@@ -229,12 +240,16 @@ Singleton {
 
         root.unsupportedReason = typeof s.unsupportedReason === "string" ? s.unsupportedReason : "";
         root.helper = s.helper === true;
+        root.canChangeStandard = s.canChangeStandard === true;
         root.uefi = s.uefi === true;
         root.espFreeBytes = root.bytesOrUnknown(s.espFreeBytes);
         root.standardImageBytes = root.bytesOrUnknown(s.standardImageBytes);
         root.nextKernel = typeof s.nextKernel === "string" ? s.nextKernel : "";
         root.canChooseNext = s.canChooseNext === true;
         root.kernels = kernels;
+        root.installedKernels = Array.isArray(s.installedKernels)
+            ? s.installedKernels.filter(base => typeof base === "string" && base.length > 0)
+            : [];
         root.probeFailed = false;
         root.loaded = true;
     }

@@ -23,6 +23,7 @@ PERFORMANCE_KERNEL=linux-mainstream-performance
 KERNELS=("$STANDARD_KERNEL" linux-mainstream "$PERFORMANCE_KERNEL")
 
 helper=false
+can_change_standard=false
 uefi=false
 unsupported_reason=""
 esp_free=null
@@ -33,6 +34,13 @@ performance_cpu=false
 
 [[ -x $KERNELS_HELPER ]] && helper=true
 [[ -d $EFIVARS_DIR ]] && uefi=true
+
+# Older helpers refuse to install or remove Arch's kernel, with this message.
+if [[ $helper == true ]]; then
+    rc=0
+    grep -qF -- 'the standard kernel stays installed as the fallback' "$KERNELS_HELPER" 2>/dev/null || rc=$?
+    (( rc == 1 )) && can_change_standard=true
+fi
 
 root_fstype=""
 root_subvol=""
@@ -203,10 +211,9 @@ for kernel in "${KERNELS[@]}"; do
     # The helper installs a kernel with its headers, so both must be on offer.
     available=false
     download=null
-    if [[ -n ${on_offer[$kernel]:-} ]] \
-            && { [[ $kernel == "$STANDARD_KERNEL" ]] || [[ -n ${on_offer[$kernel-headers]:-} ]]; }; then
+    if [[ -n ${on_offer[$kernel]:-} && -n ${on_offer[$kernel-headers]:-} ]]; then
         available=true
-        if [[ $kernel != "$STANDARD_KERNEL" && $installed == false ]]; then
+        if [[ $installed == false ]]; then
             total=$(download_bytes "$kernel")
             [[ -n $total ]] && download=$total
         fi
@@ -248,6 +255,7 @@ done
 
 exec jq -nc \
     --argjson helper "$helper" \
+    --argjson canChangeStandard "$can_change_standard" \
     --arg unsupportedReason "$unsupported_reason" \
     --argjson uefi "$uefi" \
     --argjson espFreeBytes "$esp_free" \
@@ -257,11 +265,13 @@ exec jq -nc \
     --argjson kernels "$kernels_json" \
     '{
         helper: $helper,
+        canChangeStandard: $canChangeStandard,
         unsupportedReason: $unsupportedReason,
         uefi: $uefi,
         espFreeBytes: $espFreeBytes,
         standardImageBytes: $standardImageBytes,
         nextKernel: $nextKernel,
         canChooseNext: $canChooseNext,
+        installedKernels: $ARGS.positional,
         kernels: $kernels
-    }'
+    }' --args "${installed_bases[@]}"

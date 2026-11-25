@@ -45,7 +45,7 @@ SEARCH_TERMS = {
     ("DisplayConfig", "UI text size"): ["desktop font size"],
     ("StorageConfig", "EFI Boot Partition"): ["boot partition", "kernel updates", "snapshots"],
     ("DefaultAppsSection", "Web Browser"): ["default browser"],
-    ("KernelSection", "Kernel"): ["kernel", "linux-mainstream", "Mainstream kernel", "Mainstream Performance", "performance kernel",
+    ("KernelSection", "Kernel"): ["kernel", "linux-mainstream", "Mainstream kernel", "Mainstream Performance", "performance kernel", "Arch kernel",
                                   "install kernel", "remove kernel", "boot menu", "next start"],
     ("SecureBootSection", "Secure Boot"): ["Secure Boot", "BitLocker", "sbctl", "UEFI", "Setup Mode", "Limine", "boot verification", "signing keys"],
     ("SecureBootSection", "Boot verification"): ["Secure Boot", "BitLocker", "sbctl", "UEFI", "Setup Mode", "Limine"],

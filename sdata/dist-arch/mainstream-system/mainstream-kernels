@@ -4,11 +4,11 @@
 # (polkit action org.mainstreamos.kernels).
 #
 # Subcommands:
-#   install <kernel>    linux-mainstream or linux-mainstream-performance, with its
-#                       headers, from a repository
-#   remove <kernel>     one of those two
-#   next <kernel>       linux or one of those two: the kernel the boot menu starts
-#                       at the next start
+#   install <kernel>    linux, linux-mainstream or linux-mainstream-performance,
+#                       with its headers, from a repository
+#   remove <kernel>     one of those three, while another kernel stays installed
+#   next <kernel>       one of those three: the kernel the boot menu starts at the
+#                       next start
 #
 # A kernel is always named by its package and never by a file path.
 #
@@ -23,8 +23,8 @@
 #   6   the EFI partition does not have room for another kernel, or the room could
 #       not be measured
 #   7   the kernel is installed, but the graphics driver could not be built for it
-#   8   remove refused (the standard kernel, the running kernel, a kernel that is
-#       not installed, or the only kernel)
+#   8   remove refused (the running kernel, a kernel that is not installed, or the
+#       only kernel)
 #   9   the boot menu's choice cannot be stored on this system
 #   10  another change is running (kernel, Secure Boot, update, or package manager)
 #   11  no repository offers the kernel
@@ -434,7 +434,7 @@ nvidia_modules_for_all_kernels() {
 cmd_install() {
     (( $# == 1 )) || die 2 "usage: install <kernel>"
     local kernel=$1
-    is_one_of "$kernel" "${MAINSTREAM_KERNELS[@]}" || \
+    is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
         die 2 "not a kernel that can be installed here"
 
     require_installed_system
@@ -465,8 +465,6 @@ cmd_remove() {
     local -a pkgs
     is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
         die 2 "not a kernel that can be removed here"
-    [[ $kernel != "$STANDARD_KERNEL" ]] || \
-        die 8 "the standard kernel stays installed as the fallback"
 
     require_installed_system
     require_limine_tools
