@@ -1068,14 +1068,41 @@ write_conf "Mainstream OS\\\\/$PLAIN"
 printf '    //x\n        default_entry: Mainstream OS/%s\n' "$PLAIN" >>"$T_CONF"
 check "remove succeeds with the name inside an entry" run_helper remove "$PLAIN"
 check "only the header line is changed" test "$(grep -c "/$PLAIN" "$T_CONF")" = 1 -a "$(grep -c '^default_entry: Mainstream OS.*/linux$' "$T_CONF")" = 1
-# Arch's kernel removed by hand earlier: nothing to point at.
-t_reset
-grep -vxF linux "$T_STATE/installed" >"$T_STATE/installed.new"; mv "$T_STATE/installed.new" "$T_STATE/installed"
-t_install "$PLAIN" "$PLAIN-headers" "$PERF"
+# Without Arch's kernel the menu goes to the best kernel that is left.
+t_mainstream_only
+t_install "$PERF" "$PERF-headers"
+printf '7.3.5-1-mainstream-performance\n' >"$T_STATE/release"
 write_conf "Mainstream OS\\\\/$PLAIN"
-cp "$T_CONF" "$TMP_BASE/conf.before"
 check "remove succeeds without the standard kernel" run_helper remove "$PLAIN"
-check "the default entry is left as it is without the standard kernel" cmp -s "$T_CONF" "$TMP_BASE/conf.before"
+check "the default entry is pointed at the performance kernel without the standard kernel" \
+    grep -qxF "default_entry: Mainstream OS\\\\/$PERF" "$T_CONF"
+check "the remembered entry is pointed at the performance kernel too" entry_var_is "$T_VAR" "$MENU_PARENT/$PERF"
+check "and the log names it" grep -q "remove: the boot menu starts $PERF next" "$T_LOG"
+# The best kernel left: performance, then Mainstream, then Arch's, and one with the
+# NVIDIA module where another kernel has one.
+t_reset
+t_install "$PLAIN" "$PLAIN-headers" "$PERF" "$PERF-headers"
+write_entry_var "$T_VAR" "$MENU_PARENT/$PERF"
+write_conf "Mainstream OS\\\\/$PERF"
+check "remove succeeds for the remembered performance kernel" run_helper remove "$PERF"
+check "the Mainstream kernel comes before Arch's" entry_var_is "$T_VAR" "$MENU_PARENT/$PLAIN"
+check "in the default entry too" grep -qxF "default_entry: Mainstream OS\\\\/$PLAIN" "$T_CONF"
+t_reset
+t_install "$PLAIN" "$PLAIN-headers" "$PERF" "$PERF-headers"
+mkdir -p "$T_MODULES/7.3.5-arch1-1/updates/dkms" "$T_MODULES/7.3.5-1-mainstream-performance/updates/dkms"
+: >"$T_MODULES/7.3.5-arch1-1/updates/dkms/nvidia.ko.zst"
+: >"$T_MODULES/7.3.5-1-mainstream-performance/updates/dkms/nvidia.ko.zst"
+write_entry_var "$T_VAR" "$MENU_PARENT/$PERF"
+check "remove succeeds with the NVIDIA module on Arch's kernel and not on the Mainstream one" run_helper remove "$PERF"
+check "the kernel with the NVIDIA module is the one the menu goes to" entry_var_is "$T_VAR" "$MENU_PARENT/linux"
+# None of the three left: the kernel that is.
+t_mainstream_only
+t_install linux-t2
+printf '6.0.0-linux-t2\n' >"$T_STATE/release"
+write_conf "Mainstream OS\\\\/$PLAIN"
+check "remove succeeds with only another kernel left" run_helper remove "$PLAIN"
+check "the menu goes to that kernel" entry_var_is "$T_VAR" "$MENU_PARENT/linux-t2"
+check "in the default entry too" grep -qxF "default_entry: Mainstream OS\\\\/linux-t2" "$T_CONF"
 # A menu that is a symlink is not written through.
 t_reset
 t_install "$PLAIN" "$PLAIN-headers"

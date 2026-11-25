@@ -337,10 +337,32 @@ write_last_entry() {  # $1 = the entry's path in the menu
     [[ $got == "$new" ]]
 }
 
+# The kernel the boot menu goes to once $1 is removed: the first left of the
+# performance, Mainstream and Arch kernels, then any other, taking one with the
+# NVIDIA module where another kernel has one. Fails when none is left.
+fallback_kernel() {  # $1 = the removed kernel
+    local k
+    local -a left=() order=()
+    while IFS= read -r k; do
+        [[ -n $k && $k != "$1" ]] && left+=("$k")
+    done < <(installed_kernels)
+    (( ${#left[@]} )) || return 1
+    for k in "$PERFORMANCE_KERNEL" linux-mainstream "$STANDARD_KERNEL" "${left[@]}"; do
+        is_one_of "$k" "${left[@]}" && ! is_one_of "$k" "${order[@]}" && order+=("$k")
+    done
+    for k in "${order[@]}"; do
+        if kernel_has_nvidia_module "$k"; then
+            printf '%s' "$k"
+            return 0
+        fi
+    done
+    printf '%s' "${order[0]}"
+}
+
 # A default_entry that names the removed kernel's entry would name nothing.
 # ./setup writes that setting as the entry's path; the number the ISO writes
 # needs no change. Returns 1 when the menu could not be changed.
-repoint_default_entry() {  # $1 = the removed kernel
+repoint_default_entry() {  # $1 = the removed kernel, $2 = the kernel to name instead
     local conf line val="" tmp lock rc=0
     find_esp || return 0
     conf="$ESP/limine.conf"
@@ -362,14 +384,14 @@ repoint_default_entry() {  # $1 = the removed kernel
         while IFS= read -r line || [[ -n $line ]]; do
             [[ $line =~ ^[[:space:]]*/ ]] && entries=1
             if (( ! entries )) && [[ $line =~ ^([[:space:]]*default_entry:[[:space:]]*)(.*/)"$1"[[:space:]]*$ ]]; then
-                line="${BASH_REMATCH[1]}${BASH_REMATCH[2]}$STANDARD_KERNEL"
+                line="${BASH_REMATCH[1]}${BASH_REMATCH[2]}$2"
             fi
             printf '%s\n' "$line"
         done <"$conf" >"$tmp" && mv -f "$tmp" "$conf"
     ) 9>>"$lock" || rc=1
     rm -f "$tmp" 2>/dev/null
     (( rc == 0 )) || return 1
-    log "remove: the boot menu's default entry names $STANDARD_KERNEL"
+    log "remove: the boot menu's default entry names $2"
     # An enrolled checksum of the old file would stop Limine at the next start.
     if [[ $(limine_setting ENABLE_ENROLL_LIMINE_CONFIG) == yes ]]; then
         limine-enroll-config </dev/null >>"$LOG" 2>&1 || return 1
@@ -439,7 +461,7 @@ cmd_install() {
 
 cmd_remove() {
     (( $# == 1 )) || die 2 "usage: remove <kernel>"
-    local kernel=$1 other others=0 was_next=0 parent=""
+    local kernel=$1 other others=0 was_next=0 parent="" fallback
     local -a pkgs
     is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
         die 2 "not a kernel that can be removed here"
@@ -467,21 +489,22 @@ cmd_remove() {
     pacman -Rns --noconfirm "${pkgs[@]}" </dev/null >>"$LOG" 2>&1 || \
         die 4 "$kernel could not be removed; see $LOG"
 
-    if pkg_installed "$STANDARD_KERNEL" && ! repoint_default_entry "$kernel"; then
-        log "remove: could not point the boot menu's default entry at $STANDARD_KERNEL"
-        printf 'mainstream-kernels: %s was removed, but the boot menu'"'"'s default entry could not be pointed at the standard kernel\n' \
-            "$kernel" >&2
+    fallback=$(fallback_kernel "$kernel") || fallback=""
+    if [[ -z $fallback ]]; then
+        log "remove: no other kernel is installed, so the boot menu is left as it is"
+    elif ! repoint_default_entry "$kernel" "$fallback"; then
+        log "remove: could not point the boot menu's default entry at $fallback"
+        printf 'mainstream-kernels: %s was removed, but the boot menu'"'"'s default entry could not be pointed at %s\n' \
+            "$kernel" "$fallback" >&2
     fi
     # The menu would otherwise preselect an entry that is gone.
-    if (( was_next )); then
-        if ! pkg_installed "$STANDARD_KERNEL"; then
-            log "remove: the boot menu remembered $kernel and the standard kernel is not installed; the record is left as it is"
-        elif write_last_entry "$parent/$STANDARD_KERNEL"; then
-            log "remove: the boot menu starts $STANDARD_KERNEL next"
+    if (( was_next )) && [[ -n $fallback ]]; then
+        if write_last_entry "$parent/$fallback"; then
+            log "remove: the boot menu starts $fallback next"
         else
-            log "remove: could not point the boot menu back at $STANDARD_KERNEL"
-            printf 'mainstream-kernels: %s was removed, but the boot menu could not be pointed back at the standard kernel\n' \
-                "$kernel" >&2
+            log "remove: could not point the boot menu at $fallback"
+            printf 'mainstream-kernels: %s was removed, but the boot menu could not be pointed at %s\n' \
+                "$kernel" "$fallback" >&2
         fi
     fi
     log "remove: $kernel removed"
