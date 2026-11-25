@@ -129,32 +129,41 @@ mac_needs_wl_driver() {
     esac
 }
 
-# The packages that driver needs: the module source, DKMS, and headers for
-# the kernel that is installed, named for the kernel package in use.
-mac_wl_packages() {
-    local kernel=linux
-    if command -v pacman >/dev/null 2>&1; then
-        kernel="$(pacman -Qqs '^linux(-zen|-lts|-hardened|-t2)?$' 2>/dev/null | head -n 1)"
-        [ -n "$kernel" ] || kernel=linux
-    fi
-    echo "broadcom-wl-dkms dkms ${kernel}-headers"
+# The package of every kernel this system can boot, one per line.
+_mac_kernel_pkgbases() {
+    local d
+    for d in "${MAC_MODULES_DIR:-/usr/lib/modules}"/*/; do
+        [ -f "${d}vmlinuz" ] && [ -r "${d}pkgbase" ] && cat "${d}pkgbase"
+    done
+    return 0
 }
+_mac_pkg_available() { pacman -Si "$1" >/dev/null 2>&1; }
 
-# Whether this machine runs a kernel the image's staged header package does not
-# match. The MacBook edition boots linux-t2, and the headers staged for an
-# offline install are Arch's, so a driver built against them would be built for
-# a kernel that is not running.
-mac_kernel_is_stock() {
-    command -v pacman >/dev/null 2>&1 || return 0
-    # By name: linux-t2 provides linux, and pacman -Q answers with a provider.
-    [ "$(pacman -Qq linux 2>/dev/null)" = linux ]
+# The packages that driver needs: the module source, DKMS, and headers for
+# every installed kernel, or the module is missing whenever another one boots.
+# Headers no repository carries are named and left out.
+mac_wl_packages() {
+    local base name headers="" seen=" "
+    for base in $(_mac_kernel_pkgbases); do
+        name="${base}-headers"
+        case "$seen" in *" $name "*) continue ;; esac
+        seen="$seen$name "
+        if _mac_pkg_available "$name"; then
+            headers="$headers $name"
+        else
+            echo "mac-config: no $name in the repositories" >&2
+        fi
+    done
+    # No kernel could be read at all, so the stock one is the likeliest.
+    [ "$seen" != " " ] || headers=" linux-headers"
+    echo "broadcom-wl-dkms dkms${headers}"
 }
 
 # Whether the kernel this system runs drives the T2. The MacBook edition ships
 # linux-t2, which carries the bridge driver the internal keyboard, trackpad and
-# audio hang off; every other edition ships Arch's kernel, which does not. The
-# answer changes what is true to say about a T2 machine, so ask before saying
-# any of it.
+# audio hang off; every other edition ships linux-mainstream, which does not,
+# and neither does Arch's kernel. The answer changes what is true to say about a
+# T2 machine, so ask before saying any of it.
 mac_has_t2_support() {
     local kver; kver="$(uname -r)"
     # The kernel that is running is the one that matters, and a running system
