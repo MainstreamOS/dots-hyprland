@@ -647,9 +647,11 @@ fi
 # existed never gained it: the firmware fetch for the T2 chips, the wl driver
 # for the 2012-2015 Broadcom parts, the SPI and NVMe fixes. Applied here from
 # the same library the installer uses; a no-op on anything that is not a Mac.
-# The initramfs is not rebuilt here, in keeping with the rest of this script:
-# a module added to its list lands on the next kernel update.
+# A module added to the initramfs list lands on the next kernel update; changed
+# T2 boot options get a rebuild of their own further down.
 MAC_LIB_SRC="$REPO_DIR/sdata/lib/mac-config.sh"
+T2_STAMP=/var/lib/mainstream/t2-cmdline-rebuilt
+_t2_cmdline_sum() { grep -v '^[[:space:]]*#' /etc/kernel/cmdline 2>/dev/null | sha256sum | cut -d' ' -f1; }
 GPU_LIB_SRC="$REPO_DIR/sdata/lib/gpu-config.sh"
 if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" == Apple* ]]; then
     # shellcheck source=/dev/null
@@ -684,6 +686,11 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
     else
         warn "$(t "Mac quirks did not fully apply")"
         RC=1
+    fi
+    # The stamp names the command line the images were last rebuilt for, so a kernel
+    # that never boots with it (another entry, a Limine override) costs one rebuild.
+    if mac_t2_cmdline_pending && [[ "$(cat "$T2_STAMP" 2>/dev/null)" != "$(_t2_cmdline_sum)" ]]; then
+        _T2_CMDLINE_PENDING=1
     fi
     systemctl daemon-reload 2>/dev/null || true
     mac_fetch_firmware_now 2>&1 | sed 's/^/    /' || true
@@ -744,7 +751,11 @@ _rebuild_boot_images() {
     "${inhibit[@]}" limine-mkinitcpio </dev/null >"$log" 2>&1
     rc=$?
     [[ "$log" == /dev/null ]] || { sed 's/^/    /' "$log"; rm -f "$log"; }
-    (( rc == 0 )) || _BOOT_REBUILD_FAILED=1
+    if (( rc == 0 )); then
+        _BOOT_REBUILT=1
+    else
+        _BOOT_REBUILD_FAILED=1
+    fi
     return "$rc"
 }
 
@@ -911,6 +922,26 @@ if [[ -f /etc/gshadow && ! -L /etc/gshadow ]]; then
     done
     if (( ${#_gs_added[@]} > 0 )); then
         ok "$(tf "Added the missing group shadow entries for %s" "${_gs_added[*]}")"
+    fi
+fi
+
+# ── Apple T2 boot options ──────────────────────────────────────────────────
+# Found by the Mac step above. A rebuild since then, for hibernation or the TPM,
+# already carries them.
+if [[ -n "${_T2_CMDLINE_PENDING-}" ]]; then
+    if [[ -n "${_BOOT_REBUILT-}" ]]; then
+        mkdir -p "${T2_STAMP%/*}" && _t2_cmdline_sum > "$T2_STAMP"
+    elif [[ -z "${_BOOT_REBUILD_FAILED-}" ]] \
+       && command -v limine-mkinitcpio >/dev/null 2>&1 \
+       && _luks_keyfile_idle; then
+        say "$(t "Rebuilding the boot images with the Apple T2 boot options...")"
+        if _rebuild_boot_images; then
+            mkdir -p "${T2_STAMP%/*}" && _t2_cmdline_sum > "$T2_STAMP"
+            ok "$(t "Boot images rebuilt with the Apple T2 boot options.")"
+        else
+            warn "$(t "The boot images were not rebuilt; the next kernel update rebuilds them with the Apple T2 boot options.")"
+            RC=1
+        fi
     fi
 fi
 

@@ -3615,5 +3615,8 @@
   "Could not check for a new DaVinci Resolve because Blackmagic's site did not answer. The rest of the update is not affected.": "Could not check for a new DaVinci Resolve because Blackmagic's site did not answer. The rest of the update is not affected.",
   "not enough free disk space": "not enough free disk space",
   "could not check for a new version": "could not check for a new version",
-  "DaVinci Resolve:": "DaVinci Resolve:"
+  "DaVinci Resolve:": "DaVinci Resolve:",
+  "Rebuilding the boot images with the Apple T2 boot options...": "Rebuilding the boot images with the Apple T2 boot options...",
+  "Boot images rebuilt with the Apple T2 boot options.": "Boot images rebuilt with the Apple T2 boot options.",
+  "The boot images were not rebuilt; the next kernel update rebuilds them with the Apple T2 boot options.": "The boot images were not rebuilt; the next kernel update rebuilds them with the Apple T2 boot options."
 }

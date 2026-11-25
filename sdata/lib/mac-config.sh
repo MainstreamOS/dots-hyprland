@@ -6,12 +6,12 @@
 # is in mainline now (applespi, hid_apple, applesmc, apple-gmux), so this is
 # module options and initramfs entries rather than drivers.
 #
-# T2 machines (2018-2020) are detected but not configured. Their internal
-# keyboard, trackpad, audio and fan control live behind a patched kernel this
-# project does not ship, and reporting that plainly beats leaving someone to
-# work out why the keyboard is dead. Their Wi-Fi and Bluetooth are another
-# matter: the drivers are in the stock kernel and only the firmware is
-# missing, and that the machine can fetch from Apple for itself.
+# T2 machines (2018-2020) need a patched kernel for the internal keyboard,
+# trackpad, audio and fans. Only the MacBook edition ships one, linux-t2, and
+# there this also sets the boot options its T2 drivers want. Wi-Fi and
+# Bluetooth run on stock drivers in every edition, with the Broadcom firmware
+# fetched where the chip needs it, and the UART Bluetooth models get a
+# recovery service.
 #
 # Write seams match gpu-config.sh so both libraries behave the same when sourced
 # together:
@@ -19,11 +19,26 @@
 #   MKINITCPIO_CONF default /etc/mkinitcpio.conf
 #   MODPROBE_DIR    default /etc/modprobe.d
 #   SYSTEMD_DIR     default /etc/systemd/system
+#   KERNEL_CMDLINE  default /etc/kernel/cmdline
+#   MAC_HELPER_DIR  default /usr/local/lib/mainstream-mac
+#   MAC_STATE_DIR   default /var/lib/mainstream
 
 # ── Hardware probes (overridable for testing) ───────────────────────────────
 _mac_sys_vendor()  { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
 _mac_product()     { cat /sys/class/dmi/id/product_name 2>/dev/null || true; }
 _mac_pci()         { lspci -nn 2>/dev/null || true; }
+_mac_proc_cmdline() { cat /proc/cmdline 2>/dev/null || true; }
+# ACPI lists devices the firmware hides (the MacPro7,1's) too, so status bit 0
+# decides; no status file means no _STA, which ACPI reads as present.
+_mac_acpi_uart_bt() {
+    local d s
+    for d in "${MAC_ACPI_DIR:-/sys/bus/acpi/devices}"/BCM2E7C*; do
+        [ -e "$d" ] || continue
+        s="$(cat "$d/status" 2>/dev/null)" || return 0
+        [ $(( ${s:-0} & 1 )) -eq 1 ] && return 0
+    done
+    return 1
+}
 
 _mac_write_file() {
     local dest="$1" mode="${2:-644}" tmp
@@ -211,11 +226,102 @@ mac_apple_firmware_present() {
     return 1
 }
 
+# ── mac_needs_t2_cmdline ────────────────────────────────────────────────────
+# t2linux's options for the T2 drivers only linux-t2 has; pm_async=off replaced
+# pcie_ports=compat in April 2026, as compat turns off Thunderbolt's PCIe hotplug.
+mac_t2_cmdline_tokens() { echo intel_iommu=on iommu=pt pm_async=off; }
+mac_needs_t2_cmdline() {
+    mac_has_t2 && mac_has_t2_support
+}
+
+# ── mac_needs_t2_uart_bt ────────────────────────────────────────────────────
+# The BCM4364 models, MacBookPro15,1 among them, attach Bluetooth over a UART
+# (ACPI BCM2E7C, driven by hci_uart) rather than over PCIe like the BCM4377.
+mac_needs_t2_uart_bt() {
+    mac_has_t2 && _mac_acpi_uart_bt
+}
+
+# Adds the T2 options whose keys the user has not set and drops the earlier
+# pcie_ports=compat, once per option set, so an option taken out stays out.
+mac_apply_t2_cmdline() {
+    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" tok t found
+    local mark="${MAC_STATE_DIR:-/var/lib/mainstream}/t2-cmdline-options"
+    local -a toks=() missing=()
+    mac_needs_t2_cmdline || return 0
+    [ -f "$kc" ] || return 0
+    [ "$(cat "$mark" 2>/dev/null)" != "$(mac_t2_cmdline_tokens)" ] || return 0
+    declare -F cmdline_upsert >/dev/null && declare -F cmdline_remove >/dev/null || return 0
+    read -ra toks <<<"$(_gpu_cmdline_current | tr '\n' ' ')" || true
+    for t in "${toks[@]}"; do
+        if [ "$t" = pcie_ports=compat ]; then
+            cmdline_remove pcie_ports
+            break
+        fi
+    done
+    for tok in $(mac_t2_cmdline_tokens); do
+        found=0
+        for t in "${toks[@]}"; do
+            if [ "${t%%=*}" = "${tok%%=*}" ]; then
+                found=1
+                break
+            fi
+        done
+        [ "$found" -eq 1 ] || missing+=("$tok")
+    done
+    if [ "${#missing[@]}" -gt 0 ]; then
+        cmdline_upsert "${missing[@]}" || return 1
+    fi
+    mac_t2_cmdline_tokens | _mac_write_file "$mark" 644
+}
+
+# Whether /etc/kernel/cmdline differs from the running kernel in a T2 option
+# it sets or the pcie_ports=compat it dropped, so the boot images need a rebuild.
+mac_t2_cmdline_pending() {
+    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" want have tok
+    mac_needs_t2_cmdline && [ -f "$kc" ] || return 1
+    want=" $(grep -v '^[[:space:]]*#' "$kc" | tr '\n' ' ') "
+    have=" $(_mac_proc_cmdline | tr '\n' ' ') "
+    for tok in $(mac_t2_cmdline_tokens); do
+        if [[ "$want" == *" $tok "* && "$have" != *" $tok "* ]]; then
+            return 0
+        fi
+    done
+    [[ "$have" == *" pcie_ports=compat "* && "$want" != *" pcie_ports=compat "* ]]
+}
+
+# Reloads hci_uart when no serial-attached Bluetooth controller has appeared
+# within the given seconds. POSIX sh, so the units run it without this library.
+_mac_t2_bt_recover_script() {
+    cat <<'SH'
+#!/bin/sh
+# Written by mac-config.sh: reloads hci_uart when this Mac's UART Bluetooth has
+# no controller after $1 seconds (default 10).
+class="${MAC_BLUETOOTH_CLASS:-/sys/class/bluetooth}"
+have_uart_hci() {
+    for dev in "$class"/hci*; do
+        [ -e "$dev/device" ] || continue
+        case "$(readlink -f "$dev/device")" in */serial*) return 0 ;; esac
+    done
+    return 1
+}
+i=0
+while ! have_uart_hci; do
+    if [ "$i" -ge "${1:-10}" ]; then
+        modprobe -r hci_uart 2>/dev/null
+        exec modprobe -b hci_uart
+    fi
+    sleep 1
+    i=$((i + 1))
+done
+SH
+}
+
 # ── mac_apply_autoconfig ────────────────────────────────────────────────────
 # Idempotent. A no-op on anything that is not an Apple machine.
 mac_apply_autoconfig() {
     local modprobe_dir="${MODPROBE_DIR:-/etc/modprobe.d}"
     local systemd_dir="${SYSTEMD_DIR:-/etc/systemd/system}"
+    local helper="${MAC_HELPER_DIR:-/usr/local/lib/mainstream-mac}/t2-bluetooth-recover"
     mac_is_apple || return 0
 
     # Media keys without holding fn, the way the keycaps read and the way the
@@ -264,7 +370,9 @@ mac_apply_autoconfig() {
             '[Install]' \
             'WantedBy=multi-user.target' \
             | _mac_write_file "$systemd_dir/mainstream-mac-nvme.service" 644
-        ${GPU_SUDO:-} systemctl enable mainstream-mac-nvme.service >/dev/null 2>&1 || true
+        if [ "$systemd_dir" = /etc/systemd/system ]; then
+            ${GPU_SUDO:-} systemctl enable mainstream-mac-nvme.service >/dev/null 2>&1 || true
+        fi
     fi
 
     # The firmware fetch needs a network the machine may not have until
@@ -293,7 +401,50 @@ mac_apply_autoconfig() {
             '[Install]' \
             'WantedBy=timers.target' \
             | _mac_write_file "$systemd_dir/mainstream-mac-firmware.timer" 644
-        ${GPU_SUDO:-} systemctl enable mainstream-mac-firmware.timer >/dev/null 2>&1 || true
+        if [ "$systemd_dir" = /etc/systemd/system ]; then
+            ${GPU_SUDO:-} systemctl enable mainstream-mac-firmware.timer >/dev/null 2>&1 || true
+        fi
+    fi
+
+    mac_apply_t2_cmdline
+
+    if mac_needs_t2_uart_bt; then
+        _mac_t2_bt_recover_script | _mac_write_file "$helper" 755
+        printf '%s\n' \
+            '[Unit]' \
+            "Description=Bring back this Mac's UART Bluetooth if it did not come up" \
+            'ConditionPathExistsGlob=/sys/bus/acpi/devices/BCM2E7C*' \
+            'After=systemd-modules-load.service' \
+            '' \
+            '[Service]' \
+            'Type=oneshot' \
+            'ExecStart=/usr/local/lib/mainstream-mac/t2-bluetooth-recover 10' \
+            '' \
+            '[Install]' \
+            'WantedBy=multi-user.target' \
+            | _mac_write_file "$systemd_dir/mainstream-t2-bluetooth.service" 644
+        printf '%s\n' \
+            '[Unit]' \
+            "Description=Bring back this Mac's UART Bluetooth after sleep" \
+            'ConditionPathExistsGlob=/sys/bus/acpi/devices/BCM2E7C*' \
+            'After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target' \
+            '' \
+            '[Service]' \
+            'Type=oneshot' \
+            'ExecStart=/usr/local/lib/mainstream-mac/t2-bluetooth-recover 10' \
+            '' \
+            '[Install]' \
+            'WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target' \
+            | _mac_write_file "$systemd_dir/mainstream-t2-bluetooth-resume.service" 644
+        if [ "$systemd_dir" = /etc/systemd/system ]; then
+            ${GPU_SUDO:-} systemctl enable \
+                mainstream-t2-bluetooth.service \
+                mainstream-t2-bluetooth-resume.service >/dev/null 2>&1 || true
+            if [ -d /run/systemd/system ] && ! systemd-detect-virt --chroot -q 2>/dev/null; then
+                ${GPU_SUDO:-} systemctl daemon-reload >/dev/null 2>&1 || true
+                ${GPU_SUDO:-} systemctl start --no-block mainstream-t2-bluetooth.service >/dev/null 2>&1 || true
+            fi
+        fi
     fi
 
     return 0
@@ -369,6 +520,12 @@ mac_apply_session_quirks() {
         ${GPU_SUDO:-} modprobe brcmfmac 2>/dev/null || true
     fi
 
+    # In a unit of its own: the live quirks unit holds the network back until it ends.
+    if mac_needs_t2_uart_bt && [ -d /run/systemd/system ]; then
+        ${GPU_SUDO:-} systemd-run --no-block --collect --quiet --unit=mainstream-t2-bluetooth-live \
+            sh -c "$(_mac_t2_bt_recover_script)" t2-bluetooth-recover 10 >/dev/null 2>&1 || true
+    fi
+
     return 0
 }
 
@@ -393,6 +550,8 @@ mac_report() {
     mac_needs_spi_input      && echo "  SPI keyboard and trackpad: applespi added to the initramfs"
     mac_needs_nvme_quirk     && echo "  NVMe suspend quirk applied"
     mac_needs_brcmfmac_quirk && echo "  Broadcom WPA offload disabled"
+    mac_needs_t2_cmdline     && echo "  T2 boot options: $(mac_t2_cmdline_tokens)"
+    mac_needs_t2_uart_bt     && echo "  UART Bluetooth (BCM2E7C): recovery service at boot and after sleep"
     mac_needs_wl_driver      && echo "  Broadcom wl driver: $(mac_wl_packages)"
     if mac_needs_apple_firmware; then
         if mac_apple_firmware_present; then

@@ -152,18 +152,20 @@ apply_intel_wifi7_eht_quirk() {
 apply_apple_quirks() {
     is_apple || return 0
     log "Apple hardware detected. Applying the Mac configuration..."
-    local mac_lib="" path script_dir
+    local lib path script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    for path in /usr/local/lib/mac-config.sh "$script_dir/../../lib/mac-config.sh"
-    do
-        if [[ -f "$path" ]]; then
-            mac_lib="$path"
-            break
-        fi
+    # gpu-config.sh brings the kernel command line writer mac-config.sh uses for
+    # the T2 boot options; the rest applies without it.
+    for lib in gpu-config.sh mac-config.sh; do
+        for path in "/usr/local/lib/$lib" "$script_dir/../../lib/$lib"; do
+            if [[ -f "$path" ]]; then
+                # shellcheck source=/dev/null
+                source "$path"
+                break
+            fi
+        done
     done
-    if [[ -n "$mac_lib" ]]; then
-        # shellcheck source=/dev/null
-        source "$mac_lib"
+    if declare -F mac_apply_autoconfig >/dev/null; then
         mac_apply_autoconfig || true
     else
         log "Warning: mac-config.sh library not found, skipping mac autoconfig."
