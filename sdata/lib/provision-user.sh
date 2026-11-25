@@ -706,8 +706,15 @@ WEB_TYPES=(
     x-scheme-handler/http x-scheme-handler/https
     text/html application/xhtml+xml
 )
-su -s /bin/bash "$u" -c "env -u BROWSER xdg-settings set default-web-browser chromium.desktop" || true
-su -s /bin/bash "$u" -c "xdg-mime default chromium.desktop ${WEB_TYPES[*]}" || true
+# A Flatpak Chromium has its own desktop id. The ISO installs apps after this
+# runs, so its cleanup step corrects the choice once they are in.
+BROWSER_DESKTOP=chromium.desktop
+if [[ ! -f /usr/share/applications/chromium.desktop \
+      && -f /var/lib/flatpak/exports/share/applications/org.chromium.Chromium.desktop ]]; then
+    BROWSER_DESKTOP=org.chromium.Chromium.desktop
+fi
+su -s /bin/bash "$u" -c "env -u BROWSER xdg-settings set default-web-browser $BROWSER_DESKTOP" || true
+su -s /bin/bash "$u" -c "xdg-mime default $BROWSER_DESKTOP ${WEB_TYPES[*]}" || true
 _pu_log "Chromium set as default browser."
 
 # Set Papers as default document viewer. Without this a PDF opens in the

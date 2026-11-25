@@ -811,7 +811,13 @@ v setup_default_appimage_installer
 # mail client, which is a surprising thing to find under a "default apps" list.
 function setup_default_browser(){
   local desktop=chromium.desktop
-  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+  # The shipped chromium.desktop override is dropped later when only the Flatpak is installed.
+  if ! test -f /usr/share/applications/$desktop \
+    && test -f /var/lib/flatpak/exports/share/applications/org.chromium.Chromium.desktop; then
+    desktop=org.chromium.Chromium.desktop
+  fi
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop" \
+    && ! test -f /var/lib/flatpak/exports/share/applications/$desktop; then
     echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping browser default.${STY_RST}"
     return 0
   fi
