@@ -631,6 +631,7 @@ printf '0\n' >"$T_STATE/gpu_detect_rc"
 printf '0\n' >"$T_STATE/ensure_rc"
 : >"$T_STATE/calls.log"
 
+ESP_UUID=0123456789abcdef0123456789abcdef
 IMAGE_BYTES=$((36 * 1024 * 1024))
 NEEDED_BYTES=$((IMAGE_BYTES * 2 + 32 * 1024 * 1024))
 printf '%s\n' "$((900 * 1024 * 1024))" >"$T_STATE/esp_avail"
@@ -691,7 +692,7 @@ t_mainstream_only() {  # a Default install: the Mainstream kernel alone, and run
 
 # The helper runs on these tools and the stand-ins beside them alone: a package
 # manager or boot tool with no stand-in is missing, never the real one.
-for tool in bash date mkdir flock head tail tr od dd stat grep mv rm cat; do
+for tool in bash date mkdir flock head tail tr od dd stat grep mv rm cat sed cp chmod cksum jq awk; do
     ln -s "$(command -v "$tool")" "$T_BIN/$tool"
 done
 
@@ -740,6 +741,9 @@ case \$op in
     -Si)
         [[ \${1:-} == -- ]] && shift
         grep -qxF -- "\$1" "$T_STATE/repo" || exit 1 ;;
+    -Qqo)
+        [[ \${1:-} == -- ]] && shift
+        grep -qxF -- "\$1" "$T_STATE/owned" 2>/dev/null || exit 1 ;;
     -S)
         [[ \$(<"$T_STATE/pacman_fail") == 1 ]] && exit 1
         [[ \$(<"$T_STATE/pacman_no_effect") == 1 ]] && exit 0
@@ -774,12 +778,59 @@ echo "$tool \$*" >>"$T_STATE/calls.log"
 exit 0
 STUB_END
 done
+# The boot tools' entry tool takes the named entries out of this system's part of the
+# menu, with the boot image each one names.
+cat >"$T_BIN/limine-entry-tool" <<STUB_END
+#!/usr/bin/env bash
+echo "limine-entry-tool \$*" >>"$T_STATE/calls.log"
+[[ \$(cat "$T_STATE/entry_tool_rc" 2>/dev/null || echo 0) == 0 ]] || exit 1
+[[ \$1 == --remove-all ]] || exit 2
+shift
+conf="$ESP_T/limine.conf"
+for name in "\$@"; do
+    [[ \$name == --* ]] && continue
+    awk -v n="\$name" '
+        /^\/[^\/]/ { mine = (\$0 ~ /^\/\+Mainstream OS/) }
+        /machine-id=/ { if (index(\$0, "machine-id=") && !index(\$0, "$ESP_UUID")) mine = 0 }
+        /^[ \t]*\/\// { skip = mine && (\$0 ~ "^[ \t]*//" n "[ \t]*\$") }
+        /^[ \t]*\/[^\/]/ { skip = 0 }
+        !skip { print }' "\$conf" >"\$conf.tool" && mv "\$conf.tool" "\$conf"
+    rm -f "$ESP_T/EFI/Linux/mainstream_\$name.efi"
+done
+exit 0
+STUB_END
+# sbctl's file database, kept in its own map form. Like sbctl 0.18, its JSON listing
+# leaves out every listed file that no longer exists.
+T_SBCTL_DB="$T_ROOT/var/lib/sbctl/files.json"
+cat >"$T_BIN/sbctl" <<STUB_END
+#!/usr/bin/env bash
+echo "sbctl \$*" >>"$T_STATE/calls.log"
+case "\$*" in
+    "setup --print-config") printf 'keydir: /var/lib/sbctl/keys\nfiles_db: /var/lib/sbctl/files.json\n' ;;
+    "--json list-files")
+        while IFS= read -r f; do
+            [[ -e "$T_ROOT\$f" ]] && printf '%s\n' "\$f"
+        done < <(jq -r '.[].file' "$T_SBCTL_DB" 2>/dev/null) | jq -R '{file: .}' | jq -cs '.' ;;
+    "remove-file "*)
+        jq --arg f "\$2" 'del(.[\$f])' "$T_SBCTL_DB" >"$T_SBCTL_DB.new" && mv "$T_SBCTL_DB.new" "$T_SBCTL_DB" ;;
+    *) exit 2 ;;
+esac
+STUB_END
+# grub-mkconfig writes the menu for the kernels installed now.
+cat >"$T_BIN/grub-mkconfig" <<STUB_END
+#!/usr/bin/env bash
+echo "grub-mkconfig \$*" >>"$T_STATE/calls.log"
+[[ \$1 == -o ]] || exit 2
+for d in "$T_MODULES"/*/; do
+    [[ -r "\${d}pkgbase" ]] && printf 'linux /vmlinuz-%s\n' "\$(<"\${d}pkgbase")"
+done >"\$2"
+STUB_END
 cat >"$T_BIN/lspci" <<STUB_END
 #!/usr/bin/env bash
 cat "$T_STATE/lspci" 2>/dev/null
 exit 0
 STUB_END
-chmod +x "$T_BIN"/findmnt "$T_BIN"/uname "$T_BIN"/df "$T_BIN"/chattr "$T_BIN"/pacman "$T_BIN"/limine-* "$T_BIN"/lspci
+chmod +x "$T_BIN"/findmnt "$T_BIN"/uname "$T_BIN"/df "$T_BIN"/chattr "$T_BIN"/pacman "$T_BIN"/limine-* "$T_BIN"/lspci "$T_BIN"/sbctl "$T_BIN"/grub-mkconfig
 refute "the real package manager cannot be reached from the test system" \
     env -i PATH="$T_BIN" bash -c 'command -v pacman | grep -q "^/usr"'
 
@@ -1490,5 +1541,319 @@ t_install "$PERF" "$PERF-headers"
 check "next takes the old name of a kernel installed under today's" run_helper next "$OLD_PERF"
 check "and names today's entry" entry_var_is "$T_VAR" "$MENU_PARENT/$PERF"
 expect_rc 9 "next refuses a kernel installed under neither name" run_helper next "$PLAIN"
+
+# 4.9 The rename's migration after the package update
+printf '%s\n' "$ESP_UUID" >"$T_ROOT/etc/machine-id"
+T_CONF="$ESP_T/limine.conf"
+OTHER_ID=ffffffffffffffffffffffffffffffff
+migrate() {
+    (
+        export MAINSTREAM_KERNELS_TEST_ROOT="$T_ROOT" MAINSTREAM_KERNELS_TEST_BIN="$T_BIN"
+        # shellcheck source=/dev/null
+        source "$HELPER_SCRIPT"
+        migrate_renamed_kernels
+    )
+}
+# A system the ISO set up with the old packages, before the update. Its menu is the
+# installer's: the system's entry carries no machine ID ($1 = id gives it one, the
+# way limine-entry-tool writes it). Another Mainstream install and Windows share the
+# partition, each with an entry named like the old kernel.
+m_old_system() {
+    t_reset
+    rm -rf "${T_MODULES:?}"/*
+    : >"$T_STATE/installed"
+    t_install linux linux-headers "$OLD_PLAIN" "$OLD_PLAIN-headers"
+    printf 'mainstream-image\n' >"$T_MODULES/7.3.5-arch1-1-mainstream/vmlinuz"
+    printf '%s\n' 'TARGET_OS_NAME="Mainstream OS\\"' 'ESP_PATH="/boot/efi"' ENABLE_UKI=yes \
+        'CUSTOM_UKI_NAME="mainstream"' "BOOT_ORDER=\"$OLD_PLAIN, *, *fallback, Snapshots\"" >"$T_ROOT/etc/default/limine"
+    printf 'timeout: 5\nremember_last_entry: yes\ndefault_entry: Mainstream OS\\\\/%s\n\n/+Mainstream OS\\\\\n' "$OLD_PLAIN" >"$T_CONF"
+    [[ ${1:-} == id ]] && printf '    comment: Mainstream OS machine-id=%s\n' "$ESP_UUID" >>"$T_CONF"
+    printf '    //%s\n        protocol: efi\n        path: boot():/EFI/Linux/mainstream_%s.efi\n' \
+        "$OLD_PLAIN" "$OLD_PLAIN" linux linux >>"$T_CONF"
+    printf '    //Snapshots\n/+Mainstream OS\\\\\n    comment: machine-id=%s\n    //%s\n        path: boot():/EFI/Linux/other_%s.efi\n' \
+        "$OTHER_ID" "$OLD_PLAIN" "$OLD_PLAIN" >>"$T_CONF"
+    printf '/Windows\n    //%s\n        path: boot():/EFI/windows_%s.efi\n' "$OLD_PLAIN" "$OLD_PLAIN" >>"$T_CONF"
+    : >"$ESP_T/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+    write_entry_var "$T_VAR" "$MENU_PARENT/$OLD_PLAIN"
+    mkdir -p "$T_ROOT/etc/mkinitcpio.d" "$T_ROOT/boot" "${T_SBCTL_DB%/*}"
+    rm -rf "$T_ROOT"/etc/mkinitcpio.d/* "$T_ROOT"/boot/vmlinuz-* "$T_ROOT"/boot/initramfs-* "$T_ROOT/boot/grub" \
+        "$T_ROOT/var/lib/mainstream" "$T_ROOT/var/log/pacman.log" "$ESP_T/loader"
+    printf "PRESETS=('default')\nALL_kver='/boot/vmlinuz-%s'\ndefault_config='/etc/mkinitcpio.conf'\ndefault_image='/boot/initramfs-%s.img'\n" \
+        "$OLD_PLAIN" "$OLD_PLAIN" >"$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset"
+    printf 'old-image\n' >"$T_ROOT/boot/vmlinuz-$OLD_PLAIN"
+    : >"$T_ROOT/boot/initramfs-$OLD_PLAIN.img"
+    jq -n --arg old "$OLD_PLAIN" '[
+            "/boot/efi/EFI/Linux/mainstream_" + $old + ".efi", "/boot/vmlinuz-" + $old,
+            "/boot/efi/EFI/limine/limine_x64.efi", "/boot/efi/EFI/Linux/mainstream_" + $old + "-performance.efi"]
+        | map({(.): {file: ., output_file: .}}) | add' >"$T_SBCTL_DB"
+    : >"$T_STATE/owned"
+    : >"$T_STATE/calls.log"
+    echo 0 >"$T_STATE/entry_tool_rc"
+}
+# The update swapped the package for today's, which got its entry and image from the
+# install hook. With a new release, as the renamed packages ship, the removal hooks
+# took the old entry, image, preset and /boot copies away ($1 = hooks); with the same
+# release they never ran and all of it is left.
+m_swap_plain() {
+    grep -vxF -e "$OLD_PLAIN" -e "$OLD_PLAIN-headers" "$T_STATE/installed" >"$T_STATE/installed.new"
+    mv "$T_STATE/installed.new" "$T_STATE/installed"
+    printf '%s\n' "$PLAIN" "$PLAIN-headers" >>"$T_STATE/installed"
+    if [[ ${1:-} == hooks ]]; then
+        rm -rf "$T_MODULES/7.3.5-arch1-1-mainstream"
+        mkdir -p "$T_MODULES/7.3.5-arch1-3-mainstream"
+        printf 'mainstream-image\n' >"$T_MODULES/7.3.5-arch1-3-mainstream/vmlinuz"
+        printf '%s\n' "$PLAIN" >"$T_MODULES/7.3.5-arch1-3-mainstream/pkgbase"
+        drop_first_entry "$OLD_PLAIN"
+        rm -f "$ESP_T/EFI/Linux/mainstream_$OLD_PLAIN.efi" "$T_ROOT/boot/vmlinuz-$OLD_PLAIN" "$T_ROOT/boot/initramfs-$OLD_PLAIN.img"
+        mv "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset" "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset.pacsave"
+    else
+        printf '%s\n' "$PLAIN" >"$T_MODULES/7.3.5-arch1-1-mainstream/pkgbase"
+    fi
+    # limine-entry-tool names it mainstream.efi: the kernel's name starts with the prefix.
+    sed -i "s|^    //linux\$|    //$PLAIN\n        protocol: efi\n        path: boot():/EFI/Linux/$PLAIN.efi\n    //linux|" "$T_CONF"
+    : >"$ESP_T/EFI/Linux/$PLAIN.efi"
+}
+limine_default_has() { grep -qxF -- "$1" "$T_ROOT/etc/default/limine"; }
+drop_first_entry() {  # $1 = entry name: its first entry in the menu, as a hook or a failed build leaves it
+    awk -v n="    //$1" '$0 == n && !done { skip = 1; done = 1; next }
+        skip && /^ *\/\/|^\// { skip = 0 } !skip { print }' "$T_CONF" >"$T_CONF.new" && mv "$T_CONF.new" "$T_CONF"
+}
+sbctl_lists() { jq -e --arg f "$1" 'has($f)' "$T_SBCTL_DB" >/dev/null; }
+settings_stay_old() {
+    limine_default_has "BOOT_ORDER=\"$OLD_PLAIN, *, *fallback, Snapshots\"" \
+        && grep -qxF "default_entry: Mainstream OS\\\\/$OLD_PLAIN" "$T_CONF" \
+        && entry_var_is "$T_VAR" "$MENU_PARENT/$OLD_PLAIN"
+}
+settings_moved() {
+    limine_default_has "BOOT_ORDER=\"$PLAIN, *, *fallback, Snapshots\"" \
+        && grep -qxF "default_entry: Mainstream OS\\\\/$PLAIN" "$T_CONF" \
+        && entry_var_is "$T_VAR" "$MENU_PARENT/$PLAIN"
+}
+
+m_old_system
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc|$out" "0|" "with the old package still installed nothing is migrated"
+check "its BOOT_ORDER, default entry and boot record stay" settings_stay_old
+check "its entry stays" grep -qxF "    //$OLD_PLAIN" "$T_CONF"
+check "its preset stays" test -f "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset"
+check "no tool is run" test "$(calls '^limine-entry-tool\|^sbctl remove\|^grub-mkconfig')" = 0
+
+# The swap as the renamed packages ship it: a new release, cleaned up by the hooks.
+m_swap_plain hooks
+# Both packages at once, which their conflict should prevent: the old one still counts.
+printf '%s\n' "$OLD_PLAIN" >>"$T_STATE/installed"
+assert_eq "$(migrate)" "" "with the old package installed beside today's nothing is migrated"
+grep -vxF "$OLD_PLAIN" "$T_STATE/installed" >"$T_STATE/installed.new"
+mv "$T_STATE/installed.new" "$T_STATE/installed"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "after a swap the hooks cleaned up, the migration succeeds"
+check "BOOT_ORDER, the default entry and the boot record name today's package" settings_moved
+assert_eq "$(grep -c '' <<<"$out")" "4" "and those three and sbctl's list are all it changes"
+refute "sbctl no longer lists the image the hooks removed" sbctl_lists "/boot/efi/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+check "no entry tool is needed" test "$(calls '^limine-entry-tool')" = 0
+check "the preset the hook kept aside is left alone" test -f "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset.pacsave"
+refute "and no preset is made" test -e "$T_ROOT/etc/mkinitcpio.d/$PLAIN.preset"
+check "the other systems' entries stay" test "$(grep -c "//$OLD_PLAIN\$" "$T_CONF")" = 2
+: >"$T_STATE/calls.log"
+cp "$T_CONF" "$TMP_BASE/conf.after"
+assert_eq "$(migrate)" "" "a second run finds nothing to migrate"
+check "and changes nothing" cmp -s "$T_CONF" "$TMP_BASE/conf.after"
+
+# The same release: the hooks never ran, so the old entry and files are left as well.
+for shape in iso id; do
+    m_old_system "$shape"
+    m_swap_plain
+    out=$(migrate) && rc=0 || rc=$?
+    assert_eq "$rc" "0" "the migration succeeds after a swap the hooks missed ($shape menu)"
+    check "BOOT_ORDER, the default entry and the boot record move ($shape menu)" settings_moved
+    check "the old entries are removed by the boot tools ($shape menu)" \
+        test "$(calls "^limine-entry-tool --remove-all $OLD_PLAIN $OLD_PLAIN-fallback --quiet\$")" = 1
+    assert_eq "$(sed '/^\/Windows/,$d' "$T_CONF" | sed '/machine-id='"$OTHER_ID"'/,$d' | grep -c "//$OLD_PLAIN\$")" "0" \
+        "this system's old entry is gone ($shape menu)"
+    check "the other systems' entries stay ($shape menu)" test "$(grep -c "//$OLD_PLAIN\$" "$T_CONF")" = 2
+    refute "the old boot image is gone ($shape menu)" test -e "$ESP_T/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+    check "today's boot image stays ($shape menu)" test -e "$ESP_T/EFI/Linux/$PLAIN.efi"
+    refute "sbctl no longer lists the removed image ($shape menu)" sbctl_lists "/boot/efi/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+done
+check "the preset has today's name" test -f "$T_ROOT/etc/mkinitcpio.d/$PLAIN.preset"
+refute "and the old one is gone" test -e "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset"
+assert_eq "$(cat "$T_ROOT/etc/mkinitcpio.d/$PLAIN.preset")" \
+    "$(printf "PRESETS=('default')\nALL_kver='/boot/vmlinuz-%s'\ndefault_config='/etc/mkinitcpio.conf'\ndefault_image='/boot/initramfs-%s.img'" "$PLAIN" "$PLAIN")" \
+    "the preset names today's kernel and image files"
+assert_eq "$(cat "$T_ROOT/boot/vmlinuz-$PLAIN" 2>/dev/null)" "mainstream-image" \
+    "the kernel the preset names is copied from the package"
+refute "the old kernel copy in /boot is gone" test -e "$T_ROOT/boot/vmlinuz-$OLD_PLAIN"
+refute "and its initramfs" test -e "$T_ROOT/boot/initramfs-$OLD_PLAIN.img"
+assert_eq "$(jq -c 'keys' "$T_SBCTL_DB")" \
+    '["/boot/efi/EFI/Linux/mainstream_linux-mainstream-performance.efi","/boot/efi/EFI/limine/limine_x64.efi"]' \
+    "sbctl's database drops the old files that are gone, and no other"
+check "each change is reported" test "$(grep -c '' <<<"$out")" -ge 6
+check "the settings are moved before the old entries go" \
+    test "$(grep -n 'boot record' <<<"$out" | cut -d: -f1)" -lt "$(grep -n 'Removed the boot menu entries' <<<"$out" | cut -d: -f1)"
+refute "no work file is left" test -e "$T_ROOT/etc/default/limine.mainstream-kernels" -o \
+    -e "$T_ROOT/etc/mkinitcpio.d/$PLAIN.preset.mainstream-kernels"
+: >"$T_STATE/calls.log"
+cp "$T_CONF" "$TMP_BASE/conf.after"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc|$out" "0|" "a second run finds nothing to migrate"
+check "and changes nothing" cmp -s "$T_CONF" "$TMP_BASE/conf.after"
+check "and runs no tool" test "$(calls '^limine-entry-tool\|^sbctl remove')" = 0
+
+# Half migrated: the plain kernel is swapped, the performance kernel is not yet.
+m_old_system
+t_install "$OLD_PERF" "$OLD_PERF-headers"
+printf '%s\n' 'TARGET_OS_NAME="Mainstream OS\\"' 'ESP_PATH="/boot/efi"' \
+    "BOOT_ORDER=\"$OLD_PERF,$OLD_PLAIN, *fallback\"" >"$T_ROOT/etc/default/limine"
+write_entry_var "$T_VAR" "$MENU_PARENT/$OLD_PERF"
+sed -i "0,/^    \/\/linux\$/s||    //$OLD_PERF\n        path: boot():/EFI/Linux/mainstream_$OLD_PERF.efi\n    //linux|" "$T_CONF"
+m_swap_plain
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "a half swapped system migrates"
+check "only the swapped kernel's name changes in BOOT_ORDER" limine_default_has "BOOT_ORDER=\"$OLD_PERF,$PLAIN, *fallback\""
+check "the record of the kernel not yet swapped stays" entry_var_is "$T_VAR" "$MENU_PARENT/$OLD_PERF"
+check "its entry stays" grep -qxF "    //$OLD_PERF" "$T_CONF"
+check "only the swapped kernel's entries are removed" \
+    test "$(calls '^limine-entry-tool')" = 1 -a "$(calls "^limine-entry-tool --remove-all $OLD_PLAIN ")" = 1
+
+# Half migrated the other way: an earlier run moved the settings, the old entry is left.
+m_old_system
+m_swap_plain
+printf '%s\n' 'TARGET_OS_NAME="Mainstream OS\\"' 'ESP_PATH="/boot/efi"' "BOOT_ORDER=\"$PLAIN, *\"" >"$T_ROOT/etc/default/limine"
+write_entry_var "$T_VAR" "$MENU_PARENT/$PLAIN-fallback"
+rm -f "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "a system with the old entry left migrates"
+check "the entries are removed" test "$(calls '^limine-entry-tool')" = 1
+refute "and nothing about BOOT_ORDER is said" grep -q BOOT_ORDER <<<"$out"
+
+# The fallback entry's record follows too.
+m_old_system
+m_swap_plain hooks
+write_entry_var "$T_VAR" "$MENU_PARENT/$OLD_PLAIN-fallback"
+migrate >/dev/null
+check "a record of the old fallback entry names today's fallback entry" entry_var_is "$T_VAR" "$MENU_PARENT/$PLAIN-fallback"
+
+# Today's package has no entry yet: nothing moves, so no setting names a missing entry
+# and the kernel keeps the entry it has.
+for shape in iso id; do
+    m_old_system "$shape"
+    m_swap_plain
+    drop_first_entry "$PLAIN"
+    out=$(migrate) && rc=0 || rc=$?
+    assert_eq "$rc|$out" "0|" "nothing is migrated before today's entry exists ($shape menu)"
+    check "BOOT_ORDER, the default entry and the boot record stay ($shape menu)" settings_stay_old
+    check "the old entry stays ($shape menu)" grep -qxF "    //$OLD_PLAIN" "$T_CONF"
+    check "and the tool is not run ($shape menu)" test "$(calls '^limine-entry-tool')" = 0
+    check "its boot image stays ($shape menu)" test -e "$ESP_T/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+    check "and sbctl keeps signing it ($shape menu)" sbctl_lists "/boot/efi/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+done
+# An entry by today's name in another system's part does not count.
+m_old_system id
+m_swap_plain
+drop_first_entry "$PLAIN"
+sed -i "s|^    //$OLD_PLAIN\$|    //$PLAIN|2" "$T_CONF"
+assert_eq "$(migrate)" "" "today's name in another system's part of the menu moves nothing"
+
+# The entry tool fails: reported, and the files the menu still names stay.
+m_old_system
+m_swap_plain
+echo 1 >"$T_STATE/entry_tool_rc"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "1" "a failed entry removal is reported"
+check "the boot image the old entry names stays" test -e "$ESP_T/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+check "the settings were still moved" settings_moved
+
+# Leftovers no entry names: an image, a kernel directory, and a file a package owns.
+m_old_system
+m_swap_plain
+drop_first_entry "$OLD_PLAIN"
+mkdir -p "$ESP_T/$ESP_UUID/$OLD_PLAIN" "$ESP_T/$ESP_UUID/$OLD_PERF"
+: >"$ESP_T/$ESP_UUID/$OLD_PLAIN/vmlinuz-$OLD_PLAIN"
+: >"$ESP_T/$ESP_UUID/$OLD_PERF/vmlinuz-$OLD_PERF"
+printf '%s\n' "/boot/initramfs-$OLD_PLAIN.img" >"$T_STATE/owned"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "leftover files are cleaned"
+refute "an old image no entry names is removed" test -e "$ESP_T/EFI/Linux/mainstream_$OLD_PLAIN.efi"
+refute "the old kernel directory is removed" test -e "$ESP_T/$ESP_UUID/$OLD_PLAIN"
+check "a directory of a longer name stays" test -e "$ESP_T/$ESP_UUID/$OLD_PERF/vmlinuz-$OLD_PERF"
+check "a file a package owns stays" test -e "$T_ROOT/boot/initramfs-$OLD_PLAIN.img"
+rm -rf "${ESP_T:?}/$ESP_UUID"
+# A prefix the old name starts with leaves the image under the old name alone.
+m_old_system
+m_swap_plain
+drop_first_entry "$OLD_PLAIN"
+sed -i 's/^CUSTOM_UKI_NAME=.*/CUSTOM_UKI_NAME="linux"/' "$T_ROOT/etc/default/limine"
+: >"$ESP_T/EFI/Linux/$OLD_PLAIN.efi"
+migrate >/dev/null
+refute "an old image named as limine-entry-tool names it under that prefix is removed" test -e "$ESP_T/EFI/Linux/$OLD_PLAIN.efi"
+
+# A preset for today's name already exists: the old one only goes.
+m_old_system
+m_swap_plain
+printf 'kept\n' >"$T_ROOT/etc/mkinitcpio.d/$PLAIN.preset"
+migrate >/dev/null
+assert_eq "$(cat "$T_ROOT/etc/mkinitcpio.d/$PLAIN.preset")" "kept" "an existing preset for today's name is kept"
+refute "and the old preset goes" test -e "$T_ROOT/etc/mkinitcpio.d/$OLD_PLAIN.preset"
+
+# Other boot loaders. GRUB's menu is made again while it names the old kernel.
+m_old_system
+m_swap_plain hooks
+rm -f "$T_CONF" "$T_ROOT/etc/default/limine"
+mkdir -p "$T_ROOT/boot/grub"
+printf 'linux /vmlinuz-%s\nlinux /vmlinuz-linux\n' "$OLD_PLAIN" >"$T_ROOT/boot/grub/grub.cfg"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "a GRUB system migrates"
+check "grub-mkconfig writes the menu" test "$(calls "^grub-mkconfig -o $T_ROOT/boot/grub/grub.cfg\$")" = 1
+check "which starts today's kernel" grep -qxF "linux /vmlinuz-$PLAIN" "$T_ROOT/boot/grub/grub.cfg"
+check "and says so" grep -q 'GRUB menu was made again' <<<"$out"
+: >"$T_STATE/calls.log"
+assert_eq "$(migrate)" "" "a second run leaves GRUB alone"
+check "with no grub-mkconfig run" test "$(calls '^grub-mkconfig')" = 0
+printf 'linux /vmlinuz-%s\n' "$OLD_PLAIN" >"$T_ROOT/boot/grub/grub.cfg"
+mv "$T_BIN/grub-mkconfig" "$T_BIN/grub-mkconfig.aside"
+out=$(migrate) && rc=0 || rc=$?
+mv "$T_BIN/grub-mkconfig.aside" "$T_BIN/grub-mkconfig"
+assert_eq "$rc" "1" "without grub-mkconfig the GRUB step is reported"
+check "with the command to run" grep -qF 'run: sudo grub-mkconfig -o /boot/grub/grub.cfg' <<<"$out"
+rm -rf "$T_ROOT/boot/grub"
+
+# A systemd-boot entry is named for the person to change.
+m_old_system
+m_swap_plain hooks
+rm -f "$T_CONF" "$T_ROOT/etc/default/limine"
+mkdir -p "$ESP_T/loader/entries"
+printf 'title Mainstream\nlinux /vmlinuz-%s\ninitrd /initramfs-%s.img\n' "$OLD_PLAIN" "$OLD_PLAIN" >"$ESP_T/loader/entries/mainstream.conf"
+printf 'title Arch\nlinux /vmlinuz-linux\n' >"$ESP_T/loader/entries/arch.conf"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "a systemd-boot system migrates"
+check "the entry that starts the old kernel is named" \
+    grep -qF "The boot entry /boot/efi/loader/entries/mainstream.conf still starts $OLD_PLAIN; point it at vmlinuz-$PLAIN and initramfs-$PLAIN.img" <<<"$out"
+refute "and no other entry" grep -q 'arch.conf' <<<"$out"
+rm -rf "$ESP_T/loader"
+
+# Any other boot loader: named once, where pacman removed the old package here.
+m_old_system
+m_swap_plain hooks
+rm -f "$T_CONF" "$T_ROOT/etc/default/limine" "$T_VAR"
+echo '{}' >"$T_SBCTL_DB"
+assert_eq "$(migrate)" "" "with no sign of the old package, another loader is not asked about"
+mkdir -p "$T_ROOT/var/log"
+printf '[2026-11-26T10:00:00-0600] [ALPM] removed %s (7.3.6.arch1-2)\n' "$OLD_PLAIN" >"$T_ROOT/var/log/pacman.log"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "another loader's system migrates"
+check "the person is told what to point at today's kernel" grep -qF "starts /boot/vmlinuz-$OLD_PLAIN, point it at /boot/vmlinuz-$PLAIN" <<<"$out"
+assert_eq "$(migrate)" "" "and told once"
+
+# Nothing ever named the old packages.
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+printf '%s\n' 'TARGET_OS_NAME="Mainstream OS\\"' 'ESP_PATH="/boot/efi"' "BOOT_ORDER=\"$PLAIN, *\"" >"$T_ROOT/etc/default/limine"
+printf '/+Mainstream OS\\\\\n    //%s\n' "$PLAIN" >"$T_CONF"
+rm -rf "$T_ROOT"/etc/mkinitcpio.d/* "$T_ROOT"/boot/vmlinuz-* "$T_ROOT"/boot/initramfs-* "$T_ROOT/var/log/pacman.log"
+echo '{}' >"$T_SBCTL_DB"
+: >"$T_STATE/calls.log"
+out=$(migrate) && rc=0 || rc=$?
+assert_eq "$rc|$out" "0|" "a system that never had the old packages has nothing to migrate"
+check "and nothing is run" test "$(calls '^limine-entry-tool\|^sbctl remove\|^limine-enroll\|^grub-mkconfig')" = 0
 
 printf '\nAll %d tests passed.\n' "$PASS_COUNT"

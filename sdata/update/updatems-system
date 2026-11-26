@@ -725,6 +725,29 @@ if [[ -r "$GPU_LIB_SRC" && ! -e "$NVML_STAMP" ]]; then
     fi
 fi
 
+# ── Renamed kernel packages ────────────────────────────────────────────────
+# Mainstream's kernels lost their linux- prefix (linux-mainstream is mainstream). The
+# package update swaps them like a kernel update, and the settings and other boot
+# loaders that name the old packages stay behind; the Kernel page's helper moves those.
+# The clone's copy is this release's, which the installed package may not carry yet.
+# The boot images are rebuilt once further down, so the menu follows BOOT_ORDER.
+_kr_helper="$REPO_DIR/sdata/dist-arch/mainstream-system/mainstream-kernels"
+_src_ok "$_kr_helper" || _kr_helper="${MAINSTREAM_KERNELS_HELPER:-/usr/lib/mainstream/mainstream-kernels}"
+if [[ -r "$_kr_helper" ]] && grep -qF 'migrate_renamed_kernels()' "$_kr_helper"; then
+    # shellcheck source=/dev/null
+    _kr_out="$( ( source "$_kr_helper" && migrate_renamed_kernels ) )"
+    _kr_rc=$?
+    if [[ -n "$_kr_out" ]]; then
+        say "$(t "Moving the boot menu to the kernels' new package names...")"
+        sed 's/^/    /' <<<"$_kr_out"
+        _KERNEL_RENAME_REBUILD_PENDING=1
+    fi
+    if (( _kr_rc != 0 )); then
+        warn "$(t "Some boot settings still name the kernels' old packages; the next update tries again.")"
+        RC=1
+    fi
+fi
+
 # ── An older NVIDIA card's driver ──────────────────────────────────────────
 # An install that could not download the frozen NVIDIA branch an older card
 # needs left the card on nouveau and a note for this step, which installs the
@@ -1068,6 +1091,20 @@ if [[ -n "${_NVIDIA_REBUILD_PENDING-}" && -z "${_BOOT_REBUILT-}" ]]; then
         fi
     else
         warn "$(t "The boot images were not rebuilt, so the graphics card stays on nouveau until the next kernel update rebuilds them.")"
+        RC=1
+    fi
+fi
+
+# ── Renamed kernel packages: the boot images ───────────────────────────────
+# Found by the rename step above. A rebuild since then already follows BOOT_ORDER.
+if [[ -n "${_KERNEL_RENAME_REBUILD_PENDING-}" && -z "${_BOOT_REBUILT-}" && -z "${_BOOT_REBUILD_FAILED-}" ]] \
+   && command -v limine-mkinitcpio >/dev/null 2>&1 \
+   && _luks_keyfile_idle; then
+    say "$(t "Rebuilding the boot images for the kernels' new package names...")"
+    if _rebuild_boot_images; then
+        ok "$(t "Boot images rebuilt for the kernels' new package names.")"
+    else
+        warn "$(t "The boot images were not rebuilt; the next kernel update rebuilds them.")"
         RC=1
     fi
 fi

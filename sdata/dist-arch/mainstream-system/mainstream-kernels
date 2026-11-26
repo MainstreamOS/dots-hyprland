@@ -437,8 +437,10 @@ fallback_kernel() {  # $1 = the removed kernel
 
 # A default_entry that names the removed kernel's entry would name nothing.
 # ./setup writes that setting as the entry's path; the number the ISO writes
-# needs no change. Returns 1 when the menu could not be changed.
-repoint_default_entry() {  # $1 = the removed kernel, $2 = the kernel to name instead
+# needs no change. Returns 1 when the menu could not be changed, and sets
+# DEFAULT_ENTRY_MOVED when it was.
+DEFAULT_ENTRY_MOVED=0
+repoint_default_entry() {  # $1 = the kernel whose entry goes, $2 = the kernel to name instead
     local conf line val="" tmp lock rc=0
     find_esp || return 0
     conf="$ESP/limine.conf"
@@ -467,7 +469,8 @@ repoint_default_entry() {  # $1 = the removed kernel, $2 = the kernel to name in
     ) 9>>"$lock" || rc=1
     rm -f "$tmp" 2>/dev/null
     (( rc == 0 )) || return 1
-    log "remove: the boot menu's default entry names $2"
+    DEFAULT_ENTRY_MOVED=1
+    log "the boot menu's default entry names $2 instead of $1"
     # An enrolled checksum of the old file would stop Limine at the next start.
     if [[ $(limine_setting ENABLE_ENROLL_LIMINE_CONFIG) == yes ]]; then
         limine-enroll-config </dev/null >>"$LOG" 2>&1 || return 1
@@ -503,6 +506,326 @@ nvidia_modules_for_all_kernels() {
         gpu_classify_nvidia_driver
         gpu_nvidia_ensure_modules
     ) </dev/null >>"$LOG" 2>&1
+}
+
+# ── Renamed kernel packages ──────────────────────────────────────────────────
+# An update swaps a renamed kernel's package for the new one like any kernel update:
+# the boot tools' removal hooks take the old entries, images and preset away. What
+# names the old package stays: BOOT_ORDER, a default entry by path and the firmware's
+# boot record, and another boot loader's menu. Whatever the hooks left behind goes
+# too. updatems-system runs this after the package step; it changes only what still
+# names an old package, so a second run does nothing. Prints one line per
+# change, sets BOOT_ORDER_MOVED to the kernels whose place in the menu changed, and
+# returns 1 when a step failed.
+BOOT_ORDER_MOVED=()
+migrate_renamed_kernels() {
+    local pair old new rc=0
+    BOOT_ORDER_MOVED=()
+    for pair in "${RENAMED_KERNELS[@]}"; do
+        old=${pair%%:*} new=${pair#*:}
+        # Half way, with the old package still in place, everything stays as it is.
+        pkg_installed "$old" && continue
+        pkg_installed "$new" || continue
+        # shellcheck disable=SC2046
+        is_one_of "$new" $(installed_kernels) || continue
+        # On a Limine system nothing moves before the new package has its entry, so no
+        # setting names an entry the menu lacks and the kernel never drops off it.
+        if find_esp && [[ -f $ESP/limine.conf ]] && ! menu_has_entry "$ESP/limine.conf" "$new" ""; then
+            log "migrate: $new has no boot menu entry yet, so nothing moves from $old"
+            continue
+        fi
+        # The settings that pick an entry move first, so none of them names an entry
+        # that is about to go.
+        migrate_boot_order "$old" "$new" || rc=1
+        DEFAULT_ENTRY_MOVED=0
+        if repoint_default_entry "$old" "$new"; then
+            (( DEFAULT_ENTRY_MOVED )) && printf "The boot menu's default entry names %s instead of %s\n" "$new" "$old"
+        else
+            rc=1
+        fi
+        migrate_last_entry "$old" "$new" || rc=1
+        migrate_preset "$old" "$new" || rc=1
+        remove_old_entries "$old" || rc=1
+        remove_old_boot_files "$old" || rc=1
+        forget_old_signed_files "$old" || rc=1
+        migrate_other_loaders "$old" "$new" || rc=1
+    done
+    return "$rc"
+}
+
+# The name limine-entry-tool gives a kernel's boot image in EFI/Linux: the prefix
+# (CUSTOM_UKI_NAME, or the machine ID) and the kernel's name, unless the name already
+# starts with the prefix, as mainstream and mainstream-performance do.
+uki_file_name() {  # $1 = prefix, $2 = kernel entry name
+    if [[ $2 == "$1"* ]]; then
+        printf '%s.efi' "$2"
+    else
+        printf '%s_%s.efi' "$1" "$2"
+    fi
+}
+
+# Whether $2 is kernel $1's name in a boot file's name: alone or with -fallback after
+# it, and never the start of a longer kernel name such as $1-performance.
+names_kernel() {  # $1 = kernel, $2 = word
+    [[ $2 == "$1" || $2 == "$1-fallback" ]]
+}
+
+# BOOT_ORDER in /etc/default/limine names the entries the menu lists first.
+migrate_boot_order() {  # $1 = old name, $2 = new name
+    local line out="" changed=0 item word joined tmp
+    local -a items
+    [[ -f $LIMINE_DEFAULT && ! -L $LIMINE_DEFAULT ]] || return 0
+    while IFS= read -r line || [[ -n $line ]]; do
+        if [[ $line =~ ^([[:space:]]*BOOT_ORDER[[:space:]]*=[[:space:]]*\"?)([^\"]*)(\"?[[:space:]]*)$ ]]; then
+            local lead=${BASH_REMATCH[1]} rest=${BASH_REMATCH[3]}
+            IFS=, read -ra items <<<"${BASH_REMATCH[2]}"
+            joined=""
+            for item in "${items[@]}"; do
+                word=${item#"${item%%[![:space:]]*}"}
+                word=${word%"${word##*[![:space:]]}"}
+                if names_kernel "$1" "$word"; then
+                    item=${item/"$1"/"$2"}
+                    changed=1
+                fi
+                joined+="${joined:+,}$item"
+            done
+            line="$lead$joined$rest"
+        fi
+        out+="$line"$'\n'
+    done <"$LIMINE_DEFAULT"
+    (( changed )) || return 0
+    tmp="$LIMINE_DEFAULT.mainstream-kernels"
+    refuse_symlinks "$tmp"
+    if ! { printf '%s' "$out" >"$tmp" && chmod 644 "$tmp" && mv -f "$tmp" "$LIMINE_DEFAULT"; }; then
+        rm -f "$tmp" 2>/dev/null
+        log "migrate: could not rewrite BOOT_ORDER for $2"
+        return 1
+    fi
+    log "migrate: BOOT_ORDER names $2 instead of $1"
+    BOOT_ORDER_MOVED+=("$2")
+    printf 'BOOT_ORDER names %s instead of %s\n' "$2" "$1"
+}
+
+# The entry Limine preselects at the next start, as the firmware keeps it.
+migrate_last_entry() {  # $1 = old name, $2 = new name
+    local name
+    read_last_entry || return 0
+    [[ $ENTRY != */Snapshots/* ]] || return 0
+    name=${ENTRY##*/}
+    names_kernel "$1" "$name" || return 0
+    if ! write_last_entry "${ENTRY%/*}/$2${name#"$1"}"; then
+        log "migrate: could not point the firmware's boot record at $2"
+        return 1
+    fi
+    log "migrate: the firmware's boot record names $2 instead of $1"
+    printf "The firmware's boot record names %s instead of %s\n" "$2" "$1"
+}
+
+# A preset for a package that is gone fails mkinitcpio -P as a whole. Its file names
+# follow the package's name, and the kernel copy it names is made if missing.
+migrate_preset() {  # $1 = old name, $2 = new name
+    local dir="$ROOT/etc/mkinitcpio.d" from to tmp kver rel d
+    from="$dir/$1.preset"
+    to="$dir/$2.preset"
+    [[ -f $from && ! -L $from ]] || return 0
+    refuse_symlinks "$to"
+    if [[ ! -e $to ]]; then
+        tmp="$to.mainstream-kernels"
+        refuse_symlinks "$tmp"
+        if ! { sed -E "s/(^|[^[:alnum:]])$1(-fallback)?([^[:alnum:]-]|$)/\\1$2\\2\\3/g" "$from" >"$tmp" \
+               && chmod 644 "$tmp" && mv -f "$tmp" "$to"; }; then
+            rm -f "$tmp" 2>/dev/null
+            log "migrate: could not write $to"
+            return 1
+        fi
+    fi
+    rm -f -- "$from" || return 1
+    log "migrate: ${from#"$ROOT"} is now ${to#"$ROOT"}"
+    printf '%s is now %s\n' "${from#"$ROOT"}" "${to#"$ROOT"}"
+    kver=$(sed -nE "s/^[[:space:]]*ALL_kver=[\"']?([^\"']*)[\"']?[[:space:]]*$/\\1/p" "$to" | tail -n1)
+    [[ $kver == /boot/* && ! -e $ROOT$kver ]] || return 0
+    for d in "$MODULES_DIR"/*/; do
+        [[ -f "${d}vmlinuz" && -r "${d}pkgbase" && $(<"${d}pkgbase") == "$2" ]] && rel=$d
+    done
+    [[ -n ${rel:-} ]] || return 0
+    if ! cp -- "${rel}vmlinuz" "$ROOT$kver"; then
+        log "migrate: could not copy the $2 kernel to $kver"
+        return 1
+    fi
+    chmod 644 "$ROOT$kver"
+}
+
+# Whether this system's part of the menu has an entry $2 (its fallback entry counts
+# with $3). That part is the top-level entry whose comment carries this machine's ID,
+# as limine-entry-tool writes it, or, with no machine ID in it, the one named after
+# TARGET_OS_NAME, as the installer writes it. Another system's entries never count.
+menu_has_entry() {  # $1 = limine.conf, $2 = entry name, $3 = with-fallback|""
+    local machine
+    machine=$(cat -- "$ROOT/etc/machine-id" 2>/dev/null) || machine=""
+    [[ $machine =~ ^[0-9a-f]{32}$ ]] || machine=""
+    # Through the environment: awk -v would read the backslashes in the name.
+    MENU_ID=$machine MENU_OS=$(limine_setting TARGET_OS_NAME) awk -v name="$2" -v fallback="$3" '
+        BEGIN { id = ENVIRON["MENU_ID"]; os = ENVIRON["MENU_OS"] }
+        function done() {
+            if (found && (mine || id == "" || (!other && (os == "" || title == os)))) hit = 1
+            found = 0; mine = 0; other = 0
+        }
+        /^\/[^\/]/ {
+            done()
+            title = $0
+            sub(/^\/\+?/, "", title)
+            sub(/[ \t\r]*$/, "", title)
+        }
+        tolower($0) ~ /^[ \t]*comment:.*machine-id=[0-9a-f]+/ {
+            if (id != "" && index(tolower($0), "machine-id=" id)) mine = 1
+            else other = 1
+        }
+        /^[ \t]*\/\// {
+            line = $0
+            sub(/^[ \t]*\/\//, "", line)
+            sub(/[ \t\r]*$/, "", line)
+            if (line == name || (fallback != "" && line == name "-fallback")) found = 1
+        }
+        END { done(); exit !hit }' "$1"
+}
+
+# The old package's entries the removal hooks left, removed by the tool those hooks
+# run, which keeps to this system's part of the menu and takes the entries' files.
+remove_old_entries() {  # $1 = old name
+    local conf before after
+    find_esp || return 0
+    conf="$ESP/limine.conf"
+    [[ -f $conf && ! -L $conf ]] || return 0
+    menu_has_entry "$conf" "$1" with-fallback || return 0
+    command -v limine-entry-tool >/dev/null 2>&1 || return 0
+    before=$(cksum <"$conf")
+    if ! limine-entry-tool --remove-all "$1" "$1-fallback" --quiet </dev/null >>"$LOG" 2>&1; then
+        log "migrate: limine-entry-tool could not remove the entries of $1"
+        return 1
+    fi
+    after=$(cksum <"$conf")
+    [[ $before != "$after" ]] || return 0
+    log "migrate: removed the boot menu entries of $1"
+    printf 'Removed the boot menu entries of %s\n' "$1"
+}
+
+# Whether limine.conf names the file or directory $2, and not one whose name only
+# starts the same way.
+conf_names_file() {  # $1 = limine.conf, $2 = the path as the menu writes it
+    local re
+    [[ $2 == */ ]] && { grep -qF -- "$2" "$1"; return; }
+    re=$(printf '%s' "$2" | sed 's/[][\\.*^$+?(){}|]/\\&/g')
+    grep -qE -- "$re([^[:alnum:]_.-]|\$)" "$1"
+}
+
+# Boot files of the old package that no entry names any more: its boot image, the
+# kernel and initramfs its entries carried, and the copies a preset made in /boot.
+# Only where Limine starts the system: another boot loader's menu may still name them.
+remove_old_boot_files() {  # $1 = old name
+    local conf prefix machine f gone=0
+    local -a files=()
+    find_esp || return 0
+    conf="$ESP/limine.conf"
+    [[ -f $conf && ! -L $conf ]] || return 0
+    machine=$(cat -- "$ROOT/etc/machine-id" 2>/dev/null) || machine=""
+    [[ $machine =~ ^[0-9a-f]{32}$ ]] || machine=""
+    prefix=$(limine_setting CUSTOM_UKI_NAME)
+    [[ $prefix =~ ^[a-z0-9]+$ ]] || prefix=$machine
+    [[ -n $prefix ]] && files+=("$ESP/EFI/Linux/$(uki_file_name "$prefix" "$1")" \
+                                "$ESP/EFI/Linux/$(uki_file_name "$prefix" "$1-fallback")")
+    [[ -n $machine ]] && files+=("$ESP/$machine/$1/")
+    files+=("$ROOT/boot/vmlinuz-$1" "$ROOT/boot/initramfs-$1.img" "$ROOT/boot/initramfs-$1-fallback.img")
+    for f in "${files[@]}"; do
+        [[ -e $f && ! -L ${f%/} ]] || continue
+        # Named by an entry, it belongs to another system on this partition.
+        conf_names_file "$conf" "${f#"$ESP"}" && continue
+        pacman -Qqo -- "${f#"$ROOT"}" >/dev/null 2>&1 && continue
+        if rm -rf -- "$f"; then
+            gone=1
+            log "migrate: removed ${f#"$ROOT"}"
+        else
+            log "migrate: could not remove ${f#"$ROOT"}"
+            return 1
+        fi
+    done
+    (( gone )) && printf 'Removed the boot files of %s\n' "$1"
+    return 0
+}
+
+# sbctl signs the files in its list again at every package change and fails on one
+# that is gone, so the old package's files leave the list. Read from sbctl's own
+# database: its JSON listing leaves out every file that no longer exists.
+forget_old_signed_files() {  # $1 = old name
+    local db f base gone=0
+    command -v sbctl >/dev/null 2>&1 || return 0
+    db=$(sbctl setup --print-config 2>/dev/null \
+        | sed -nE 's/^[[:space:]]*files_db:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/p' | head -n1)
+    [[ $db == /* ]] || db=/var/lib/sbctl/files.json
+    db=$ROOT$db
+    [[ -f $db && ! -L $db ]] || return 0
+    while IFS= read -r f; do
+        [[ $f == /* && ! -e $ROOT$f ]] || continue
+        base=${f##*/}
+        case $base in
+            vmlinuz-*) names_kernel "$1" "${base#vmlinuz-}" ;;
+            initramfs-*.img) base=${base#initramfs-}; names_kernel "$1" "${base%.img}" ;;
+            *.efi) base=${base%.efi}; names_kernel "$1" "$base" || names_kernel "$1" "${base#*_}" ;;
+            *) [[ $f == */"$1"/* ]] ;;
+        esac || continue
+        if sbctl remove-file "$f" </dev/null >>"$LOG" 2>&1; then
+            gone=1
+            log "migrate: sbctl no longer signs $f"
+        else
+            log "migrate: sbctl could not forget $f"
+            return 1
+        fi
+    done < <(jq -r '[.. | objects | select(has("file")) | .file | strings] | unique[]' "$db" 2>/dev/null)
+    (( gone )) && printf 'Secure Boot no longer signs the removed files of %s\n' "$1"
+    return 0
+}
+
+# Another boot loader's menu names the kernel's files itself. GRUB's is made again; a
+# systemd-boot entry, or an entry of a loader Mainstream does not know, is named here
+# for the person to change, the last kind once.
+migrate_other_loaders() {  # $1 = old name, $2 = new name
+    local cfg="$ROOT/boot/grub/grub.cfg" d f found=0 note
+    local -a dirs=()
+    if [[ -f $cfg ]] && grep -qE "vmlinuz-$1([^[:alnum:]-]|$)" "$cfg"; then
+        found=1
+        if command -v grub-mkconfig >/dev/null 2>&1 \
+                && grub-mkconfig -o "$cfg" </dev/null >>"$LOG" 2>&1 \
+                && ! grep -qE "vmlinuz-$1([^[:alnum:]-]|$)" "$cfg"; then
+            log "migrate: grub-mkconfig wrote the GRUB menu for $2"
+            printf 'The GRUB menu was made again, so it starts %s\n' "$2"
+        else
+            log "migrate: the GRUB menu still starts $1"
+            printf 'The GRUB menu still starts %s; run: sudo grub-mkconfig -o /boot/grub/grub.cfg\n' "$1"
+            return 1
+        fi
+    fi
+    find_esp && dirs+=("$ESP/loader/entries")
+    for d in "$ROOT/boot/loader/entries" "$ROOT/efi/loader/entries" "$ROOT/boot/efi/loader/entries"; do
+        is_one_of "$d" "${dirs[@]}" || dirs+=("$d")
+    done
+    for d in "${dirs[@]}"; do
+        for f in "$d"/*.conf; do
+            [[ -f $f ]] && grep -qE "vmlinuz-$1([^[:alnum:]-]|$)" "$f" || continue
+            found=1
+            printf 'The boot entry %s still starts %s; point it at vmlinuz-%s and initramfs-%s.img\n' \
+                "${f#"$ROOT"}" "$1" "$2" "$2"
+        done
+    done
+    (( found )) && return 0
+    # Limine, GRUB and systemd-boot are known; any other loader started the old
+    # package only if pacman removed it on this system.
+    [[ -f ${ESP:-}/limine.conf || -f $cfg ]] && return 0
+    note="$ROOT/var/lib/mainstream/kernel-rename-noted-$1"
+    [[ ! -e $note ]] || return 0
+    grep -qE "\] (removed|upgraded) $1 \(" "$ROOT/var/log/pacman.log" 2>/dev/null || return 0
+    printf "If this computer's boot loader starts /boot/vmlinuz-%s, point it at /boot/vmlinuz-%s and /boot/initramfs-%s.img\n" \
+        "$1" "$2" "$2"
+    mkdir -p -- "${note%/*}" 2>/dev/null && : >"$note"
+    return 0
 }
 
 # ── Subcommands ──────────────────────────────────────────────────────────────
