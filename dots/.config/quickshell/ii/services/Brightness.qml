@@ -10,6 +10,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import QtQuick
+import "backlight-device.js" as BacklightDevice
 
 /**
  * For managing brightness of monitors. Supports both brightnessctl and ddcutil.
@@ -29,15 +30,23 @@ Singleton {
     // device when the change handler below runs, and the re-read would go to
     // the device that was just switched away from.
     function brightnessctlDeviceArgs(): list<string> {
-        if (root.brightnessctlDeviceName.length === 0)
+        const name = root.brightnessctlDeviceName.length > 0 ? root.brightnessctlDeviceName : root.automaticDeviceName;
+        if (name.length === 0)
             return [];
-        return ["-d", root.brightnessctlDeviceName];
+        return ["-d", name];
     }
+
+    // What Automatic drives when brightnessctl's own pick could be the Touch Bar.
+    readonly property string automaticDeviceName: BacklightDevice.automaticDevice(root.availableDevices)
 
     // Re-read levels: the new device is at its own brightness, and without
     // this the slider keeps showing the old device's value until the next
     // change, which then jumps.
     onBrightnessctlDeviceNameChanged: Qt.callLater(() => root.initializeMonitor(0))
+    onAutomaticDeviceNameChanged: {
+        if (root.brightnessctlDeviceName.length === 0)
+            Qt.callLater(() => root.initializeMonitor(0));
+    }
 
     // Backlight devices offered in settings. LEDs are listed by brightnessctl
     // too but are not backlights, so they are filtered out.
