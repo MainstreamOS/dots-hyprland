@@ -475,6 +475,15 @@ cmd_remove() {
         [[ -n $other && $other != "$kernel" ]] && others=$((others + 1))
     done < <(installed_kernels)
     (( others > 0 )) || die 8 "removing $kernel would leave this system with no kernel"
+    # A T2 Mac's keyboard and trackpad run only on Mainstream's kernels, which
+    # carry the T2 drivers (PCI 106b:1801/1802).
+    if [[ $kernel == linux-mainstream* ]] && lspci -n 2>/dev/null | grep -qE ' 106b:180[12]( |$)'; then
+        others=0
+        while IFS= read -r other; do
+            [[ $other == linux-mainstream* && $other != "$kernel" ]] && others=$((others + 1))
+        done < <(installed_kernels)
+        (( others > 0 )) || die 8 "removing $kernel would leave this Mac's keyboard and trackpad without a driver"
+    fi
 
     if read_last_entry && entry_is_installed_kernel && [[ ${ENTRY##*/} == "$kernel" ]]; then
         was_next=1

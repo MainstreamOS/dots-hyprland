@@ -713,7 +713,12 @@ echo "$tool \$*" >>"$T_STATE/calls.log"
 exit 0
 STUB_END
 done
-chmod +x "$T_BIN"/findmnt "$T_BIN"/uname "$T_BIN"/df "$T_BIN"/chattr "$T_BIN"/pacman "$T_BIN"/limine-*
+cat >"$T_BIN/lspci" <<STUB_END
+#!/usr/bin/env bash
+cat "$T_STATE/lspci" 2>/dev/null
+exit 0
+STUB_END
+chmod +x "$T_BIN"/findmnt "$T_BIN"/uname "$T_BIN"/df "$T_BIN"/chattr "$T_BIN"/pacman "$T_BIN"/limine-* "$T_BIN"/lspci
 refute "the real package manager cannot be reached from the test system" \
     env -i PATH="$T_BIN" bash -c 'command -v pacman | grep -q "^/usr"'
 
@@ -1038,6 +1043,16 @@ expect_rc 8 "remove refuses Arch's kernel when it is the only kernel" run_helper
 check "the reason says no kernel would be left" \
     grep -q "^mainstream-kernels: removing linux would leave this system with no kernel$" <<<"$(reason_of remove linux)"
 check "the only kernel is never removed" no_package_change
+
+# A T2 Mac keeps a Mainstream kernel: Arch's has no T2 drivers.
+t_reset
+t_install "$PLAIN" "$PLAIN-headers"
+printf '%s\n' '00:00.0 0600: 8086:3e30' '02:00.1 0880: 106b:1801 (rev 01)' >"$T_STATE/lspci"
+expect_rc 8 "remove refuses the last Mainstream kernel on a T2 Mac" run_helper remove "$PLAIN"
+check "the reason names the Mac's keyboard and trackpad" \
+    grep -q "^mainstream-kernels: removing $PLAIN would leave this Mac's keyboard and trackpad without a driver$" <<<"$(reason_of remove "$PLAIN")"
+check "the last Mainstream kernel stays on a T2 Mac" is_installed "$PLAIN"
+rm -f "$T_STATE/lspci"
 
 t_reset
 expect_rc 8 "remove refuses a kernel that is not installed" run_helper remove "$PLAIN"
