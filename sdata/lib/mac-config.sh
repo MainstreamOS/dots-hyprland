@@ -2,15 +2,16 @@
 # paths. This file is sourced, never executed: it defines functions and writes
 # nothing until mac_apply_autoconfig is called.
 #
-# Scope is Intel Macs on a stock kernel. Everything the 2015-2017 machines need
-# is in mainline now (applespi, hid_apple, applesmc, apple-gmux), so this is
-# module options and initramfs entries rather than drivers.
+# Scope is Intel Macs. Everything the 2015-2017 machines need is in the kernel
+# (applespi, hid_apple, apple-gmux, and the SMC driver: applesmc in Arch's kernel,
+# macsmc in Mainstream's), so this is module options and initramfs entries
+# rather than drivers.
 #
-# T2 machines (2018-2020) need a patched kernel for the internal keyboard,
-# trackpad, audio and fans. Only the MacBook edition ships one, linux-t2, and
-# there this also sets the boot options its T2 drivers want. Wi-Fi and
-# Bluetooth run on stock drivers in every edition, with the Broadcom firmware
-# fetched where the chip needs it, and the UART Bluetooth models get a
+# T2 machines (2018-2020) need the T2 drivers for the internal keyboard,
+# trackpad, audio and fans, which Mainstream's kernels carry and Arch's does
+# not. On a kernel that has them this also sets the boot options they want.
+# Wi-Fi and Bluetooth run on stock drivers either way, with the Broadcom
+# firmware fetched where the chip needs it, and the UART Bluetooth models get a
 # recovery service.
 #
 # Write seams match gpu-config.sh so both libraries behave the same when sourced
@@ -28,6 +29,7 @@ _mac_sys_vendor()  { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
 _mac_product()     { cat /sys/class/dmi/id/product_name 2>/dev/null || true; }
 _mac_pci()         { lspci -nn 2>/dev/null || true; }
 _mac_proc_cmdline() { cat /proc/cmdline 2>/dev/null || true; }
+_mac_uname_r()     { uname -r; }
 # ACPI lists devices the firmware hides (the MacPro7,1's) too, so status bit 0
 # decides; no status file means no _STA, which ACPI reads as present.
 _mac_acpi_uart_bt() {
@@ -159,28 +161,35 @@ mac_wl_packages() {
     echo "broadcom-wl-dkms dkms${headers}"
 }
 
-# Whether the kernel this system runs drives the T2. The MacBook edition ships
-# linux-t2, which carries the bridge driver the internal keyboard, trackpad and
-# audio hang off; every other edition ships linux-mainstream, which does not,
-# and neither does Arch's kernel. The answer changes what is true to say about a
-# T2 machine, so ask before saying any of it.
+# Whether the kernel this system runs drives the T2. t2bce_core is the bridge
+# driver the internal keyboard, trackpad and audio hang off; Mainstream's
+# kernels carry it and Arch's does not. The answer changes what is true to say
+# about a T2 machine, so ask before saying any of it.
+_mac_tree_has_t2bce() {
+    grep -qs -e '/t2bce_core\.ko' "$1/modules.dep" "$1/modules.builtin" && return 0
+    # Inside the package transaction that installs a kernel, depmod has not
+    # written its modules.dep yet; the module file is already there.
+    find "$1/kernel" -name 't2bce_core.ko*' -print -quit 2>/dev/null | grep -q .
+}
 mac_has_t2_support() {
-    local kver; kver="$(uname -r)"
+    local dir="${MAC_MODULES_DIR:-/usr/lib/modules}" d
     # The kernel that is running is the one that matters, and a running system
     # keeps its modules where they can be read. An installer chroot does not:
     # uname there reports the kernel of the image doing the installing, whose
     # modules sit outside this root, so the absence of that directory is what
-    # says to ask the package set instead. Asking the package set first got this
-    # backwards on a machine with the T2 kernel installed but booted from an
-    # entry for another one, where it is the running kernel that decides whether
-    # the keyboard works.
-    if [ -d "/usr/lib/modules/$kver" ]; then
-        modinfo -k "$kver" apple-bce >/dev/null 2>&1 && return 0
-        modinfo -k "$kver" t2bce     >/dev/null 2>&1 && return 0
-        return 1
+    # says to ask the installed kernels instead. Asking them first got this
+    # backwards on a machine with a T2 kernel installed but booted from an
+    # entry for another one, where it is the running kernel that decides
+    # whether the keyboard works.
+    d="$dir/$(_mac_uname_r)"
+    if [ -d "$d" ]; then
+        _mac_tree_has_t2bce "$d"
+        return
     fi
-    command -v pacman >/dev/null 2>&1 || return 1
-    [ -n "$(pacman -Qq linux-t2 2>/dev/null)" ]
+    for d in "$dir"/*/; do
+        [ -f "${d}vmlinuz" ] && _mac_tree_has_t2bce "${d%/}" && return 0
+    done
+    return 1
 }
 
 # ── mac_needs_apple_firmware ────────────────────────────────────────────────
@@ -236,8 +245,8 @@ mac_apple_firmware_present() {
 }
 
 # ── mac_needs_t2_cmdline ────────────────────────────────────────────────────
-# t2linux's options for the T2 drivers only linux-t2 has; pm_async=off replaced
-# pcie_ports=compat in April 2026, as compat turns off Thunderbolt's PCIe hotplug.
+# t2linux's options for the T2 drivers; pm_async=off replaced pcie_ports=compat
+# in April 2026, as compat turns off Thunderbolt's PCIe hotplug.
 mac_t2_cmdline_tokens() { echo intel_iommu=on iommu=pt pm_async=off; }
 mac_needs_t2_cmdline() {
     mac_has_t2 && mac_has_t2_support
@@ -572,14 +581,14 @@ mac_report() {
     if [ "$class" = t2 ]; then
         if mac_has_t2_support; then
             cat <<'T2'
-  T2 security chip present, and this edition carries the kernel that drives it.
-  The internal keyboard, trackpad, audio and fan control all work.
+  T2 security chip present, and this kernel drives it. The internal keyboard,
+  trackpad, audio and fan control all work.
 T2
         else
             cat <<'T2'
-  T2 security chip present. The internal keyboard, trackpad, audio and fan
-  control need a patched kernel that is not shipped here. A USB keyboard and
-  mouse are required on this machine.
+  T2 security chip present, but this kernel has no T2 drivers. The internal
+  keyboard, trackpad, audio and fan control need one of Mainstream's kernels;
+  until one boots, a USB keyboard and mouse are required on this machine.
 T2
         fi
     fi

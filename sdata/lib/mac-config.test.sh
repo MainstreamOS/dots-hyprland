@@ -15,6 +15,7 @@ _mac_sys_vendor()   { printf '%s\n' "$FIX_VENDOR"; }
 _mac_product()      { printf '%s\n' "$FIX_PRODUCT"; }
 _mac_pci()          { printf '%s\n' "$FIX_PCI"; }
 _mac_proc_cmdline() { printf '%s\n' "$FIX_PROC"; }
+eval "real_$(declare -f mac_has_t2_support)"
 mac_has_t2_support() { [[ $FIX_T2_SUPPORT == true ]]; }
 
 FAILS=0; CASES=0
@@ -90,7 +91,7 @@ uart_bt 15
 mac_apply_autoconfig
 chk override-cmdline "$(cat "$R/cmdline")" "root=UUID=4444 pcie_ports=native iommu=off rw intel_iommu=on pm_async=off"
 
-# 5. A T2 Mac on a stock-kernel edition: no boot options, Bluetooth recovery still.
+# 5. A T2 Mac on a kernel without the T2 drivers: no boot options, Bluetooth recovery still.
 setup stock-t2 "root=UUID=5555 rw"
 uart_bt 15
 FIX_T2_SUPPORT=false
@@ -170,6 +171,50 @@ mkdir -p "$MAC_MODULES_DIR/7.3.5-1-mainstream"; echo linux-mainstream > "$MAC_MO
 kernel 7.2.0-1-custom linux-custom
 chk wl-skips "$(mac_wl_packages 2>/dev/null)" "broadcom-wl-dkms dkms linux-t2-headers"
 chk wl-skips-says "$(mac_wl_packages 2>&1 >/dev/null)" "mac-config: no linux-custom-headers in the repositories"
+unset MAC_MODULES_DIR
+
+# 12. Whether the kernel drives the T2, read off t2bce_core in its module tree:
+#     the running kernel's when its tree is here, otherwise any installed kernel's.
+MAC_MODULES_DIR="$WORK/t2-modules"
+FIX_UNAME="7.3.6-2-mainstream"
+_mac_uname_r() { printf '%s\n' "$FIX_UNAME"; }
+tree() {  # release, "dep" or "builtin" or "none", [vmlinuz]
+    local d="$MAC_MODULES_DIR/$1"
+    mkdir -p "$d"
+    : > "$d/modules.dep"; : > "$d/modules.builtin"
+    case "$2" in
+        dep)     printf '%s\n' 'kernel/drivers/staging/t2bce/t2bce_vhci.ko.zst: kernel/drivers/staging/t2bce/t2bce_core.ko.zst' \
+                     'kernel/drivers/staging/t2bce/t2bce_core.ko.zst:' > "$d/modules.dep" ;;
+        builtin) echo 'kernel/drivers/staging/t2bce/t2bce_core.ko' > "$d/modules.builtin" ;;
+    esac
+    [[ -z "${3:-}" ]] || : > "$d/vmlinuz"
+}
+supported() { real_mac_has_t2_support && echo yes || echo no; }
+tree 7.3.6-2-mainstream dep vmlinuz
+chk support-running-module "$(supported)" yes
+rm -rf "$MAC_MODULES_DIR"; tree 7.3.6-2-mainstream builtin vmlinuz
+chk support-running-builtin "$(supported)" yes
+# Mid-transaction: the module is unpacked but depmod has not run yet.
+rm -rf "$MAC_MODULES_DIR"; tree 7.3.6-2-mainstream none vmlinuz
+rm -f "$MAC_MODULES_DIR/7.3.6-2-mainstream/modules.dep"
+mkdir -p "$MAC_MODULES_DIR/7.3.6-2-mainstream/kernel/drivers/staging/t2bce/t2bce_core"
+: > "$MAC_MODULES_DIR/7.3.6-2-mainstream/kernel/drivers/staging/t2bce/t2bce_core/t2bce_core.ko.zst"
+chk support-running-no-depmod "$(supported)" yes
+# The old bridge driver's name is not the T2 support of today's kernels.
+rm -rf "$MAC_MODULES_DIR"; tree 7.3.6-2-mainstream none vmlinuz
+echo 'kernel/drivers/misc/apple-bce.ko.zst:' > "$MAC_MODULES_DIR/7.3.6-2-mainstream/modules.dep"
+chk support-running-none "$(supported)" no
+# The running kernel decides, even with a T2 kernel installed beside it.
+tree 7.3.6-2-mainstream-performance dep vmlinuz
+chk support-running-wins "$(supported)" no
+# An installer chroot: the running kernel's tree is not here, the installed ones are.
+FIX_UNAME="7.3.5-1-live"
+chk support-chroot-any "$(supported)" yes
+rm -rf "$MAC_MODULES_DIR"; tree 7.3.6-arch1-1 none vmlinuz
+chk support-chroot-none "$(supported)" no
+# A headers-only tree is no kernel.
+tree 7.3.4-1-mainstream dep
+chk support-chroot-headers-only "$(supported)" no
 unset MAC_MODULES_DIR
 
 if [[ $FAILS -eq 0 ]]; then echo "mac_config: all $CASES cases PASS"; exit 0
