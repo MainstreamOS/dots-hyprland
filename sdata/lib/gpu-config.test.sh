@@ -725,6 +725,21 @@ chk_str maxwell-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
 chk_str maxwell-sleep-opts "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
 chk_str maxwell-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo yes || echo no )" "yes"
 
+# The NVIDIA part alone, for a driver installed by the system update: the card's
+# modprobe options, boot option, services and GSP hook, and nothing for the other
+# GPUs or for hibernation.
+oreset; FIX_LSPCI="00:02.0 VGA compatible controller [0300]: Intel Corporation HD Graphics 630 [8086:591b] (rev 04)
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB] [10de:1c03] (rev a1)"
+_gpu_swap_partuuid_saved="$(declare -f _gpu_swap_partuuid)"; _gpu_swap_partuuid() { echo 1111-aaaa; }
+gpu_detect; gpu_apply_nvidia_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE" 2>/dev/null)"
+eval "$_gpu_swap_partuuid_saved"
+chk_str nvonly-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
+chk_str nvonly-no-resume "$( [[ "$CL" == *"resume="* ]] && echo present || echo absent )" "absent"
+chk_str nvonly-no-modules "$(grep '^MODULES=' "$MKINITCPIO_CONF")" "MODULES=()"
+chk_str nvonly-modprobe "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
+chk_str nvonly-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo yes || echo no )" "yes"
+chk_str nvonly-gsp-hook "$( [[ -f "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp" ]] && echo yes || echo no )" "yes"
+
 # An RTX card on the legacy edition runs 580xx, which suspends the legacy way.
 oreset; FIX_INSTALLED_BRANCH=580xx; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); FIX_INSTALLED_BRANCH=""
@@ -890,9 +905,11 @@ classify turing "";   chk cls-turing NVIDIA_DRIVER_FAMILY nvidia-open
 chk_str cls-turing-repo "${NVIDIA_REPO_PKGS[0]}" nvidia-open
 classify maxwell "";  chk cls-maxwell NVIDIA_DRIVER_FAMILY nvidia-580xx
 chk_str cls-maxwell-local "${NVIDIA_LOCAL_PKGS[0]}" nvidia-580xx-dkms
-classify kepler "";   chk cls-kepler NVIDIA_DRIVER_FAMILY nvidia-470xx
-classify fermi "";    chk cls-fermi NVIDIA_DRIVER_FAMILY nvidia-390xx
-chk_str cls-fermi-local "${NVIDIA_LOCAL_PKGS[*]}" "nvidia-390xx-dkms nvidia-390xx-utils"
+# Kepler's and Fermi's branches predate GBM: those cards stay on nouveau.
+classify kepler "";   chk cls-kepler NVIDIA_DRIVER_FAMILY nouveau
+chk_str cls-kepler-no-local "${#NVIDIA_LOCAL_PKGS[@]}" 0
+classify fermi "";    chk cls-fermi NVIDIA_DRIVER_FAMILY nouveau
+chk_str cls-fermi-repo "${NVIDIA_REPO_PKGS[*]}" "xf86-video-nouveau mesa lib32-mesa"
 classify prefermi ""; chk cls-prefermi NVIDIA_DRIVER_FAMILY nouveau
 classify none "";     chk cls-none NVIDIA_DRIVER_FAMILY nouveau
 
@@ -904,6 +921,12 @@ classify turing 580xx;  chk cls-installed-over-turing NVIDIA_DRIVER_FAMILY nvidi
 chk_str cls-installed-no-repo "${#NVIDIA_REPO_PKGS[@]}" 0
 classify kepler 470xx;  chk cls-installed-470 NVIDIA_DRIVER_FAMILY nvidia-470xx
 classify fermi 390xx;   chk cls-installed-390 NVIDIA_DRIVER_FAMILY nvidia-390xx
+chk_str cls-installed-390-local "${NVIDIA_LOCAL_PKGS[*]}" "nvidia-390xx-dkms nvidia-390xx-utils"
+# An installed branch that cannot drive the card is no driver to keep: the
+# 580xx a Kepler card inherits from the legacy edition's image, say.
+classify kepler 580xx;  chk cls-installed-not-driving NVIDIA_DRIVER_FAMILY nouveau
+classify fermi 470xx;   chk cls-installed-not-driving-fermi NVIDIA_DRIVER_FAMILY nouveau
+classify turing 390xx;  chk cls-installed-not-driving-turing NVIDIA_DRIVER_FAMILY nvidia-open
 
 # An unrecognized probe answer must not zero the result; the map still runs.
 classify maxwell bogus; chk cls-installed-bogus NVIDIA_DRIVER_FAMILY nvidia-580xx

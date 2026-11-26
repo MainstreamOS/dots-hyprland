@@ -187,15 +187,17 @@ gpu_detect() {
 # ── gpu_classify_nvidia_driver ──────────────────────────────────────────────
 # Maps NVIDIA_GEN (set by gpu_detect) to the driver family + package sets.
 # Exports: NVIDIA_DRIVER_FAMILY, and arrays NVIDIA_REPO_PKGS (pacman -S) and
-# NVIDIA_LOCAL_PKGS (legacy DKMS prebuilts, pacman -U). The CALLER owns the
-# install (live -S from repo; chroot -S + -U + DKMS-against-target-kernel), and
-# is responsible for the nouveau+breadcrumb fallback when local pkgs are absent.
+# NVIDIA_LOCAL_PKGS (a frozen branch's DKMS driver: from the [mainstream]
+# repository, or staged prebuilts installed with pacman -U on the legacy
+# edition). The CALLER owns the install and the nouveau fallback when the
+# branch cannot be had.
 # Turing+ default is nvidia-open (the locked policy).
 _gpu_frozen_family() {
     case "$1" in
         580xx)
             NVIDIA_DRIVER_FAMILY=nvidia-580xx
             NVIDIA_LOCAL_PKGS=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils nvidia-580xx-settings libxnvctrl-580xx) ;;
+        # Kepler's and Fermi's branches only for a system that already has them.
         470xx)
             NVIDIA_DRIVER_FAMILY=nvidia-470xx
             NVIDIA_LOCAL_PKGS=(nvidia-470xx-dkms nvidia-470xx-utils lib32-nvidia-470xx-utils) ;;
@@ -205,9 +207,8 @@ _gpu_frozen_family() {
     esac
 }
 # The driver branch this system runs or is about to get: mainline, 580xx, 470xx,
-# 390xx or none. A frozen branch already installed wins over the card's own, as
-# it does in the classification below, so an RTX card on the legacy edition
-# reads as 580xx.
+# 390xx or none. A frozen branch already installed wins over the card's own, so an
+# RTX card on the legacy edition reads as 580xx.
 _gpu_nvidia_branch() {
     local installed
     installed="$(_gpu_installed_nvidia_branch)"
@@ -215,22 +216,22 @@ _gpu_nvidia_branch() {
     case "${NVIDIA_GEN:-none}" in
         turing)  printf 'mainline\n' ;;
         maxwell) printf '580xx\n' ;;
-        kepler)  printf '470xx\n' ;;
-        fermi)   printf '390xx\n' ;;
         *)       printf 'none\n' ;;
     esac
 }
 gpu_classify_nvidia_driver() {
     NVIDIA_DRIVER_FAMILY=none
     NVIDIA_REPO_PKGS=() NVIDIA_LOCAL_PKGS=()
-    # A frozen branch that is already installed wins over the generation map.
-    # Repair and re-provisioning must serve the install that exists: the
-    # legacy edition boots on a proprietary branch the online repos do not
-    # carry, and reclassifying it from scratch is how a repair ends up
-    # replacing a working driver with the fresh-install pick.
+    # A frozen branch that is already installed and drives the card wins over the
+    # generation map. Repair and re-provisioning must serve the install that
+    # exists: the legacy edition runs even a Turing card on 580xx, and
+    # reclassifying it from scratch is how a repair ends up replacing a working
+    # driver with the fresh-install pick. One that cannot drive the card, such
+    # as the 580xx a Kepler card inherits from the legacy edition's image, is no
+    # driver to keep.
     local _installed
     _installed="$(_gpu_installed_nvidia_branch)"
-    if [[ -n "$_installed" ]]; then
+    if [[ -n "$_installed" ]] && _gpu_branch_drives "$_installed" "${NVIDIA_GEN:-none}"; then
         _gpu_frozen_family "$_installed"
         [[ "$NVIDIA_DRIVER_FAMILY" != none ]] && return 0
     fi
@@ -247,11 +248,9 @@ gpu_classify_nvidia_driver() {
             fi ;;
         maxwell)
             _gpu_frozen_family 580xx ;;
-        kepler)
-            _gpu_frozen_family 470xx ;;
-        fermi)
-            _gpu_frozen_family 390xx ;;
-        prefermi|none)
+        # Kepler's and Fermi's branches predate GBM, which the Hyprland session
+        # needs, so nouveau's hardware GL is the better driver for them.
+        kepler|fermi|prefermi|none)
             NVIDIA_DRIVER_FAMILY=nouveau
             NVIDIA_REPO_PKGS=(xf86-video-nouveau mesa lib32-mesa) ;;
     esac
@@ -1050,6 +1049,46 @@ _gpu_swap_partuuid() {
     printf '%s\n' "$partuuid"
 }
 
+# ── gpu_apply_nvidia_autoconfig ─────────────────────────────────────────────
+# The NVIDIA part of gpu_apply_autoconfig on its own, for a driver installed on
+# a system that is already set up. _gpu_nvidia_autoconfig adds its command line
+# tokens to the caller's cmdline_args.
+_gpu_nvidia_autoconfig() {
+    if [[ $HAS_NVIDIA == true && $NVIDIA_GEN != prefermi ]] && _gpu_nvidia_has_driver; then
+        # The userspace packages being present says nothing about whether a
+        # module exists for the kernel about to boot. Dressing a driverless
+        # kernel in modeset flags and suspend services hides the failure behind
+        # config that reads as correct; say it instead.
+        local _k; _k="$(gpu_target_kernel)"
+        if nvidia_module_present "$_k"; then
+            # No nvidia entries go into MODULES. Baking them into the initramfs
+            # costs hibernation: the boot kernel freezes devices before anything
+            # has written /proc/driver/nvidia/suspend, so the driver refuses the
+            # freeze and the resume falls through into an ordinary boot. KMS is
+            # kept by nvidia_drm.modeset=1 below, and udev loads the modules on
+            # the real root where the handshake can happen. The cost is a visible
+            # handoff from simpledrm once nvidia_drm probes.
+            write_modprobe_conf nvidia
+            cmdline_args+=("nvidia_drm.modeset=1")
+            local _pw=false _sleep=true
+            # The driver decides this, not the card: an RTX card on a frozen
+            # branch still suspends the legacy way.
+            if [[ "$(_gpu_nvidia_branch)" == mainline ]]; then _pw=true; _sleep=false; fi
+            nvidia_enable_services "$_pw" "$_sleep"
+        else
+            note_failure "nvidia: driver installed but no module for kernel ${_k:-unknown}, so the GPU configuration was skipped"
+        fi
+    fi
+}
+gpu_apply_nvidia_autoconfig() {
+    local -a cmdline_args=()
+    _gpu_nvidia_autoconfig
+    nvidia_strip_gsp_firmware
+    if (( ${#cmdline_args[@]} > 0 )); then
+        cmdline_upsert "${cmdline_args[@]}"
+    fi
+}
+
 # ── gpu_apply_autoconfig ────────────────────────────────────────────────────
 # System-level GPU config from gpu_detect's results: per-vendor MODULES,
 # modprobe.d, NVIDIA early-KMS + services, the GPU kernel cmdline flags, and
@@ -1089,31 +1128,7 @@ gpu_apply_autoconfig() {
             [[ $IS_RDNA4 == true ]] && cmdline_args+=("amdgpu.sg_display=0") || true
         fi
     fi
-    if [[ $HAS_NVIDIA == true && $NVIDIA_GEN != prefermi ]] && _gpu_nvidia_has_driver; then
-        # The userspace packages being present says nothing about whether a
-        # module exists for the kernel about to boot. Dressing a driverless
-        # kernel in modeset flags and suspend services hides the failure behind
-        # config that reads as correct; say it instead.
-        local _k; _k="$(gpu_target_kernel)"
-        if nvidia_module_present "$_k"; then
-            # No nvidia entries go into MODULES. Baking them into the initramfs
-            # costs hibernation: the boot kernel freezes devices before anything
-            # has written /proc/driver/nvidia/suspend, so the driver refuses the
-            # freeze and the resume falls through into an ordinary boot. KMS is
-            # kept by nvidia_drm.modeset=1 below, and udev loads the modules on
-            # the real root where the handshake can happen. The cost is a visible
-            # handoff from simpledrm once nvidia_drm probes.
-            write_modprobe_conf nvidia
-            cmdline_args+=("nvidia_drm.modeset=1")
-            local _pw=false _sleep=true
-            # The driver decides this, not the card: an RTX card on a frozen
-            # branch still suspends the legacy way.
-            if [[ "$(_gpu_nvidia_branch)" == mainline ]]; then _pw=true; _sleep=false; fi
-            nvidia_enable_services "$_pw" "$_sleep"
-        else
-            note_failure "nvidia: driver installed but no module for kernel ${_k:-unknown}, so the GPU configuration was skipped"
-        fi
-    fi
+    _gpu_nvidia_autoconfig
     nvidia_strip_gsp_firmware
     # PRIME for hybrid.
     if [[ $IS_HYBRID == true && $early_kms == true ]]; then

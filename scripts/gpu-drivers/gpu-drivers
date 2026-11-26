@@ -90,21 +90,19 @@ if [[ $HAS_NVIDIA == true ]]; then
         if [[ $have_kernel_steps == true ]]; then
             gpu_nvidia_ensure_modules || fail=1
         fi
+    elif [[ $have_kernel_steps == true ]]; then
+        # The frozen nvidia-580xx branch from [mainstream], or a 470xx/390xx one
+        # already installed, in place of whichever NVIDIA driver is installed,
+        # built by DKMS for every installed kernel. Without it the card is left
+        # on nouveau.
+        gpu_nvidia_setup_legacy || fail=1
     else
-        # Frozen legacy branch (nvidia-580xx/470xx/390xx) from [mainstream]; the
-        # -dkms package builds against the kernel, so headers + dkms come first.
-        if [[ $have_kernel_steps == true ]]; then
-            gpu_nvidia_kernel_toolchain || fail=1
-        else
-            legacy_pre=("${kernel_pkgs[@]}")
-            [[ " ${legacy_pre[*]} " == *" $kernel_headers "* ]] || legacy_pre+=("$kernel_headers")
-            run pacman -S --needed --noconfirm "${legacy_pre[@]}" dkms || fail=1
-        fi
+        legacy_pre=("${kernel_pkgs[@]}")
+        [[ " ${legacy_pre[*]} " == *" $kernel_headers "* ]] || legacy_pre+=("$kernel_headers")
+        run pacman -S --needed --noconfirm "${legacy_pre[@]}" dkms || fail=1
         if ! run pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
-            echo "Legacy NVIDIA branch $NVIDIA_DRIVER_FAMILY unavailable — installing nouveau instead."
+            echo "Legacy NVIDIA branch $NVIDIA_DRIVER_FAMILY unavailable, installing nouveau instead."
             run pacman -S --needed --noconfirm xf86-video-nouveau mesa || fail=1
-        elif [[ $have_kernel_steps == true ]]; then
-            gpu_nvidia_ensure_modules || fail=1
         fi
     fi
     [[ $IS_HYBRID == true ]] && { run pacman -S --needed --noconfirm nvidia-prime || true; }

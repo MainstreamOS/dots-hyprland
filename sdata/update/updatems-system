@@ -725,6 +725,99 @@ if [[ -r "$GPU_LIB_SRC" && ! -e "$NVML_STAMP" ]]; then
     fi
 fi
 
+# ── An older NVIDIA card's driver ──────────────────────────────────────────
+# An install that could not download the frozen NVIDIA branch an older card
+# needs left the card on nouveau and a note for this step, which installs the
+# branch once the repositories offer it. NVIDIA's driver takes over at the next
+# restart, after the boot images are rebuilt below. A system set up before the
+# repositories carried the branch gets the note once, the first time it is due.
+GPU_INSTALL_LIB_SRC="$REPO_DIR/sdata/lib/gpu-driver-install.sh"
+NV_PENDING="${GPU_NVIDIA_PENDING:-/var/lib/mainstream/nvidia-driver-pending}"
+NV_OFFERED="${GPU_NVIDIA_OFFERED:-/var/lib/mainstream/nvidia-580xx-offered}"
+KERNELS_HELPER="${MAINSTREAM_KERNELS_HELPER:-/usr/lib/mainstream/mainstream-kernels}"
+# Every kernel that lacks the module is noted already; the one the computer starts
+# must have it. The Kernel page's helper is sourced in a subshell for the kernel the
+# boot menu starts and for pointing it elsewhere, since its own command would wait
+# on the lock this update holds.
+_nv_start_kernel_ready() {
+    local missing next target
+    missing="$(gpu_kernels_missing_nvidia)"
+    [[ -n "$missing" ]] || return 0
+    if [[ -r "$KERNELS_HELPER" ]]; then
+        # shellcheck source=/dev/null
+        next="$( ( source "$KERNELS_HELPER" && read_last_entry && entry_is_installed_kernel && printf '%s' "${ENTRY##*/}" ) 2>/dev/null )"
+        [[ -n "$next" ]] && ! grep -q " $next\$" <<<"$missing" && return 0
+        # shellcheck source=/dev/null
+        target="$( ( source "$KERNELS_HELPER" && fallback_kernel "$next" ) 2>/dev/null )"
+    fi
+    if [[ -n "${target:-}" ]] && gpu_kernel_nvidia_ready "$target" \
+       && ( source "$KERNELS_HELPER" && cmd_next "$target" ) >/dev/null 2>&1; then
+        ok "$(tf "%s has no NVIDIA driver, so the computer starts %s from now on" "$next" "$target")"
+        return 0
+    fi
+    warn "$(t "The kernel the computer starts may have no NVIDIA driver; choose another one in the boot menu")"
+    return 1
+}
+if [[ ! -e "$NV_PENDING" && ! -e "$NV_OFFERED" ]] && _src_ok "$GPU_LIB_SRC" && _src_ok "$GPU_INSTALL_LIB_SRC"; then
+    # shellcheck source=/dev/null
+    source "$GPU_LIB_SRC"
+    # shellcheck source=/dev/null
+    source "$GPU_INSTALL_LIB_SRC"
+    GPU_SUDO='' NVIDIA_LOCAL_PKGS=() NVIDIA_DRIVER_FAMILY=none
+    if gpu_detect >/dev/null 2>&1 && [[ $HAS_NVIDIA == true ]]; then
+        gpu_classify_nvidia_driver
+    fi
+    if gpu_nvidia_legacy_due && gpu_nvidia_mark_pending; then
+        mkdir -p "${NV_OFFERED%/*}" && : > "$NV_OFFERED"
+    fi
+fi
+if [[ -e "$NV_PENDING" ]] && _src_ok "$GPU_LIB_SRC" && _src_ok "$GPU_INSTALL_LIB_SRC"; then
+    # shellcheck source=/dev/null
+    source "$GPU_LIB_SRC"
+    # shellcheck source=/dev/null
+    source "$GPU_INSTALL_LIB_SRC"
+    GPU_SUDO='' GPU_FAILURES=() NVIDIA_LOCAL_PKGS=()
+    if gpu_detect >/dev/null 2>&1 && [[ $HAS_NVIDIA == true ]]; then
+        gpu_classify_nvidia_driver
+    fi
+    # Nothing is left to install once the card is another or the branch is here.
+    if (( ${#NVIDIA_LOCAL_PKGS[@]} == 0 )) || _gpu_pkg_installed "${NVIDIA_LOCAL_PKGS[0]}"; then
+        rm -f "$NV_PENDING"
+    else
+        say "$(t "Installing NVIDIA's driver for this graphics card...")"
+        gpu_nvidia_install_legacy > >(sed 's/^/    /') 2>&1
+        _nv_rc=$?
+        wait "$!" 2>/dev/null || true
+        case "$_nv_rc" in
+            0)
+                case "$NVIDIA_DRIVER_FAMILY" in
+                    nvidia-580xx|nvidia-470xx) _pacman_needed libva-nvidia-driver libva-utils || true ;;
+                esac
+                _nv_start_kernel_ready || RC=1
+                gpu_apply_nvidia_autoconfig
+                # The person's own files, written as them.
+                _nv_home="$(getent passwd "$UMS_PERSON" 2>/dev/null | cut -d: -f6)"
+                if [[ -n "$_nv_home" && -d "$_nv_home" ]]; then
+                    runuser -u "$UMS_PERSON" -- bash -c 'source "$1" && gpu_detect >/dev/null 2>&1 && gpu_apply_hypr_tweaks "$2"' \
+                        _ "$GPU_LIB_SRC" "$_nv_home" </dev/null || true
+                fi
+                rm -f "$NV_PENDING"
+                _NVIDIA_REBUILD_PENDING=1
+                ok "$(t "NVIDIA's driver is installed and takes over from nouveau at the next restart")"
+                ;;
+            1)
+                # It is off the machine again, so the images keep loading nouveau.
+                warn "$(t "NVIDIA's driver did not build for this system, so the graphics card stays on nouveau until the next update tries again")"
+                RC=1
+                ;;
+            *)
+                ok "$(t "NVIDIA's driver for this graphics card could not be downloaded yet; the next update tries again")"
+                ;;
+        esac
+        flush_failures
+    fi
+fi
+
 # ── Wi-Fi country ──────────────────────────────────────────────────────────
 # Runs on every update: a country guessed from the time zone follows later
 # time zone changes until one is chosen in Settings.
@@ -953,6 +1046,26 @@ if [[ -n "${_T2_CMDLINE_PENDING-}" ]]; then
             warn "$(t "The boot images were not rebuilt; the next kernel update rebuilds them with the Apple T2 boot options.")"
             RC=1
         fi
+    fi
+fi
+
+# ── NVIDIA's driver for an older card ─────────────────────────────────────
+# Installed by the step above. The images built while the card ran on nouveau
+# load nouveau before NVIDIA's driver can, and lack its boot options.
+if [[ -n "${_NVIDIA_REBUILD_PENDING-}" && -z "${_BOOT_REBUILT-}" ]]; then
+    if [[ -z "${_BOOT_REBUILD_FAILED-}" ]] \
+       && command -v limine-mkinitcpio >/dev/null 2>&1 \
+       && _luks_keyfile_idle; then
+        say "$(t "Rebuilding the boot images for NVIDIA's driver...")"
+        if _rebuild_boot_images; then
+            ok "$(t "Boot images rebuilt for NVIDIA's driver.")"
+        else
+            warn "$(t "The boot images were not rebuilt, so the graphics card stays on nouveau until the next kernel update rebuilds them.")"
+            RC=1
+        fi
+    else
+        warn "$(t "The boot images were not rebuilt, so the graphics card stays on nouveau until the next kernel update rebuilds them.")"
+        RC=1
     fi
 fi
 

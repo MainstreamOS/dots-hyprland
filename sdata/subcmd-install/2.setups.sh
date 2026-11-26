@@ -352,11 +352,11 @@ function setup_gpu_drivers(){
                 gpu_nvidia_ensure_modules || flush_failures
               fi
             else
-              # Frozen legacy branch (nvidia-580xx/470xx/390xx) — only present if [mainstream] prebuilt it.
-              # The *-dkms packages build against the kernel, so every installed kernel's headers + dkms must be present first.
-              gpu_nvidia_kernel_toolchain || true
-              # Try the legacy branch; if unavailable, fall back to nouveau and leave a breadcrumb.
-              if sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
+              # The frozen nvidia-580xx branch from [mainstream], or a 470xx/390xx one
+              # already installed, built by DKMS for every installed kernel. One that
+              # cannot be downloaded leaves the card on nouveau until the system
+              # update installs it.
+              if gpu_nvidia_setup_legacy; then
                 # These branches ship no VA-API driver of their own, so every
                 # video player and game stream would decode on the CPU. 390xx is
                 # below the driver's floor and is left out.
@@ -364,21 +364,8 @@ function setup_gpu_drivers(){
                   nvidia-580xx|nvidia-470xx)
                     try sudo pacman -S --needed --noconfirm libva-nvidia-driver libva-utils ;;
                 esac
-                gpu_nvidia_ensure_modules || flush_failures
               else
-                # A legacy edition boots on a branch the online repos do not
-                # carry, so the resolve failing is the normal repair case
-                # there, not a missing driver. Keeping the installed branch is
-                # the repair; nouveau is only for a machine with nothing.
-                if pacman -Q "${NVIDIA_LOCAL_PKGS[0]}" >/dev/null 2>&1; then
-                  echo -e "${STY_CYAN}[$0]: ${NVIDIA_DRIVER_FAMILY} is already installed; keeping it.${STY_RST}"
-                  gpu_nvidia_ensure_modules || flush_failures
-                else
-                  echo -e "${STY_YELLOW}[$0]: Legacy NVIDIA branch ${NVIDIA_DRIVER_FAMILY} unavailable — falling back to nouveau.${STY_RST}"
-                  x sudo pacman -S --needed --noconfirm xf86-video-nouveau mesa
-                  note_failure "NVIDIA ${NVIDIA_GEN} card: proprietary branch ${NVIDIA_DRIVER_FAMILY} not available; installed nouveau instead."
-                  flush_failures
-                fi
+                flush_failures
               fi
             fi
             mapfile -t _nv_extra < <(nvidia_extra_pkgs)

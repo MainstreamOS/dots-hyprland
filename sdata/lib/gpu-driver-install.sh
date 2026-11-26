@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# gpu-driver-install.sh: an NVIDIA module for every installed kernel.
+# gpu-driver-install.sh: an NVIDIA module for every installed kernel, and the
+# frozen 580xx branch GTX 900 to Titan V cards need, from the repositories.
 #
 # Sourced after gpu-config.sh, which stays free of package transactions and
 # supplies the reads used here (gpu_installed_kernels, nvidia_module_present,
@@ -13,6 +14,8 @@
 #                   for an installer: on a running system a refresh followed
 #                   by a kernel and driver install is a partial upgrade.
 #   GPU_LOG_DIR     where a failed build's log is kept (default /var/log/mainstream)
+#   GPU_NVIDIA_PENDING  where a frozen branch left for the system update is
+#                   noted (default /var/lib/mainstream/nvidia-driver-pending)
 # and the functions below, which tests redefine to record calls.
 
 _gpu_pacman() { ${GPU_SUDO:-} pacman "$@"; }
@@ -300,6 +303,135 @@ gpu_nvidia_modules_for_added_kernel() {
     gpu_kernel_nvidia_ready "$kernel" || return 1
     for n in "${notes[@]}"; do note_failure "$n"; done
     return 0
+}
+
+# ── gpu_nvidia_remove_drivers [<family to keep>] ────────────────────────────
+# Takes every NVIDIA driver package off but the named family's, by exact name.
+# The branches conflict with each other and pacman's conflict question answers
+# itself with no, so the driver being replaced goes before the next arrives.
+# Without dependency checks: the branch that follows provides nvidia-utils.
+gpu_nvidia_remove_drivers() {
+    local keep="${1:-none}" b p all=() present=()
+    all=(nvidia nvidia-open nvidia-dkms nvidia-open-dkms nvidia-utils lib32-nvidia-utils
+         nvidia-settings libxnvctrl opencl-nvidia lib32-opencl-nvidia)
+    for b in 580xx 470xx 390xx; do
+        [[ "$keep" == "nvidia-$b" ]] && continue
+        all+=("nvidia-$b-dkms" "nvidia-$b-utils" "lib32-nvidia-$b-utils" "nvidia-$b-settings"
+              "libxnvctrl-$b" "opencl-nvidia-$b" "lib32-opencl-nvidia-$b")
+    done
+    for p in "${all[@]}"; do
+        if _gpu_pkg_installed "$p"; then present+=("$p"); fi
+    done
+    (( ${#present[@]} > 0 )) || return 0
+    echo "nvidia: removing ${present[*]}."
+    _gpu_pacman -Rdd --noconfirm "${present[@]}"
+}
+
+# ── gpu_nvidia_legacy_offered ───────────────────────────────────────────────
+# Whether the repositories offer the frozen branch NVIDIA_LOCAL_PKGS names: its
+# dkms and utils packages. Its settings app comes along when it is offered too.
+gpu_nvidia_legacy_offered() {
+    local p
+    (( ${#NVIDIA_LOCAL_PKGS[@]} > 0 )) || return 1
+    for p in "${NVIDIA_LOCAL_PKGS[@]}"; do
+        [[ "$p" == *-dkms || "$p" == *-utils ]] || continue
+        _gpu_pkg_in_repo "$p" || return 1
+    done
+    return 0
+}
+
+# ── gpu_nvidia_legacy_due ───────────────────────────────────────────────────
+# Whether a system set up before the repositories carried the 580xx branch should
+# get it now: the card is one 580xx is the driver for, no NVIDIA kernel driver is
+# installed, and the repositories offer it. Reads gpu_classify_nvidia_driver.
+gpu_nvidia_legacy_due() {
+    local p
+    [[ "${NVIDIA_DRIVER_FAMILY:-none}" == nvidia-580xx ]] || return 1
+    for p in nvidia nvidia-lts nvidia-dkms nvidia-open nvidia-open-lts nvidia-open-dkms \
+             nvidia-580xx-dkms nvidia-470xx-dkms nvidia-390xx-dkms; do
+        _gpu_pkg_installed "$p" && return 1
+    done
+    gpu_nvidia_legacy_offered
+}
+
+# ── gpu_nvidia_install_legacy ───────────────────────────────────────────────
+# Installs the frozen branch gpu_classify_nvidia_driver picked (NVIDIA_LOCAL_PKGS)
+# from the package repositories and has DKMS build it for every installed
+# kernel. Returns:
+#   0  it is installed and at least one kernel has its module
+#   1  it was tried and no kernel can use it, so every NVIDIA driver is off the
+#      machine, the card is left to nouveau and the family reads nouveau
+#   2  the repositories do not offer it or it could not be downloaded, and
+#      nothing was changed
+gpu_nvidia_install_legacy() {
+    local family="${NVIDIA_DRIVER_FAMILY:-none}" p rel base kernels pkgs=()
+    if ! gpu_nvidia_legacy_offered; then
+        echo "nvidia: the repositories do not offer $family, so it cannot be installed now."
+        return 2
+    fi
+    for p in "${NVIDIA_LOCAL_PKGS[@]}"; do
+        if _gpu_pkg_in_repo "$p"; then pkgs+=("$p"); fi
+    done
+    # Downloaded before anything comes off: a machine that cannot fetch the
+    # branch keeps whatever driver it has.
+    if ! _gpu_pacman -Sw --noconfirm "${pkgs[@]}"; then
+        echo "nvidia: $family could not be downloaded."
+        return 2
+    fi
+    gpu_nvidia_remove_drivers "$family" || echo "nvidia: could not remove the NVIDIA driver $family replaces."
+    gpu_nvidia_kernel_toolchain || echo "nvidia: could not install all of the DKMS toolchain."
+    if _gpu_pacman -S --needed --noconfirm "${pkgs[@]}" egl-wayland; then
+        gpu_nvidia_ensure_modules || true
+        kernels="$(gpu_installed_kernels)"
+        if [[ -z "$kernels" ]]; then
+            echo "nvidia: no installed kernel found, so the module is unverified."
+            return 0
+        fi
+        while read -r rel base; do
+            nvidia_module_present "$rel" && return 0
+        done <<<"$kernels"
+        note_failure "nvidia: $family did not build for any installed kernel, so it was removed and the card uses nouveau."
+    else
+        note_failure "nvidia: $family could not be installed, so the card uses nouveau."
+    fi
+    gpu_nvidia_remove_drivers none || echo "nvidia: could not remove $family."
+    NVIDIA_DRIVER_FAMILY=nouveau NVIDIA_LOCAL_PKGS=() NVIDIA_REPO_PKGS=(xf86-video-nouveau mesa lib32-mesa)
+    return 1
+}
+
+# ── the frozen branch left for the system update ───────────────────────────
+# A branch the repositories could not offer when the system was set up, so the
+# card runs on nouveau until the system update installs it.
+gpu_nvidia_mark_pending() {
+    printf '%s\n' "${NVIDIA_DRIVER_FAMILY:-none}" \
+        | _gpu_write_file "${GPU_NVIDIA_PENDING:-/var/lib/mainstream/nvidia-driver-pending}"
+}
+gpu_nvidia_clear_pending() {
+    ${GPU_SUDO:-} rm -f -- "${GPU_NVIDIA_PENDING:-/var/lib/mainstream/nvidia-driver-pending}"
+}
+
+# ── gpu_nvidia_setup_legacy ─────────────────────────────────────────────────
+# A frozen branch's whole setup on a running system (./setup, gpu-drivers): the
+# branch from the repositories, or the one already installed kept with its
+# modules seen to, or nouveau. One the repositories could not offer is left for
+# the system update. Returns 1 when the card is left without NVIDIA's driver.
+gpu_nvidia_setup_legacy() {
+    local rc
+    gpu_nvidia_install_legacy; rc=$?
+    case "$rc" in
+        0) gpu_nvidia_clear_pending; return 0 ;;
+        1) gpu_nvidia_clear_pending ;;
+        *)
+            if _gpu_pkg_installed "${NVIDIA_LOCAL_PKGS[0]:-}"; then
+                echo "nvidia: keeping the installed $NVIDIA_DRIVER_FAMILY."
+                gpu_nvidia_ensure_modules
+                return
+            fi
+            gpu_nvidia_mark_pending
+            note_failure "nvidia: $NVIDIA_DRIVER_FAMILY could not be downloaded, so the card uses nouveau. NVIDIA's driver installs with the next system update once the computer is online." ;;
+    esac
+    _gpu_pacman -S --needed --noconfirm xf86-video-nouveau mesa || true
+    return 1
 }
 
 # ── gpu_driver_run_report [<path>] ──────────────────────────────────────────
