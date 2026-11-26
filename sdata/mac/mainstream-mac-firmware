@@ -2,19 +2,23 @@
 # Fetch the Wi-Fi and Bluetooth firmware this Mac's Broadcom chips need.
 #
 # Apple's T2-era Macs carry Broadcom chips whose firmware is not in
-# linux-firmware and may not be redistributed, so nothing is shipped. Instead
-# this machine asks Apple's recovery service for its own recovery image, the
-# same one Internet Recovery would fetch, opens it here, and lifts the firmware
-# out of it under the names the brcmfmac and hci_bcm4377 drivers look for.
-# The image is verified against Apple's chunklist before anything is read.
+# linux-firmware and may not be redistributed, so nothing is shipped. A Mac
+# that still has macOS on its disk has the firmware there, which is read first,
+# without a network. Otherwise this machine asks Apple's recovery service for
+# its own recovery image, the same one Internet Recovery would fetch, opens it
+# here, and lifts the firmware out of it under the names the brcmfmac and
+# hci_bcm4377 drivers look for. The image is verified against Apple's chunklist
+# before anything is read.
 #
 # Usage: mainstream-mac-firmware [--force] [--quiet] [--check]
 #                                [--from-dmg <BaseSystem.dmg>] [--from-tree <dir>]
-#   --check      exit 0 when the firmware is already in place, 1 otherwise
-#   --force      fetch even when the machine does not look like it needs it,
-#                or the firmware is already there
-#   --from-dmg   use a recovery image already on disk instead of downloading
-#   --from-tree  use a macOS /usr/share/firmware tree already on disk
+#                                [--from-volume <device>]
+#   --check        exit 0 when the firmware is already in place, 1 otherwise
+#   --force        fetch even when the machine does not look like it needs it,
+#                  or the firmware is already there
+#   --from-dmg     use a recovery image already on disk instead of downloading
+#   --from-tree    use a macOS /usr/share/firmware tree already on disk
+#   --from-volume  read the firmware from this macOS (APFS) partition only
 #
 # Runs as root. Exit 0 also means "nothing to do" and "offline for now": the
 # timer that drives it retries until the firmware lands, then stops itself. It
@@ -44,8 +48,11 @@ MAX_FAILURES=5
 STAMP="$FW_DIR/brcm/.mainstream-mac-firmware"
 STAGE="$FW_DIR/.mainstream-mac-firmware.new"
 TIMER=mainstream-mac-firmware.timer
+# Left by a look at the disk that found no macOS firmware, so later runs go
+# straight to the download.
+NO_VOLUME="$CACHE/no-macos-volume"
 
-force=0 quiet=0 check=0 from_dmg="" from_tree=""
+force=0 quiet=0 check=0 from_dmg="" from_tree="" from_volume=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --force)     force=1 ;;
@@ -53,7 +60,8 @@ while [ $# -gt 0 ]; do
         --check)     check=1 ;;
         --from-dmg)  from_dmg="${2:-}"; shift ;;
         --from-tree) from_tree="${2:-}"; shift ;;
-        -h|--help)   sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --from-volume) from_volume="${2:-}"; shift ;;
+        -h|--help)   sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -95,7 +103,7 @@ if [ "$force" = 0 ] && have_firmware; then
     exit 0
 fi
 
-if [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ]; then
+if [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ] && [ -z "$from_volume" ]; then
     if [ -r "$MAC_LIB" ]; then
         if ! mac_needs_apple_firmware; then
             log "This machine does not need Apple's Broadcom firmware."
@@ -108,7 +116,7 @@ fi
 [ -w "$FW_DIR" ] || fail "This needs to run as root to write $FW_DIR."
 # The hardware setup enables the timer again whenever it runs. Once the fetch
 # has given up, only a run by hand starts over.
-if [ "$quiet" = 1 ] && [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ]; then
+if [ "$quiet" = 1 ] && [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ] && [ -z "$from_volume" ]; then
     gave_up="$(cat "$CACHE/failures" 2>/dev/null || true)"
     case "$gave_up" in ''|*[!0-9]*) gave_up=0 ;; esac
     if [ "$((10#$gave_up))" -ge "$MAX_FAILURES" ]; then
@@ -146,17 +154,77 @@ image_verifies() {
 
 rm -rf "$WORK" "$STAGE"
 mkdir -p "$WORK"
-have_image=0
+have_image=0 from_disk=0
 cleanup() {
     local rc=$?
     rm -rf "$WORK" "$STAGE"
     if [ "$rc" -ne 0 ] && [ "$have_image" = 1 ]; then
         note_failure
     fi
+    # Firmware off the disk that could not be prepared would fail the same way
+    # every time, so the next run downloads instead.
+    if [ "$rc" -ne 0 ] && [ "$from_disk" = 1 ]; then
+        { mkdir -p "$CACHE" && : >"$NO_VOLUME"; } 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT
 
+# The APFS partitions on this machine's internal disks, by filesystem or by
+# partition type. A USB stick or a loop image, which any desktop user can attach,
+# is never read: what it holds would reach the Wi-Fi chip unchecked.
+apfs_partitions() {
+    if [ -n "${MAC_FIRMWARE_APFS_DEVICES+set}" ]; then
+        # shellcheck disable=SC2086
+        printf '%s\n' $MAC_FIRMWARE_APFS_DEVICES
+        return 0
+    fi
+    local disks
+    disks="$(lsblk -dnPo NAME,TYPE,RM,TRAN 2>/dev/null \
+        | awk '/TYPE="disk"/ && /RM="0"/ && !/TRAN="usb"/ { match($0, /NAME="[^"]*"/); print substr($0, RSTART + 6, RLENGTH - 7) }')"
+    [ -n "$disks" ] || return 0
+    # shellcheck disable=SC2086
+    lsblk -nPo PATH,FSTYPE,PARTTYPE,PKNAME 2>/dev/null | awk -v disks=" $(printf '%s ' $disks)" '
+        function field(k) { return match($0, k "=\"[^\"]*\"") ? substr($0, RSTART + length(k) + 2, RLENGTH - length(k) - 3) : "" }
+        index(disks, " " field("PKNAME") " ") && (field("FSTYPE") == "apfs" \
+            || tolower(field("PARTTYPE")) == "7c3457ef-0000-11aa-aa11-00306543ecac") { print field("PATH") }' \
+        | sort -u
+}
+
+# 7-Zip reads APFS itself, so the macOS volume needs no APFS driver in the
+# kernel and is never mounted. Listing only what is called firmware keeps the
+# output small; the whole container is still parsed, so each step is bounded.
+# Sets tree on success.
+volume_firmware() {
+    local dev="$1" fwpath
+    fwpath="$(timeout 300 7z l -slt -tAPFS -r -- "$dev" firmware 2>/dev/null \
+        | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1 || true)"
+    [ -n "$fwpath" ] || return 1
+    rm -rf "$WORK/volume"
+    mkdir -p "$WORK/volume"
+    timeout 300 7z x -y -tAPFS -o"$WORK/volume" -r -- "$dev" "$fwpath" >/dev/null 2>&1 || true
+    [ -d "$WORK/volume/$fwpath/wifi" ] || return 1
+    tree="$WORK/volume/$fwpath"
+}
+
 tree="$from_tree"
+
+if [ -n "$from_volume" ]; then
+    log "Reading the firmware from the macOS volume on $from_volume..."
+    volume_firmware "$from_volume" || fail "No macOS firmware found on $from_volume."
+elif [ -z "$tree" ] && [ -z "$from_dmg" ] && [ ! -e "$NO_VOLUME" ]; then
+    while IFS= read -r dev; do
+        [ -n "$dev" ] || continue
+        log "Looking for macOS on $dev..."
+        if volume_firmware "$dev"; then
+            log "Reading the firmware from the macOS volume on $dev."
+            from_disk=1
+            break
+        fi
+    done < <(apfs_partitions)
+    if [ "$from_disk" = 0 ]; then
+        { mkdir -p "$CACHE" && : >"$NO_VOLUME"; } 2>/dev/null || true
+    fi
+fi
 
 if [ -z "$tree" ]; then
     dmg="$from_dmg"
@@ -246,7 +314,7 @@ for pkg in "$WORK/wifi" "$WORK/bluetooth"; do
     log "Installed $n firmware files from $(basename "$pkg")."
     installed=$((installed + n))
 done
-[ "$installed" -gt 0 ] || fail "The recovery image held no usable firmware."
+[ "$installed" -gt 0 ] || fail "No usable firmware was found."
 rm -f "$STAMP"
 ( cd "$STAGE" && find . -mindepth 1 -type d ) | while IFS= read -r d; do
     mkdir -p "$FW_DIR/$d" || exit 1

@@ -437,7 +437,7 @@ mac_apply_autoconfig() {
     if mac_needs_apple_firmware; then
         printf '%s\n' \
             '[Unit]' \
-            "Description=Fetch this Mac's Wi-Fi and Bluetooth firmware from Apple's recovery image" \
+            "Description=Fetch this Mac's Wi-Fi and Bluetooth firmware from macOS on its disk or Apple's recovery image" \
             'After=network-online.target' \
             'Wants=network-online.target' \
             'ConditionPathExists=/usr/local/bin/mainstream-mac-firmware' \
@@ -637,7 +637,7 @@ mac_report() {
         if mac_apple_firmware_present; then
             echo "  Broadcom firmware: already in place"
         else
-            echo "  Broadcom firmware: fetched from Apple's recovery image on this machine, timer enabled"
+            echo "  Broadcom firmware: read from macOS on this disk or fetched from Apple's recovery image, timer enabled"
         fi
     fi
     if [ "$class" = t2 ]; then
