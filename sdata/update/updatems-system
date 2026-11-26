@@ -959,7 +959,7 @@ TPM_UNIT=systemd-tpm2-setup-early.service
 TPM_DROPIN=50-mainstream-nvpcr.conf
 TPM_STAMP=/var/lib/mainstream/tpm2-early-setup-rebuilt
 _tpm_stale_image() {  # 0 when an image limine-mkinitcpio builds runs the unit without the drop-in
-    local esp name f kernel img list
+    local esp name f kernel img list pre
     { IFS= read -r esp; IFS= read -r name; } < <(
         source /usr/lib/limine/limine-common-functions >/dev/null 2>&1 \
             && load_config >/dev/null 2>&1 && printf '%s\n%s\n' "$ESP_PATH" "${CUSTOM_UKI_NAME-}")
@@ -968,7 +968,10 @@ _tpm_stale_image() {  # 0 when an image limine-mkinitcpio builds runs the unit w
     for f in /usr/lib/modules/*/pkgbase; do
         kernel="$(tr -d '[:space:]' <"$f" 2>/dev/null)"
         [[ -n "$kernel" ]] || continue
-        for img in "$esp/EFI/Linux/${name}_$kernel.efi" "$esp/EFI/Linux/${name}_$kernel-fallback.efi"; do
+        # A kernel whose name starts with the prefix keeps its name alone (mainstream.efi).
+        pre="${name}_"
+        [[ "$kernel" == "$name"* ]] && pre=""
+        for img in "$esp/EFI/Linux/$pre$kernel.efi" "$esp/EFI/Linux/$pre$kernel-fallback.efi"; do
             [[ -f "$img" ]] && list="$(lsinitcpio "$img" 2>/dev/null)" || continue
             grep -qxF -e "usr/lib/systemd/system/$TPM_UNIT" -e "./usr/lib/systemd/system/$TPM_UNIT" <<<"$list" \
                 && ! grep -qxF -e "usr/lib/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" \

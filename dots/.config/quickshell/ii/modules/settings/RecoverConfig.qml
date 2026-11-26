@@ -39,13 +39,14 @@ ContentPage {
     }
 
     // Boot entries are named for their kernel package; name the one the boot menu puts first.
+    // A snapshot from before the rename still carries linux-mainstream*, listed by the new name.
     property string kernelEntry: "linux"
     Process {
         id: kernelEntryProbe
         running: true
         command: ["sh", "-c",
-            "for k in linux-mainstream-performance linux-mainstream linux; do "
-            + "grep -qxF \"$k\" /usr/lib/modules/*/pkgbase 2>/dev/null && { echo \"$k\"; exit 0; }; "
+            "for k in mainstream-performance mainstream linux; do "
+            + "grep -qxF -e \"$k\" -e \"linux-$k\" /usr/lib/modules/*/pkgbase 2>/dev/null && { echo \"$k\"; exit 0; }; "
             + "done; cat /usr/lib/modules/*/pkgbase 2>/dev/null | head -n 1"]
         stdout: StdioCollector {
             onStreamFinished: {

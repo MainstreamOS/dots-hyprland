@@ -26,13 +26,13 @@ ContentSection {
             about: Translation.tr("Arch's kernel, as Arch ships it.")
         },
         {
-            name: "linux-mainstream",
+            name: "mainstream",
             icon: "developer_board",
             shown: Translation.tr("Mainstream"),
             about: Translation.tr("Mainstream's build of the same kernel version. New installs start it by default.")
         },
         {
-            name: "linux-mainstream-performance",
+            name: "mainstream-performance",
             icon: "speed",
             shown: Translation.tr("Mainstream Performance"),
             about: Translation.tr("Tuned for games and a responsive desktop.")
@@ -136,7 +136,11 @@ ContentSection {
             readonly property bool showInstall: !card.installed && !card.confirmingInstall
             readonly property bool showNext: card.installed && !card.startsNext
             readonly property bool showRemove: card.installed && !card.confirmingRemove
-            readonly property bool helperRefuses: card.standard && SystemKernels.helper && !SystemKernels.canChangeStandard
+            // An older helper refuses the standard kernel, and Mainstream's kernels under
+            // the package names they carry today.
+            readonly property bool helperRefuses: SystemKernels.helper && (card.standard
+                ? !SystemKernels.canChangeStandard
+                : !SystemKernels.canUseNewNames && card.info.package === card.kernel)
             // Why this kernel cannot be installed here, or nothing.
             readonly property string installBlocked: {
                 if (card.helperRefuses)

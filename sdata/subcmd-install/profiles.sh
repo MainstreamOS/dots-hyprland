@@ -158,8 +158,28 @@ choose_app_source() {
 }
 
 # The values each list flag accepts, in the order the install prefers them.
-INSTALL_KERNELS=(linux-mainstream-performance linux-mainstream linux)
+INSTALL_KERNELS=(mainstream-performance mainstream linux)
 INSTALL_PROTONS=(mainstream ge cachyos)
+# The package names Mainstream's kernels had before. --kernel still takes them, and
+# a repository or a system may still carry the packages under them.
+declare -gA INSTALL_KERNEL_OLD_NAMES=(
+  [mainstream]=linux-mainstream
+  [mainstream-performance]=linux-mainstream-performance
+)
+
+# Today's kernel names in the comma list in $1.
+_install_kernel_new_names() {
+  local var=$1 kernel i
+  local -a items=()
+  IFS=, read -ra items <<< "${!var}"
+  for i in "${!items[@]}"; do
+    for kernel in "${!INSTALL_KERNEL_OLD_NAMES[@]}"; do
+      [[ ${items[i]} != "${INSTALL_KERNEL_OLD_NAMES[$kernel]}" ]] || items[i]=$kernel
+    done
+  done
+  local IFS=,
+  printf -v "$var" '%s' "${items[*]}"
+}
 
 # Normalizes the comma list in $1 to the allowed values $4... in preference
 # order, which picks the defaults; $3, if set, is the value meaning none.
@@ -192,12 +212,13 @@ _install_choice_list() {
 
 choose_install_kernel() {
   local input number kernel
-  local -a numbered=(linux-mainstream linux-mainstream-performance linux) picked=()
+  local -a numbered=(mainstream mainstream-performance linux) picked=()
   if [[ -n ${MS_INSTALL_KERNELS+x} ]]; then
+    _install_kernel_new_names MS_INSTALL_KERNELS
     _install_choice_list MS_INSTALL_KERNELS --kernel '' "${INSTALL_KERNELS[@]}" || return
   elif [[ ! -t 0 || ! -t 1 ]]; then
-    MS_INSTALL_KERNELS=linux-mainstream
-    printf 'No terminal: using --kernel linux-mainstream.\n' >&2
+    MS_INSTALL_KERNELS=mainstream
+    printf 'No terminal: using --kernel mainstream.\n' >&2
   else
     printf '\nChoose the kernels to install. Enter one or more numbers, such as "1 2".\n'
     printf '  1. Mainstream kernel (recommended)\n'
@@ -220,10 +241,12 @@ choose_install_kernel() {
     _install_choice_list MS_INSTALL_KERNELS --kernel '' "${INSTALL_KERNELS[@]}" || return
   fi
   # The performance kernel does not boot on an older CPU.
-  if [[ " $MS_INSTALL_KERNELS " == *" linux-mainstream-performance "* ]] && ! cpu_runs_x86_64_v3; then
+  if [[ " $MS_INSTALL_KERNELS " == *" mainstream-performance "* ]] && ! cpu_runs_x86_64_v3; then
     printf 'This CPU does not support x86-64-v3, which the performance kernel needs. Using the Mainstream kernel instead.\n' >&2
-    kernel=${MS_INSTALL_KERNELS// /,}
-    MS_INSTALL_KERNELS=${kernel/linux-mainstream-performance/linux-mainstream}
+    kernel=,${MS_INSTALL_KERNELS// /,},
+    kernel=${kernel/,mainstream-performance,/,mainstream,}
+    kernel=${kernel#,}
+    MS_INSTALL_KERNELS=${kernel%,}
     _install_choice_list MS_INSTALL_KERNELS --kernel '' "${INSTALL_KERNELS[@]}"
   fi
 }

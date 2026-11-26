@@ -72,25 +72,34 @@ chk "--list-apps has apps" "$(grep -c $'^steam\t' <<<"$listed")" 1
 # Flags.
 apps=(--apps steam,org.gimp.GIMP)
 chk "custom defaults without a terminal" "$(opts --profile custom "${apps[@]}")" \
-  "custom||linux-mainstream|mainstream|steam org.gimp.GIMP"
-chk "no terminal kernel message" "$(grep -c 'No terminal: using --kernel linux-mainstream' "$WORK/err")" 1
+  "custom||mainstream|mainstream|steam org.gimp.GIMP"
+chk "no terminal kernel message" "$(grep -c 'No terminal: using --kernel mainstream' "$WORK/err")" 1
 chk "no terminal app source message" "$(grep -c 'No terminal: apps install as listed' "$WORK/err")" 1
 chk "kernel and proton lists ordered" \
-  "$(opts --profile custom --kernel linux,linux-mainstream-performance,linux-mainstream --proton cachyos,mainstream,ge "${apps[@]}")" \
-  "custom||linux-mainstream-performance linux-mainstream linux|mainstream ge cachyos|steam org.gimp.GIMP"
+  "$(opts --profile custom --kernel linux,mainstream-performance,mainstream --proton cachyos,mainstream,ge "${apps[@]}")" \
+  "custom||mainstream-performance mainstream linux|mainstream ge cachyos|steam org.gimp.GIMP"
 chk "repeated values once" "$(opts --profile custom --kernel linux,linux --proton ge,ge "${apps[@]}")" \
   "custom||linux|ge|steam org.gimp.GIMP"
 chk "proton none" "$(opts --profile custom --proton none "${apps[@]}")" \
-  "custom||linux-mainstream||steam org.gimp.GIMP"
+  "custom||mainstream||steam org.gimp.GIMP"
 TEST_CPU="$WORK/no-movbe"
 chk "performance becomes mainstream on an older CPU" \
-  "$(opts --profile custom --kernel linux-mainstream-performance,linux "${apps[@]}")" \
-  "custom||linux-mainstream linux|mainstream|steam org.gimp.GIMP"
+  "$(opts --profile custom --kernel mainstream-performance,linux "${apps[@]}")" \
+  "custom||mainstream linux|mainstream|steam org.gimp.GIMP"
 chk "refusal explained" "$(grep -c 'does not support x86-64-v3' "$WORK/err")" 1
 chk "performance and mainstream on an older CPU" \
-  "$(opts --profile custom --kernel linux-mainstream-performance,linux-mainstream "${apps[@]}")" \
-  "custom||linux-mainstream|mainstream|steam org.gimp.GIMP"
+  "$(opts --profile custom --kernel mainstream-performance,mainstream "${apps[@]}")" \
+  "custom||mainstream|mainstream|steam org.gimp.GIMP"
 TEST_CPU="$WORK/v3"
+
+chk "old kernel names are today's" \
+  "$(opts --profile custom --kernel linux,linux-mainstream-performance,linux-mainstream "${apps[@]}")" \
+  "custom||mainstream-performance mainstream linux|mainstream|steam org.gimp.GIMP"
+chk "an old name beside today's counts once" "$(opts --profile custom --kernel mainstream,linux-mainstream "${apps[@]}")" \
+  "custom||mainstream|mainstream|steam org.gimp.GIMP"
+opts --profile custom --kernel linux-mainstream-performance-eac "${apps[@]}" >/dev/null; chk "a kernel never offered stays unknown" $? 1
+opts --profile custom --kernel mainstream-system "${apps[@]}" >/dev/null; chk "another Mainstream package is no kernel" $? 1
+opts --profile custom --kernel ,linux "${apps[@]}" >/dev/null; chk "a leading empty kernel item refused" $? 1
 
 opts --profile default --kernel linux >/dev/null; chk "kernel needs custom" $? 1
 chk "kernel needs custom message" "$(cat "$WORK/err")" "--kernel requires --profile custom."
@@ -99,7 +108,7 @@ opts --profile custom --kernel bogus "${apps[@]}" >/dev/null; chk "unknown kerne
 chk "unknown kernel message" "$(grep -c "Unknown --kernel value bogus" "$WORK/err")" 1
 opts --profile custom --kernel none "${apps[@]}" >/dev/null; chk "kernel none refused" $? 1
 opts --profile custom --kernel '' "${apps[@]}" >/dev/null; chk "empty kernel refused" $? 1
-opts --profile custom --kernel linux,,linux-mainstream "${apps[@]}" >/dev/null; chk "empty kernel item refused" $? 1
+opts --profile custom --kernel linux,,mainstream "${apps[@]}" >/dev/null; chk "empty kernel item refused" $? 1
 opts --profile custom --app-source snap "${apps[@]}" >/dev/null; chk "unknown app source" $? 1
 opts --profile custom --proton steam "${apps[@]}" >/dev/null; chk "unknown proton" $? 1
 chk "unknown proton message" "$(grep -c "Unknown --proton value steam. Choose from mainstream,ge,cachyos, or none." "$WORK/err")" 1
@@ -110,26 +119,26 @@ chk "other profiles leave the choices unset" \
   "$(MS_INSTALL_KERNELS=linux MS_INSTALL_PROTONS=ge opts --profile default)" "default|unset|unset|unset|"
 chk "environment never sets the choices" \
   "$(MS_INSTALL_KERNELS=linux MS_INSTALL_PROTONS=ge opts --profile custom "${apps[@]}")" \
-  "custom||linux-mainstream|mainstream|steam org.gimp.GIMP"
+  "custom||mainstream|mainstream|steam org.gimp.GIMP"
 
 # The choosers with a terminal.
 chk "typed kernels" "$(typed $'\n1 2 3\n\n' --profile custom)" \
-  "custom|native|linux-mainstream-performance linux-mainstream linux|mainstream|mpv gimp"
-chk "kernel default" "$(typed $'\n\n\n' --profile custom)" "custom|native|linux-mainstream|mainstream|mpv gimp"
+  "custom|native|mainstream-performance mainstream linux|mainstream|mpv gimp"
+chk "kernel default" "$(typed $'\n\n\n' --profile custom)" "custom|native|mainstream|mainstream|mpv gimp"
 chk "bad kernel number asks again" "$(typed $'\n4\n3\n\n' --profile custom)" "custom|native|linux|mainstream|mpv gimp"
 TEST_CPU="$WORK/no-movbe"
 chk "typed performance on an older CPU" "$(typed $'\n2\n\n' --profile custom)" \
-  "custom|native|linux-mainstream|mainstream|mpv gimp"
+  "custom|native|mainstream|mainstream|mpv gimp"
 TEST_CPU="$WORK/v3"
 # The picker numbers the 2 default apps first; find the Proton items' numbers.
 picker=$( (setup_env; install_app_catalog) | awk -F'\t' '!seen[$1]++ {print NR - 0 "\t" $1}')
 num() { awk -F'\t' -v id="$1" '$2 == id {print $1}' <<<"$picker"; }
 chk "picker toggles protons" "$(typed $'\n\n'"$(num proton:mainstream) $(num proton:cachyos) $(num proton:ge)"$'\n\n' --profile custom)" \
-  "custom|native|linux-mainstream|ge cachyos|mpv gimp"
+  "custom|native|mainstream|ge cachyos|mpv gimp"
 chk "picker can drop every proton" "$(typed $'\n\n'"$(num proton:mainstream)"$'\n\n' --profile custom)" \
-  "custom|native|linux-mainstream||mpv gimp"
+  "custom|native|mainstream||mpv gimp"
 chk "--proton preselects the picker" "$(typed $'\n\n'"$(num steam)"$'\n\n' --profile custom --proton ge,cachyos)" \
-  "custom|native|linux-mainstream|ge cachyos|mpv gimp steam"
+  "custom|native|mainstream|ge cachyos|mpv gimp steam"
 
 # The swap, with and without the pairs file. A scripted run without
 # --app-source keeps its --apps as listed even when pairs exist.
@@ -143,13 +152,13 @@ gimp|org.gimp.GIMP   # trailing comment
 krita|org.kde.krita
 LIST
 chk "flatpak swaps native apps" "$(opts --profile custom --app-source flatpak --apps chromium,steam,org.gimp.GIMP)" \
-  "custom|flatpak|linux-mainstream|mainstream|org.chromium.Chromium steam org.gimp.GIMP"
+  "custom|flatpak|mainstream|mainstream|org.chromium.Chromium steam org.gimp.GIMP"
 chk "native swaps flatpak apps" "$(opts --profile custom --app-source native "${apps[@]}")" \
-  "custom|native|linux-mainstream|mainstream|steam gimp"
+  "custom|native|mainstream|mainstream|steam gimp"
 chk "a swap never lists an app twice" "$(opts --profile custom --app-source native --apps gimp,org.gimp.GIMP)" \
-  "custom|native|linux-mainstream|mainstream|gimp"
+  "custom|native|mainstream|mainstream|gimp"
 chk "no --app-source keeps --apps as listed" "$(opts --profile custom --apps chromium,org.gimp.GIMP)" \
-  "custom||linux-mainstream|mainstream|chromium org.gimp.GIMP"
+  "custom||mainstream|mainstream|chromium org.gimp.GIMP"
 swapped() {
   ( setup_env; source "$ROOT/sdata/subcmd-install/options.sh" "$@" || exit $?; printf '%s' "${MS_SWAPPED_FLATPAKS[*]-}" ) </dev/null 2>"$WORK/err"
 }
@@ -161,7 +170,8 @@ chk "native source swaps in no Flatpak" "$(swapped --profile custom --app-source
 # a stand-in pacman. Prints the kernels it added, then the boot default it picked.
 kernel_step() {
   (
-    eval "$(sed -n '/^function setup_mainstream_kernel(){/,/^}/p' "$ROOT/sdata/subcmd-install/2.setups.sh")"
+    source "$ROOT/sdata/subcmd-install/profiles.sh"
+    eval "$(sed -n '/^function setup_mainstream_kernel(){/,/^}/p; /^function _installed_kernel_package(){/,/^}/p' "$ROOT/sdata/subcmd-install/2.setups.sh")"
     OS_GROUP_ID=arch INSTALL_FIRSTRUN=true MAINSTREAM_KERNEL_CHOICES=$2 MAINSTREAM_KERNEL="" STY_BLUE="" STY_YELLOW="" STY_RST=""
     INSTALLED=" $1 "
     pacman() { [[ $1 == -Qq && $INSTALLED == *" $2 "* ]] && echo "$2"; }
@@ -172,13 +182,42 @@ kernel_step() {
     printf '%s|%s' "$(grep -o '+[^ ]*' "$WORK/kernel-step" | tr '\n' ' ')" "$MAINSTREAM_KERNEL"
   )
 }
-chk "Arch's kernel: Mainstream is added beside it" "$(kernel_step linux linux-mainstream)" "+linux-mainstream |linux-mainstream"
-chk "Mainstream only: the installed kernel stays the default" "$(kernel_step linux-mainstream linux-mainstream)" "|linux-mainstream"
+chk "Arch's kernel: Mainstream is added beside it" "$(kernel_step linux mainstream)" "+mainstream |mainstream"
+chk "Mainstream only: the installed kernel stays the default" "$(kernel_step mainstream mainstream)" "|mainstream"
 chk "Mainstream only: performance is added beside it" \
-  "$(kernel_step linux-mainstream "linux-mainstream-performance linux-mainstream")" \
-  "+linux-mainstream-performance |linux-mainstream-performance"
-chk "another kernel only: nothing is added" "$(kernel_step linux-zen linux-mainstream)" "|"
-chk "linux-t2 only: nothing is added" "$(kernel_step linux-t2 linux-mainstream)" "|"
+  "$(kernel_step mainstream "mainstream-performance mainstream")" \
+  "+mainstream-performance |mainstream-performance"
+chk "another kernel only: nothing is added" "$(kernel_step linux-zen mainstream)" "|"
+chk "linux-t2 only: nothing is added" "$(kernel_step linux-t2 mainstream)" "|"
+chk "old name installed: it stays the default under that name" "$(kernel_step linux-mainstream mainstream)" "|linux-mainstream"
+chk "old name installed: performance is added beside it" \
+  "$(kernel_step "linux linux-mainstream" "mainstream-performance mainstream")" "+mainstream-performance |mainstream-performance"
+chk "old performance name installed: it is the default" \
+  "$(kernel_step "linux linux-mainstream-performance" "mainstream-performance mainstream")" "+mainstream |linux-mainstream-performance"
+
+# _add_mainstream_kernel against the repositories in $1; prints what pacman was asked to install.
+add_step() {
+  (
+    source "$ROOT/sdata/subcmd-install/profiles.sh"
+    eval "$(sed -n '/^function _add_mainstream_kernel(){/,/^}/p' "$ROOT/sdata/subcmd-install/2.setups.sh")"
+    STY_BLUE="" STY_YELLOW="" STY_CYAN="" STY_RST="" MAINSTREAM_KERNEL_MIN_FREE_MIB=1 GPU_FAILURES=()
+    REPO=" $1 "
+    pacman() { [[ $1 == -Si && $REPO == *" $2 "* ]]; }
+    sudo() { shift; printf '%s ' "$@"; }
+    bootctl() { echo /; }
+    df() { printf 'x\nx 1 1 999\n'; }
+    gpu_detect() { return 1; }
+    gpu_kernel_nvidia_ready() { true; }
+    _add_mainstream_kernel "$2" 2>/dev/null | grep -o -- '-S --needed --noconfirm.*' | sed 's/ *$//'
+  )
+}
+chk "today's name is added when the repositories carry it" \
+  "$(add_step "mainstream mainstream-headers linux-mainstream linux-mainstream-headers" mainstream)" \
+  "-S --needed --noconfirm mainstream mainstream-headers"
+chk "the old name is added while the repositories carry only that" \
+  "$(add_step "linux-mainstream linux-mainstream-headers" mainstream)" \
+  "-S --needed --noconfirm linux-mainstream linux-mainstream-headers"
+chk "nothing is added when neither is offered with its headers" "$(add_step "mainstream linux-mainstream" mainstream)" ""
 
 echo "install-choices: $((CASES - FAILS))/$CASES passed"
 (( FAILS == 0 ))

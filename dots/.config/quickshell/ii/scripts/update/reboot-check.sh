@@ -19,8 +19,9 @@ mode="${1:-}"; shift || true
 me="$(id -un)"
 
 # Removing a running kernel's modules or changing a driver's userspace API leaves
-# the machine half working until it restarts.
-always_re='^(linux(-(lts|zen|hardened|rt|rt-lts|cachyos[a-z-]*|mainstream[a-z-]*))?|linux-firmware.*|amd-ucode|intel-ucode|glibc|nvidia|nvidia-open|nvidia-lts|nvidia-.*-dkms|nvidia-open-dkms|nvidia-utils|lib32-nvidia-utils|nvidia-settings|.*-dkms)$'
+# the machine half working until it restarts. Mainstream's kernels are listed by
+# name: mainstream-* would also take every other Mainstream package.
+always_re='^(linux(-(lts|zen|hardened|rt|rt-lts|cachyos[a-z-]*|mainstream[a-z-]*))?|mainstream|mainstream-performance|mainstream-performance-eac|linux-firmware.*|amd-ucode|intel-ucode|glibc|nvidia|nvidia-open|nvidia-lts|nvidia-.*-dkms|nvidia-open-dkms|nvidia-utils|lib32-nvidia-utils|nvidia-settings|.*-dkms)$'
 
 # One scan of the session's processes. Prints
 # "live <path>" and "gone <path>": a mapping whose file has been replaced

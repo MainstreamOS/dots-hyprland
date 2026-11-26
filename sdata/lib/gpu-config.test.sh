@@ -947,10 +947,10 @@ FIX_OPEN_DKMS=no
 NKDIR="$(mktemp -d)"
 nk() { mkdir -p "$NKDIR/$1"; : > "$NKDIR/$1/vmlinuz"; echo "$2" > "$NKDIR/$1/pkgbase"; }
 _gpu_module_dirs() { printf '%s\n' "$NKDIR"/*/; }
-nk 7.3.6-1-mainstream linux-mainstream
+nk 7.3.6-1-mainstream mainstream
 classify turing "";     chk_str cls-mainstream-only "${NVIDIA_REPO_PKGS[0]}" nvidia-open-dkms
 chk cls-mainstream-only-family NVIDIA_DRIVER_FAMILY nvidia-open
-nk 7.3.6-1-mainstream-performance linux-mainstream-performance
+nk 7.3.6-1-mainstream-performance mainstream-performance
 classify turing "";     chk_str cls-mainstream-both "${NVIDIA_REPO_PKGS[0]}" nvidia-open-dkms
 classify maxwell "";    chk_str cls-mainstream-maxwell "${NVIDIA_LOCAL_PKGS[0]}" nvidia-580xx-dkms
 nk 7.3.6-arch1-1 linux

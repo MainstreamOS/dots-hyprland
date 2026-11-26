@@ -823,7 +823,8 @@ hand_over_esp_id() {
 retire_old_esp() {
     local mp="$1" old="$2" dev="$3" guid="$4"
     local old_dev o f name mid foreign=0 left="" entries num="" tries
-    local -a ours=(-iname 'mainstream_*.efi')
+    # A kernel whose name starts with the prefix keeps its name alone (mainstream.efi).
+    local -a ours=(-iname 'mainstream_*.efi' -o -iname 'mainstream.efi' -o -iname 'mainstream-*.efi')
     emit_progress "retire" 96 "Retiring the old EFI partition..."
     old_dev="$(blkid -t "PARTUUID=$old" -o device 2>/dev/null || true)"
     if [[ ! -b "$old_dev" || "$old_dev" == "$dev" ]] || ! is_esp_partition "$old_dev" \
@@ -859,9 +860,10 @@ retire_old_esp() {
         [[ -e "$f" ]] || continue
         name="${f##*/}"
         name="${name,,}"
-        if [[ "$name" != mainstream_*.efi && ( -z "$mid" || "$name" != "$mid"_*.efi ) ]]; then
-            foreign=1
-        fi
+        case "$name" in
+            mainstream_*.efi|mainstream.efi|mainstream-*.efi) ;;
+            *) [[ -n "$mid" && "$name" == "$mid"_*.efi ]] || foreign=1 ;;
+        esac
     done
     if (( foreign )); then
         log_note "Another system keeps boot images on the old EFI partition ${old_dev}, so Mainstream's loader there was left in place."
@@ -918,7 +920,8 @@ retire_old_esp() {
 mirror_old_esp() {
     local mp old guid uuid loader boot_id misses dev old_dev o mid problem=""
     local -a ours=(--include='/EFI/' --include='/EFI/limine/' --include='/EFI/limine/**'
-        --include='/EFI/Linux/' --include='/EFI/Linux/mainstream_*.efi')
+        --include='/EFI/Linux/' --include='/EFI/Linux/mainstream_*.efi'
+        --include='/EFI/Linux/mainstream.efi' --include='/EFI/Linux/mainstream-*.efi')
     read_retire_state || return 0
     exec 8>>"$RESIZE_LOCK" && flock -s -n 8 || return 0
     dev="$(blkid -t "PARTUUID=$guid" -o device 2>/dev/null || true)"

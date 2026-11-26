@@ -34,6 +34,9 @@ Singleton {
     // Whether the helper installs and removes the standard kernel too. Older
     // ones refuse it.
     property bool canChangeStandard: false
+    // Whether the helper knows Mainstream's kernels by their package names today.
+    // Older ones know only the names the packages had before.
+    property bool canUseNewNames: false
     property bool uefi: false
     // -1 while not known. Only root can read most EFI partitions, so the size
     // of the boot image is often not known here and the helper checks it.
@@ -51,6 +54,7 @@ Singleton {
 
     readonly property var unknownKernel: ({
         name: "",
+        package: "",
         installed: false,
         version: "",
         running: false,
@@ -77,9 +81,9 @@ Singleton {
         switch (name) {
         case "linux":
             return Translation.tr("Standard");
-        case "linux-mainstream":
+        case "mainstream":
             return Translation.tr("Mainstream");
-        case "linux-mainstream-performance":
+        case "mainstream-performance":
             return Translation.tr("Mainstream Performance");
         default:
             return name;
@@ -228,6 +232,9 @@ Singleton {
                 continue;
             kernels.push({
                 name: k.name,
+                // The package the kernel is installed or offered as, which can still
+                // carry its old name.
+                package: typeof k.package === "string" && k.package.length > 0 ? k.package : k.name,
                 installed: k.installed === true,
                 version: typeof k.version === "string" ? k.version : "",
                 running: k.running === true,
@@ -241,6 +248,7 @@ Singleton {
         root.unsupportedReason = typeof s.unsupportedReason === "string" ? s.unsupportedReason : "";
         root.helper = s.helper === true;
         root.canChangeStandard = s.canChangeStandard === true;
+        root.canUseNewNames = s.canUseNewNames === true;
         root.uefi = s.uefi === true;
         root.espFreeBytes = root.bytesOrUnknown(s.espFreeBytes);
         root.standardImageBytes = root.bytesOrUnknown(s.standardImageBytes);
@@ -263,7 +271,7 @@ Singleton {
         root.busyKernel = kernel;
         helperProc.action = action;
         helperProc.kernel = kernel;
-        helperProc.command = ["pkexec", root.helperPath, action, kernel];
+        helperProc.command = ["pkexec", root.helperPath, action, root.info(kernel).package || kernel];
         helperProc.running = true;
     }
 

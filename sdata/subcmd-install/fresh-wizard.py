@@ -23,12 +23,12 @@ APP_SOURCES = [
     ('flatpak', 'Flatpak · For apps that have one'),
 ]
 KERNELS = [
-    ('linux-mainstream', 'Mainstream kernel · Recommended'),
-    ('linux-mainstream-performance', 'Mainstream performance kernel · Needs a CPU from about 2015 or newer'),
+    ('mainstream', 'Mainstream kernel · Recommended'),
+    ('mainstream-performance', 'Mainstream performance kernel · Needs a CPU from about 2015 or newer'),
     ('linux', "Arch's linux kernel"),
 ]
 # The order ./setup prefers them in, which the flags keep.
-KERNEL_ORDER = ['linux-mainstream-performance', 'linux-mainstream', 'linux']
+KERNEL_ORDER = ['mainstream-performance', 'mainstream', 'linux']
 PROTON_ORDER = ['mainstream', 'ge', 'cachyos']
 DISK_MODES = [
     ('alongside', 'Install alongside · Use existing unallocated space'),
@@ -52,7 +52,7 @@ def cpu_runs_x86_64_v3(cpuinfo='/proc/cpuinfo'):
 def install_options(state, selected):
     options = ['--profile', state['profile']]
     if state['profile'] == 'custom':
-        kernels = [kernel for kernel in KERNEL_ORDER if kernel in state['kernels']] or ['linux-mainstream']
+        kernels = [kernel for kernel in KERNEL_ORDER if kernel in state['kernels']] or ['mainstream']
         # Catalog items named with ':' are choices, never packages.
         protons = [proton for proton in PROTON_ORDER if f'proton:{proton}' in selected]
         options += ['--app-source', state['app_source'], '--kernel', ','.join(kernels),
@@ -224,14 +224,14 @@ def collect(screen, groups, selected):
                 state[key] = ui.choose('App source', 'Choose whether apps install as native packages or as Flatpaks.',
                                        APP_SOURCES, state.get(key))
             elif key == 'kernels':
-                kernels = state.setdefault(key, {'linux-mainstream'})
+                kernels = state.setdefault(key, {'mainstream'})
                 details = 'Choose one or more kernels to install.'
                 while True:
                     ui.choose('Kernel', details, KERNELS, checked=kernels)
-                    if 'linux-mainstream-performance' not in kernels or cpu_runs_x86_64_v3():
+                    if 'mainstream-performance' not in kernels or cpu_runs_x86_64_v3():
                         break
-                    kernels.discard('linux-mainstream-performance')
-                    kernels.add('linux-mainstream')
+                    kernels.discard('mainstream-performance')
+                    kernels.add('mainstream')
                     details = ('This CPU does not support x86-64-v3, which the performance kernel needs, '
                                'so the Mainstream kernel is checked instead.')
             elif key in apps:
@@ -262,7 +262,7 @@ def collect(screen, groups, selected):
                 if custom:
                     summary += f' · {dict(APP_SOURCES)[state["app_source"]].split(" · ")[0]}'
                     names = [dict(KERNELS)[kernel].split(' · ')[0] for kernel, _ in KERNELS if kernel in state['kernels']]
-                    summary += f' · {", ".join(names) or dict(KERNELS)["linux-mainstream"].split(" · ")[0]}'
+                    summary += f' · {", ".join(names) or dict(KERNELS)["mainstream"].split(" · ")[0]}'
                 if apps:
                     count = sum(':' not in app for app in selected)
                     summary += f' · {count} {"app" if count == 1 else "apps"} selected'

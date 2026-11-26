@@ -30,8 +30,8 @@ Options for install:
       --profile <profile>   Choose default, custom, gaming or os-only
       --apps <IDs>          Set the Custom app selection (comma-separated)
       --app-source <src>    Custom installs: native or flatpak versions of apps
-      --kernel <kernels>    Custom installs: any of linux, linux-mainstream and
-                            linux-mainstream-performance (comma-separated)
+      --kernel <kernels>    Custom installs: any of linux, mainstream and
+                            mainstream-performance (comma-separated)
       --proton <protons>    Custom installs: any of mainstream, ge and cachyos
                             (comma-separated), or none
       --list-apps           List app IDs for Custom installs

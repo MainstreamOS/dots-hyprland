@@ -33,16 +33,16 @@ class CpuLevelTest(unittest.TestCase):
 
 class OptionsTest(unittest.TestCase):
     def test_custom_writes_every_choice(self):
-        state = {'profile': 'custom', 'app_source': 'flatpak', 'kernels': {'linux', 'linux-mainstream-performance'}}
+        state = {'profile': 'custom', 'app_source': 'flatpak', 'kernels': {'linux', 'mainstream-performance'}}
         self.assertEqual(wizard.install_options(state, {'vlc', 'steam', 'proton:cachyos', 'proton:ge'}),
                          ['--profile', 'custom', '--app-source', 'flatpak',
-                          '--kernel', 'linux-mainstream-performance,linux',
+                          '--kernel', 'mainstream-performance,linux',
                           '--proton', 'ge,cachyos', '--apps', 'steam,vlc'])
 
     def test_no_proton_and_no_kernel(self):
         state = {'profile': 'custom', 'app_source': 'native', 'kernels': set()}
         self.assertEqual(wizard.install_options(state, {'vlc'}),
-                         ['--profile', 'custom', '--app-source', 'native', '--kernel', 'linux-mainstream',
+                         ['--profile', 'custom', '--app-source', 'native', '--kernel', 'mainstream',
                           '--proton', 'none', '--apps', 'vlc'])
 
     def test_other_profiles_write_no_custom_choices(self):
@@ -51,7 +51,7 @@ class OptionsTest(unittest.TestCase):
 
     def test_defaults(self):
         self.assertEqual(wizard.APP_SOURCES[0][0], 'native')
-        self.assertEqual(wizard.KERNELS[0][0], 'linux-mainstream')
+        self.assertEqual(wizard.KERNELS[0][0], 'mainstream')
         self.assertEqual(set(wizard.KERNEL_ORDER), {kernel for kernel, _ in wizard.KERNELS})
 
 

@@ -34,7 +34,10 @@ run() {
   if grep -q '^-Rns' "$WORK/calls"; then printf '%s removed' "$rc"; else printf '%s kept' "$rc"; fi
 }
 
-for pkg in linux linux-headers linux-mainstream linux-mainstream-headers \
+for pkg in linux linux-headers mainstream mainstream-headers \
+           mainstream-performance mainstream-performance-headers \
+           mainstream-performance-eac mainstream-performance-eac-headers \
+           linux-mainstream linux-mainstream-headers \
            linux-mainstream-performance linux-mainstream-performance-headers \
            nvidia-open nvidia-open-dkms dkms nvidia-utils; do
   chk "remove $pkg"  "$(run remove "$pkg")" "22 kept"
@@ -43,8 +46,8 @@ for pkg in linux linux-headers linux-mainstream linux-mainstream-headers \
 done
 
 # An app whose removal would take a kernel or the DKMS driver with it is refused too.
-chk "cascade takes the Mainstream headers" "$(CASCADE="some-app linux-mainstream-headers" run remove some-app)" "22 kept"
-chk "cascade names what it would take" "$(grep -c 'removal would affect protected packages: linux-mainstream-headers' "$WORK/out")" 1
+chk "cascade takes the Mainstream headers" "$(CASCADE="some-app mainstream-headers" run remove some-app)" "22 kept"
+chk "cascade names what it would take" "$(grep -c 'removal would affect protected packages: mainstream-headers' "$WORK/out")" 1
 chk "cascade takes the DKMS driver" "$(CASCADE="some-app nvidia-open-dkms dkms" run remove some-app)" "22 kept"
 
 # An ordinary app is removed.

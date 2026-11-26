@@ -19,11 +19,32 @@ PROC_CPUINFO="${PROC_CPUINFO:-/proc/cpuinfo}"
 ESP_CANDIDATES="${ESP_CANDIDATES:-/boot/efi /efi /boot /limine}"
 
 STANDARD_KERNEL=linux
-PERFORMANCE_KERNEL=linux-mainstream-performance
-KERNELS=("$STANDARD_KERNEL" linux-mainstream "$PERFORMANCE_KERNEL")
+PERFORMANCE_KERNEL=mainstream-performance
+KERNELS=("$STANDARD_KERNEL" mainstream "$PERFORMANCE_KERNEL")
+# Mainstream's kernels under the package names they had before. A system keeps the
+# old packages until an update swaps them, and each kernel is reported under its
+# name today with the package it is installed or offered as.
+declare -A OLD_NAMES=(
+    [mainstream]=linux-mainstream
+    [mainstream-performance]=linux-mainstream-performance
+    [mainstream-performance-eac]=linux-mainstream-performance-eac
+)
+
+# A kernel's name today, whichever of its names $1 is.
+kernel_name() {
+    local name
+    for name in "${!OLD_NAMES[@]}"; do
+        if [[ $1 == "${OLD_NAMES[$name]}" ]]; then
+            printf '%s' "$name"
+            return 0
+        fi
+    done
+    printf '%s' "$1"
+}
 
 helper=false
 can_change_standard=false
+can_use_new_names=false
 uefi=false
 unsupported_reason=""
 esp_free=null
@@ -40,6 +61,8 @@ if [[ $helper == true ]]; then
     rc=0
     grep -qF -- 'the standard kernel stays installed as the fallback' "$KERNELS_HELPER" 2>/dev/null || rc=$?
     (( rc == 1 )) && can_change_standard=true
+    # Older helpers know Mainstream's kernels by their old package names alone.
+    grep -qF -- 'RENAMED_KERNELS=(' "$KERNELS_HELPER" 2>/dev/null && can_use_new_names=true
 fi
 
 root_fstype=""
@@ -74,6 +97,7 @@ fi
 
 # The package of every kernel this system can start, and of the one running.
 installed_bases=()
+installed_names=()
 with_nvidia=()
 for dir in "$MODULES_DIR"/*/; do
     [[ -f "${dir}vmlinuz" && -r "${dir}pkgbase" ]] || continue
@@ -81,6 +105,7 @@ for dir in "$MODULES_DIR"/*/; do
     IFS= read -r base <"${dir}pkgbase" || true
     [[ -n $base ]] || continue
     installed_bases+=("$base")
+    installed_names+=("$(kernel_name "$base")")
     for module in "${dir}"updates/dkms/nvidia.ko* "${dir}"extramodules/nvidia.ko* \
                   "${dir}"kernel/drivers/video/nvidia.ko*; do
         if [[ -f $module ]]; then
@@ -99,11 +124,13 @@ fi
 # kernel, and the release still ends in the package's name.
 if [[ -z $running ]]; then
     case $release in
+        *-mainstream-performance-eac) running=mainstream-performance-eac ;;
         *-mainstream-performance) running=$PERFORMANCE_KERNEL ;;
-        *-mainstream) running=linux-mainstream ;;
+        *-mainstream) running=mainstream ;;
         *-arch[0-9]*) running=$STANDARD_KERNEL ;;
     esac
 fi
+running=$(kernel_name "$running")
 
 in_list() {  # $1 = word, $2... = the words it may be
     local word=$1 w
@@ -119,8 +146,8 @@ in_list() {  # $1 = word, $2... = the words it may be
 if [[ $uefi == true && -f $LAST_ENTRY_VAR && -r $LAST_ENTRY_VAR ]]; then
     entry=$(tail -c +5 -- "$LAST_ENTRY_VAR" 2>/dev/null | tr -d '\0') || entry=""
     if [[ $entry == ?*/?* && $entry != */Snapshots/* ]] \
-            && in_list "${entry##*/}" "${KERNELS[@]}" "${installed_bases[@]}"; then
-        next_kernel=${entry##*/}
+            && in_list "$(kernel_name "${entry##*/}")" "${KERNELS[@]}" "${installed_names[@]}"; then
+        next_kernel=$(kernel_name "${entry##*/}")
         can_choose_next=true
     fi
 fi
@@ -189,6 +216,7 @@ if command -v pacman >/dev/null 2>&1; then
     queried=()
     for kernel in "${KERNELS[@]}"; do
         queried+=("$kernel" "$kernel-headers")
+        [[ -n ${OLD_NAMES[$kernel]:-} ]] && queried+=("${OLD_NAMES[$kernel]}" "${OLD_NAMES[$kernel]}-headers")
     done
     while IFS= read -r name; do
         [[ -n $name ]] && on_offer[$name]=1
@@ -197,26 +225,39 @@ fi
 
 kernels_json="[]"
 for kernel in "${KERNELS[@]}"; do
+    names=("$kernel")
+    [[ -n ${OLD_NAMES[$kernel]:-} ]] && names+=("${OLD_NAMES[$kernel]}")
     installed=false
     version=""
+    package=""
     if command -v pacman >/dev/null 2>&1; then
-        read -r q_name q_version < <(pacman -Q -- "$kernel" 2>/dev/null) || true
-        if [[ ${q_name:-} == "$kernel" ]] && in_list "$kernel" "${installed_bases[@]}"; then
-            installed=true
-            version=${q_version:-}
-        fi
-        q_name="" q_version=""
+        for name in "${names[@]}"; do
+            read -r q_name q_version < <(pacman -Q -- "$name" 2>/dev/null) || true
+            if [[ ${q_name:-} == "$name" ]] && in_list "$name" "${installed_bases[@]}"; then
+                installed=true
+                version=${q_version:-}
+                package=$name
+            fi
+            q_name="" q_version=""
+        done
     fi
 
-    # The helper installs a kernel with its headers, so both must be on offer.
+    # The helper installs a kernel with its headers, so both must be on offer, under a
+    # name the helper knows.
     available=false
     download=null
-    if [[ -n ${on_offer[$kernel]:-} && -n ${on_offer[$kernel-headers]:-} ]]; then
-        available=true
-        if [[ $installed == false ]]; then
-            total=$(download_bytes "$kernel")
-            [[ -n $total ]] && download=$total
+    for name in "${names[@]}"; do
+        [[ $name == "$kernel" && -n ${OLD_NAMES[$kernel]:-} && $helper == true && $can_use_new_names == false ]] && continue
+        if [[ -n ${on_offer[$name]:-} && -n ${on_offer[$name-headers]:-} ]]; then
+            available=true
+            [[ -n $package ]] || package=$name
+            break
         fi
+    done
+    [[ -n $package ]] || package=$kernel
+    if [[ $available == true && $installed == false ]]; then
+        total=$(download_bytes "$package")
+        [[ -n $total ]] && download=$total
     fi
 
     cpu_supported=true
@@ -228,12 +269,13 @@ for kernel in "${KERNELS[@]}"; do
     # A kernel with no NVIDIA module on a machine whose other kernels have one would
     # start without graphics.
     driver_missing=false
-    if [[ $installed == true && ${#with_nvidia[@]} -gt 0 ]] && ! in_list "$kernel" "${with_nvidia[@]}"; then
+    if [[ $installed == true && ${#with_nvidia[@]} -gt 0 ]] && ! in_list "$package" "${with_nvidia[@]}"; then
         driver_missing=true
     fi
 
     kernels_json=$(jq -c \
         --arg name "$kernel" \
+        --arg package "$package" \
         --argjson installed "$installed" \
         --arg version "$version" \
         --argjson running "$is_running" \
@@ -243,6 +285,7 @@ for kernel in "${KERNELS[@]}"; do
         --argjson driverMissing "$driver_missing" \
         '. + [{
             name: $name,
+            package: $package,
             installed: $installed,
             version: $version,
             running: $running,
@@ -256,6 +299,7 @@ done
 exec jq -nc \
     --argjson helper "$helper" \
     --argjson canChangeStandard "$can_change_standard" \
+    --argjson canUseNewNames "$can_use_new_names" \
     --arg unsupportedReason "$unsupported_reason" \
     --argjson uefi "$uefi" \
     --argjson espFreeBytes "$esp_free" \
@@ -266,6 +310,7 @@ exec jq -nc \
     '{
         helper: $helper,
         canChangeStandard: $canChangeStandard,
+        canUseNewNames: $canUseNewNames,
         unsupportedReason: $unsupportedReason,
         uefi: $uefi,
         espFreeBytes: $espFreeBytes,
@@ -274,4 +319,4 @@ exec jq -nc \
         canChooseNext: $canChooseNext,
         installedKernels: $ARGS.positional,
         kernels: $kernels
-    }' --args "${installed_bases[@]}"
+    }' --args "${installed_names[@]}"

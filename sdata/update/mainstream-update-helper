@@ -258,9 +258,10 @@ if [[ ",${root_mount%% *}," == *,ro,* ]]; then
     echo ">>> $(t "The system is mounted read-only, so nothing can be updated.")"
     if [[ "${root_mount#* }" == *"/.snapshots/"* || "${root_mount#* }" == *"@snapshots"* ]]; then
         # Boot entries are named for their kernel package; name the one the boot menu puts first.
+        # A snapshot from before the rename still carries linux-mainstream*, listed by the new name.
         kernel_entry=""
-        for _k in linux-mainstream-performance linux-mainstream linux; do
-            grep -qxF -- "$_k" /usr/lib/modules/*/pkgbase 2>/dev/null && { kernel_entry="$_k"; break; }
+        for _k in mainstream-performance mainstream linux; do
+            grep -qxF -e "$_k" -e "linux-$_k" /usr/lib/modules/*/pkgbase 2>/dev/null && { kernel_entry="$_k"; break; }
         done
         [[ -n "$kernel_entry" ]] || kernel_entry="$(cat /usr/lib/modules/*/pkgbase 2>/dev/null | head -n 1)"
         echo ">>> $(tf "It was started from a snapshot in the boot menu, which is always read-only. To get back to your normal system, reboot and in the boot menu choose the entry named \"%s\", the one sitting right underneath the Mainstream OS list. If you booted the snapshot to recover from a bad update, make it permanent first: Settings > Recovery > Restore Snapshot, then reboot into that \"%s\" entry and run the update again." "${kernel_entry:-linux}" "${kernel_entry:-linux}")"
@@ -579,6 +580,12 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
                     _adoptable=0
                     break
                 fi
+                # A kernel package never takes over a file an install wrote: one in its way is not ours.
+                case "$_pkg" in
+                    mainstream-headers|mainstream-performance|mainstream-performance-headers|mainstream-performance-eac|mainstream-performance-eac-headers)
+                        _adoptable=0
+                        break ;;
+                esac
                 _ow_args+=(--overwrite "$_path")
             done
             if [[ "$_adoptable" -eq 1 ]]; then

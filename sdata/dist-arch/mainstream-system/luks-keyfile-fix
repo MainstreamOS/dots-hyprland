@@ -183,7 +183,8 @@ uses_ukis() {
     PREFIX=$(limine_setting CUSTOM_UKI_NAME)
     [[ $PREFIX =~ ^[a-z0-9]+$ ]] || PREFIX=$(cat -- "$ROOT/etc/machine-id" 2>/dev/null)
     [[ -n $PREFIX ]] || return 1
-    compgen -G "$ESP/EFI/Linux/${PREFIX}_*.efi" >/dev/null
+    compgen -G "$ESP/EFI/Linux/${PREFIX}_*.efi" >/dev/null || [[ -f $ESP/EFI/Linux/$PREFIX.efi ]] \
+        || compgen -G "$ESP/EFI/Linux/$PREFIX-*.efi" >/dev/null
 }
 
 # The images limine-mkinitcpio produces, one per installed kernel and named
@@ -197,8 +198,14 @@ built_images() {
         read -r name <"$f" || [[ -n $name ]] || continue
         name=${name// /}
         [[ -n $name ]] || continue
-        echo "$ESP/EFI/Linux/${PREFIX}_$name.efi"
-        [[ $fallback == yes || $fallback == "$name" ]] && echo "$ESP/EFI/Linux/${PREFIX}_$name-fallback.efi"
+        # A kernel whose name starts with the prefix keeps its name alone (mainstream.efi).
+        if [[ $name == "$PREFIX"* ]]; then
+            echo "$ESP/EFI/Linux/$name.efi"
+            [[ $fallback == yes || $fallback == "$name" ]] && echo "$ESP/EFI/Linux/$name-fallback.efi"
+        else
+            echo "$ESP/EFI/Linux/${PREFIX}_$name.efi"
+            [[ $fallback == yes || $fallback == "$name" ]] && echo "$ESP/EFI/Linux/${PREFIX}_$name-fallback.efi"
+        fi
     done | sort -u
 }
 

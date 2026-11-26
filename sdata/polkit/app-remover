@@ -68,8 +68,13 @@ DENYLIST=(
     polkit hyprpolkitagent seatd
     bash zsh sudo systemd dbus
     linux linux-firmware linux-headers
+    mainstream mainstream-headers
+    mainstream-performance mainstream-performance-headers
+    mainstream-performance-eac mainstream-performance-eac-headers
+    # The same kernels under their old package names, until an update swaps them.
     linux-mainstream linux-mainstream-headers
     linux-mainstream-performance linux-mainstream-performance-headers
+    linux-mainstream-performance-eac linux-mainstream-performance-eac-headers
 )
 
 # App bundles: mainstream-* metas that represent one user-facing app

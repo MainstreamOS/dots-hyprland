@@ -63,7 +63,7 @@ hook_build() {
 }
 reset() {
     rm -rf "$K"; mkdir -p "$K"
-    INSTALLED=" "; REPO=" linux linux-headers linux-mainstream linux-mainstream-headers dkms nvidia-open nvidia-open-dkms nvidia-utils "
+    INSTALLED=" "; REPO=" linux linux-headers mainstream mainstream-headers dkms nvidia-open nvidia-open-dkms nvidia-utils "
     CALLS=(); OUT=""; RC=0; GPU_FAILURES=()
     NO_FETCH=""; NO_INSTALL=""; HOOK_SKIPS=" "; DKMS_FAIL=" "; PREBUILT_STALE=0; FAIL_COMBINED=0
     LEAVE_LOG=0; unlink "$TMP/dkms/620.73.04/build/make.log" 2>/dev/null; unlink "$GPU_LOG_DIR/nvidia-dkms-$STOCK.log" 2>/dev/null
@@ -176,12 +176,12 @@ MS=7.3.5-arch1-1-mainstream
 
 # ── the reads ───────────────────────────────────────────────────────────────
 reset
-kernel $STOCK linux module; kernel $MS linux-mainstream
+kernel $STOCK linux module; kernel $MS mainstream
 mkdir -p "$K/7.3.9-headers-only/build"; echo linux > "$K/7.3.9-headers-only/pkgbase"
 mkdir -p "$K/7.0.0-no-pkgbase"; : > "$K/7.0.0-no-pkgbase/vmlinuz"
 CASES=$((CASES + 2))
-chk_str kernels-list "$(gpu_installed_kernels)" "$STOCK linux"$'\n'"$MS linux-mainstream"
-chk_str kernels-missing "$(gpu_kernels_missing_nvidia)" "$MS linux-mainstream"
+chk_str kernels-list "$(gpu_installed_kernels)" "$STOCK linux"$'\n'"$MS mainstream"
+chk_str kernels-missing "$(gpu_kernels_missing_nvidia)" "$MS mainstream"
 
 # ── classification names the package that is installed ──────────────────────
 reset; NVIDIA_GEN=turing; CASES=$((CASES + 4))
@@ -205,18 +205,18 @@ kernel $STOCK linux module
 run_once
 chk_str stock-ok-rc "$RC" 0; chk_str stock-ok-calls "$(calls)" ""
 
-reset; INSTALLED=" linux linux-mainstream nvidia-open-dkms dkms "
-kernel $STOCK linux module headers; kernel $MS linux-mainstream module headers
+reset; INSTALLED=" linux mainstream nvidia-open-dkms dkms "
+kernel $STOCK linux module headers; kernel $MS mainstream module headers
 run_once
 chk_str dkms-ok-rc "$RC" 0; chk_str dkms-ok-calls "$(calls)" ""
 
 # ── stock plus a second kernel without a module ─────────────────────────────
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 HOOK_SKIPS=" $MS "
 run_once
 chk_str second-rc "$RC" 0
-chk_str second-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers linux-mainstream linux-mainstream-headers dkms|pacman -Sw --noconfirm nvidia-open-dkms|pacman -Rdd --noconfirm nvidia-open|pacman -S --noconfirm nvidia-open-dkms|dkms install -m nvidia -v 620.73.04 -k $MS"
+chk_str second-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers mainstream mainstream-headers dkms|pacman -Sw --noconfirm nvidia-open-dkms|pacman -Rdd --noconfirm nvidia-open|pacman -S --noconfirm nvidia-open-dkms|dkms install -m nvidia -v 620.73.04 -k $MS"
 chk_str second-swapped "$(in_set nvidia-open-dkms "$INSTALLED" && ! in_set nvidia-open "$INSTALLED" && echo yes)" yes
 has second-verified-stock "$OUT" "module present for kernel $STOCK."
 has second-verified-ms "$OUT" "module present for kernel $MS."
@@ -226,8 +226,8 @@ run_once
 chk_str second-again "$RC|$(calls)" "0|"
 
 # The hook built both: nobody has to ask DKMS.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 run_once
 chk_str second-hook-rc "$RC" 0
 lacks second-hook-no-ask "$(calls)" "dkms install"
@@ -237,11 +237,11 @@ CASES=$((CASES + 1))
 chk_str seam-sudo "$(GPU_SUDO=echo; source "$DIR/gpu-driver-install.sh"; _gpu_pacman -Sy; _gpu_dkms status)" "pacman -Sy"$'\n'"dkms status"
 
 # ── the DKMS package is already the driver ──────────────────────────────────
-reset; INSTALLED=" linux linux-headers linux-mainstream nvidia-open-dkms dkms nvidia-utils "
-kernel $STOCK linux module headers; kernel $MS linux-mainstream
+reset; INSTALLED=" linux linux-headers mainstream nvidia-open-dkms dkms nvidia-utils "
+kernel $STOCK linux module headers; kernel $MS mainstream
 run_once
 chk_str dkms-installed-rc "$RC" 0
-chk_str dkms-installed-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers linux-mainstream linux-mainstream-headers dkms|dkms install -m nvidia -v 620.73.04 -k $MS"
+chk_str dkms-installed-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers mainstream mainstream-headers dkms|dkms install -m nvidia -v 620.73.04 -k $MS"
 
 # Never back to the prebuilt driver, even when it is Arch's kernel that lacks
 # the module.
@@ -254,15 +254,15 @@ lacks dkms-stock-no-prebuilt "$(calls)" "nvidia-open"
 has dkms-stock-asked "$(calls)" "dkms install -m nvidia -v 620.73.04 -k $STOCK"
 
 # ── the DKMS package cannot be fetched ──────────────────────────────────────
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 NO_FETCH=nvidia-open-dkms
 run_once
 chk_str nofetch-rc "$RC" 1
 chk_str nofetch-last-call "${CALLS[-1]}" "pacman -Sw --noconfirm nvidia-open-dkms"
 chk_str nofetch-prebuilt-kept "$(in_set nvidia-open "$INSTALLED" && echo yes)" yes
 chk_str nofetch-stock-module "$(nvidia_module_present $STOCK && echo yes)" yes
-chk_str nofetch-headers-kept "$(in_set linux-mainstream-headers "$INSTALLED" && echo yes)" yes
+chk_str nofetch-headers-kept "$(in_set mainstream-headers "$INSTALLED" && echo yes)" yes
 has nofetch-said "${GPU_FAILURES[*]}" "not obtainable"
 has nofetch-names-kernel "${GPU_FAILURES[*]}" "kernel $MS still has no module"
 lacks nofetch-not-the-served-kernel "${GPU_FAILURES[*]}" "$STOCK "
@@ -270,8 +270,8 @@ has nofetch-what-to-do "${GPU_FAILURES[*]}" "gpu-drivers again"
 has nofetch-when "${GPU_FAILURES[*]}" "online"
 
 # The install fails after the removal: the prebuilt driver goes back.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 NO_INSTALL=nvidia-open-dkms
 run_once
 chk_str noinstall-rc "$RC" 1
@@ -280,8 +280,8 @@ chk_str noinstall-stock-module "$(nvidia_module_present $STOCK && echo yes)" yes
 chk_str noinstall-last-call "${CALLS[-1]}" "pacman -S --noconfirm nvidia-open"
 
 # dkms itself cannot be installed: nothing is removed.
-reset; INSTALLED=" linux linux-headers linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
-kernel $STOCK linux module headers; kernel $MS linux-mainstream headers
+reset; INSTALLED=" linux linux-headers mainstream mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module headers; kernel $MS mainstream headers
 REPO="${REPO/ dkms / }"
 run_once
 chk_str nodkms-rc "$RC" 1
@@ -290,8 +290,8 @@ chk_str nodkms-prebuilt-kept "$(in_set nvidia-open "$INSTALLED" && echo yes)" ye
 
 # ── headers neither installed nor obtainable ────────────────────────────────
 # linux-custom is a local build in no repository, with no headers anywhere.
-reset; INSTALLED=" linux linux-mainstream linux-custom nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream; kernel 7.3.5-custom linux-custom
+reset; INSTALLED=" linux mainstream linux-custom nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream; kernel 7.3.5-custom linux-custom
 run_once
 chk_str nohdr-rc "$RC" 1
 lacks nohdr-not-in-transaction "$(calls)" "linux-custom"
@@ -324,15 +324,15 @@ has nohdr-dkms-automatic "${GPU_FAILURES[*]}" "linux-custom-headers; the module 
 
 # The kernel that has the working prebuilt module cannot get headers: the swap
 # would take its module away, so it does not happen.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 REPO="${REPO/ linux-headers / }"
 run_once
 chk_str stockhdr-rc "$RC" 1
 lacks stockhdr-no-fetch "$(calls)" "-Sw"
 lacks stockhdr-no-removal "$(calls)" "-Rdd"
 chk_str stockhdr-stock-module "$(nvidia_module_present $STOCK && echo yes)" yes
-lacks stockhdr-kernel-alone "$(calls)" "noconfirm linux linux-mainstream"
+lacks stockhdr-kernel-alone "$(calls)" "noconfirm linux mainstream"
 
 # ── a kernel that is in no repository ───────────────────────────────────────
 # Its headers are obtainable: they are taken, the kernel is not.
@@ -352,12 +352,12 @@ chk_str norepo-installed-rc "$RC" 0
 chk_str norepo-installed-toolchain "${CALLS[0]}" "pacman -S --needed --noconfirm linux linux-headers dkms"
 
 # One kernel's headers failing does not cost the others theirs.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 FAIL_COMBINED=1
 run_once
 chk_str split-rc "$RC" 0
-chk_str split-calls "${CALLS[1]}|${CALLS[2]}|${CALLS[3]}" "pacman -S --needed --noconfirm linux linux-headers|pacman -S --needed --noconfirm linux-mainstream linux-mainstream-headers|pacman -S --needed --noconfirm dkms"
+chk_str split-calls "${CALLS[1]}|${CALLS[2]}|${CALLS[3]}" "pacman -S --needed --noconfirm linux linux-headers|pacman -S --needed --noconfirm mainstream mainstream-headers|pacman -S --needed --noconfirm dkms"
 
 # ── Arch's kernel alone, stranded by a kernel that moved ────────────────────
 reset; INSTALLED=" linux nvidia-open nvidia-utils "
@@ -388,19 +388,19 @@ chk_str strand-stale-rc "$RC" 0
 chk_str strand-stale-calls "$(calls)" "pacman -S --needed --noconfirm linux nvidia-open|pacman -S --needed --noconfirm linux linux-headers dkms|pacman -Sw --noconfirm nvidia-open-dkms|pacman -Rdd --noconfirm nvidia-open|pacman -S --noconfirm nvidia-open-dkms"
 chk_str strand-stale-module "$(nvidia_module_present $STOCK && echo yes)" yes
 # A second kernel is the only one missing: no refresh, the prebuilt build cannot help it.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 run_once
 lacks second-no-refresh "$(calls)" "pacman -Sy"
 
 # ── a swap that would leave a kernel worse off is undone ────────────────────
 # DKMS cannot build for Arch's kernel, which had the prebuilt module.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 DKMS_FAIL=" $STOCK "
 run_once
 chk_str rollback-rc "$RC" 1
-chk_str rollback-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers linux-mainstream linux-mainstream-headers dkms|pacman -Sw --noconfirm nvidia-open-dkms|pacman -Rdd --noconfirm nvidia-open|pacman -S --noconfirm nvidia-open-dkms|dkms install -m nvidia -v 620.73.04 -k $STOCK|pacman -Rdd --noconfirm nvidia-open-dkms|pacman -S --noconfirm nvidia-open"
+chk_str rollback-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers mainstream mainstream-headers dkms|pacman -Sw --noconfirm nvidia-open-dkms|pacman -Rdd --noconfirm nvidia-open|pacman -S --noconfirm nvidia-open-dkms|dkms install -m nvidia -v 620.73.04 -k $STOCK|pacman -Rdd --noconfirm nvidia-open-dkms|pacman -S --noconfirm nvidia-open"
 chk_str rollback-packages "$(in_set nvidia-open "$INSTALLED" && ! in_set nvidia-open-dkms "$INSTALLED" && echo yes)" yes
 chk_str rollback-stock-module "$(nvidia_module_present $STOCK && echo yes)" yes
 chk_str rollback-ms-none "$(nvidia_module_present $MS && echo yes || echo no)" no
@@ -410,8 +410,8 @@ chk_str rollback-one-report "${#GPU_FAILURES[@]}" 1
 lacks rollback-no-log-named "${GPU_FAILURES[*]}" "log"
 
 # The failed build's log is kept before the package that owns it goes.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 DKMS_FAIL=" $STOCK "; LEAVE_LOG=1
 run_once
 chk_str keptlog-rc "$RC" 1
@@ -426,8 +426,8 @@ run_once
 chk_str keptlog-overwritten "$(cat "$GPU_LOG_DIR/nvidia-dkms-$STOCK.log" 2>/dev/null)" "make: no rule for $STOCK"
 
 # The prebuilt driver cannot be put back either: said with the command to run.
-reset; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 DKMS_FAIL=" $STOCK "; NO_INSTALL=nvidia-open
 run_once
 chk_str rollback-fail-rc "$RC" 1
@@ -435,21 +435,21 @@ has rollback-fail-said "${GPU_FAILURES[*]}" "could not be put back, so kernel $S
 
 # A kernel that never had a module failing is no reason to undo a swap that
 # gave another kernel one.
-reset; INSTALLED=" linux linux-mainstream linux-mainstream-performance nvidia-open nvidia-utils "
-REPO+="linux-mainstream-performance linux-mainstream-performance-headers "
+reset; INSTALLED=" linux mainstream mainstream-performance nvidia-open nvidia-utils "
+REPO+="mainstream-performance mainstream-performance-headers "
 PERF=7.3.5-1-mainstream-performance
-kernel $STOCK linux module; kernel $MS linux-mainstream; kernel $PERF linux-mainstream-performance
+kernel $STOCK linux module; kernel $MS mainstream; kernel $PERF mainstream-performance
 DKMS_FAIL=" $PERF "
 run_once
 chk_str gained-rc "$RC" 1
 lacks gained-no-rollback "$(calls)" "-Rdd --noconfirm nvidia-open-dkms"
 chk_str gained-on-dkms "$(in_set nvidia-open-dkms "$INSTALLED" && echo yes)" yes
 chk_str gained-modules "$(nvidia_module_present $STOCK && nvidia_module_present $MS && echo yes)" yes
-has gained-named "${GPU_FAILURES[*]}" "no loadable module for kernel $PERF (linux-mainstream-performance)"
+has gained-named "${GPU_FAILURES[*]}" "no loadable module for kernel $PERF (mainstream-performance)"
 
 # A machine that was already on the DKMS driver is never moved back, whatever fails.
-reset; INSTALLED=" linux linux-headers linux-mainstream linux-mainstream-headers nvidia-open-dkms dkms nvidia-utils "
-kernel $STOCK linux headers; kernel $MS linux-mainstream module headers
+reset; INSTALLED=" linux linux-headers mainstream mainstream-headers nvidia-open-dkms dkms nvidia-utils "
+kernel $STOCK linux headers; kernel $MS mainstream module headers
 DKMS_FAIL=" $STOCK "
 run_once
 chk_str ondkms-rc "$RC" 1
@@ -459,11 +459,11 @@ chk_str ondkms-kept "$(in_set nvidia-open-dkms "$INSTALLED" && nvidia_module_pre
 
 # ── a frozen legacy branch with two kernels ─────────────────────────────────
 reset; NVIDIA_DRIVER_FAMILY=nvidia-580xx
-REPO+="nvidia-580xx-dkms "; INSTALLED=" linux linux-mainstream "
-kernel $STOCK linux; kernel $MS linux-mainstream
+REPO+="nvidia-580xx-dkms "; INSTALLED=" linux mainstream "
+kernel $STOCK linux; kernel $MS mainstream
 CASES=$((CASES + 1))
 gpu_nvidia_kernel_toolchain >/dev/null 2>&1
-chk_str legacy-toolchain "$(calls)" "pacman -S --needed --noconfirm linux linux-headers linux-mainstream linux-mainstream-headers dkms"
+chk_str legacy-toolchain "$(calls)" "pacman -S --needed --noconfirm linux linux-headers mainstream mainstream-headers dkms"
 # Before the branch is installed there is nothing to build.
 run_once
 chk_str legacy-absent "$RC|$(calls)" "0|"
@@ -471,18 +471,18 @@ HOOK_SKIPS=" $STOCK $MS "
 _gpu_pacman -S --needed --noconfirm nvidia-580xx-dkms
 run_once
 chk_str legacy-rc "$RC" 0
-chk_str legacy-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers linux-mainstream linux-mainstream-headers dkms|dkms install -m nvidia -v 620.73.04 -k $STOCK|dkms install -m nvidia -v 620.73.04 -k $MS"
+chk_str legacy-calls "$(calls)" "pacman -S --needed --noconfirm linux linux-headers mainstream mainstream-headers dkms|dkms install -m nvidia -v 620.73.04 -k $STOCK|dkms install -m nvidia -v 620.73.04 -k $MS"
 chk_str legacy-modules "$(nvidia_module_present $STOCK && nvidia_module_present $MS && echo yes)" yes
 lacks legacy-no-open "$(calls)" "nvidia-open"
 
 # A DKMS build that fails is said by kernel name.
 reset; NVIDIA_DRIVER_FAMILY=nvidia-open
-INSTALLED=" linux linux-headers linux-mainstream linux-mainstream-headers nvidia-open-dkms dkms "
-kernel $STOCK linux module headers; kernel $MS linux-mainstream headers
+INSTALLED=" linux linux-headers mainstream mainstream-headers nvidia-open-dkms dkms "
+kernel $STOCK linux module headers; kernel $MS mainstream headers
 _gpu_dkms() { CALLS+=("dkms $*"); [[ "$1" == status ]] && echo "nvidia/620.73.04: added"; [[ "$1" != install ]]; }
 run_once
 chk_str buildfail-rc "$RC" 1
-has buildfail-named "${GPU_FAILURES[*]}" "no loadable module for kernel $MS (linux-mainstream)"
+has buildfail-named "${GPU_FAILURES[*]}" "no loadable module for kernel $MS (mainstream)"
 
 # A frozen branch is a DKMS driver too: headers arriving build the module.
 reset; NVIDIA_DRIVER_FAMILY=nvidia-470xx
@@ -512,30 +512,30 @@ run_once
 chk_str nouveau-untouched "$RC|$(calls)" "0|"
 
 # The file is safe to call from a script running under set -e.
-reset; NVIDIA_DRIVER_FAMILY=nvidia-open; INSTALLED=" linux linux-mainstream nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream
+reset; NVIDIA_DRIVER_FAMILY=nvidia-open; INSTALLED=" linux mainstream nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream
 CASES=$((CASES + 1))
 chk_str errexit "$(set -euo pipefail; gpu_nvidia_ensure_modules >/dev/null 2>&1; echo done)" done
 
 # ── whether a kernel can be started without losing the driver ───────────────
 reset; CASES=$((CASES + 6))
-kernel $STOCK linux module; kernel $MS linux-mainstream
-chk_str ready-other-has-one "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" no
+kernel $STOCK linux module; kernel $MS mainstream
+chk_str ready-other-has-one "$(gpu_kernel_nvidia_ready mainstream && echo yes || echo no)" no
 chk_str ready-stock "$(gpu_kernel_nvidia_ready linux && echo yes || echo no)" yes
-chk_str ready-not-installed "$(gpu_kernel_nvidia_ready linux-mainstream-performance && echo yes || echo no)" no
+chk_str ready-not-installed "$(gpu_kernel_nvidia_ready mainstream-performance && echo yes || echo no)" no
 : > "$K/$MS/nvidia.ko"
-chk_str ready-both "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" yes
-reset; kernel $STOCK linux; kernel $MS linux-mainstream
-chk_str ready-none-has-one "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" yes
-reset; kernel $STOCK linux; kernel $MS linux-mainstream module
-chk_str ready-only-new-has-one "$(gpu_kernel_nvidia_ready linux-mainstream && echo yes || echo no)" yes
+chk_str ready-both "$(gpu_kernel_nvidia_ready mainstream && echo yes || echo no)" yes
+reset; kernel $STOCK linux; kernel $MS mainstream
+chk_str ready-none-has-one "$(gpu_kernel_nvidia_ready mainstream && echo yes || echo no)" yes
+reset; kernel $STOCK linux; kernel $MS mainstream module
+chk_str ready-only-new-has-one "$(gpu_kernel_nvidia_ready mainstream && echo yes || echo no)" yes
 
 # ── a kernel just added beside Arch's ───────────────────────────────────────
-added_once() { CASES=$((CASES + 1)); CALLS=(); GPU_FAILURES=(); gpu_nvidia_modules_for_added_kernel linux-mainstream > "$TMP/out" 2>&1; RC=$?; OUT="$(<"$TMP/out")"; }
+added_once() { CASES=$((CASES + 1)); CALLS=(); GPU_FAILURES=(); gpu_nvidia_modules_for_added_kernel mainstream > "$TMP/out" 2>&1; RC=$?; OUT="$(<"$TMP/out")"; }
 NVIDIA_DRIVER_FAMILY=nvidia-open
 # Two kernels, both get a module: the second through the DKMS swap.
-reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream headers
+reset; INSTALLED=" linux mainstream mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream headers
 added_once
 chk_str added-ok-rc "$RC" 0
 chk_str added-ok-both "$(gpu_kernels_missing_nvidia)" ""
@@ -543,16 +543,16 @@ chk_str added-ok-swapped "$(in_set nvidia-open-dkms "$INSTALLED" && echo yes)" y
 chk_str added-ok-no-notes "${#GPU_FAILURES[@]}" 0
 # Offline: the DKMS driver cannot be fetched, so the new kernel has none while
 # Arch's keeps its prebuilt one. The caller removes the kernel; no notes.
-reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream headers
+reset; INSTALLED=" linux mainstream mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream headers
 NO_FETCH=nvidia-open-dkms
 added_once
 chk_str added-offline-rc "$RC" 1
 chk_str added-offline-notes-dropped "${#GPU_FAILURES[@]}" 0
 chk_str added-offline-stock-kept "$(in_set nvidia-open "$INSTALLED" && [[ -e "$K/$STOCK/nvidia.ko" ]] && echo yes)" yes
 # The build fails for the new kernel: the prebuilt driver comes back for Arch's.
-reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
-kernel $STOCK linux module; kernel $MS linux-mainstream headers
+reset; INSTALLED=" linux mainstream mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux module; kernel $MS mainstream headers
 DKMS_FAIL=" $MS "
 added_once
 chk_str added-buildfail-rc "$RC" 1
@@ -560,8 +560,8 @@ chk_str added-buildfail-notes-dropped "${#GPU_FAILURES[@]}" 0
 chk_str added-buildfail-stock-kept "$([[ -e "$K/$STOCK/nvidia.ko" ]] && echo yes)" yes
 # The ladder's notes still reach note_failure when the kernel stays: here no
 # kernel ends up with a module, so starting the new one loses nothing.
-reset; INSTALLED=" linux linux-mainstream linux-mainstream-headers nvidia-open nvidia-utils "
-kernel $STOCK linux; kernel $MS linux-mainstream headers
+reset; INSTALLED=" linux mainstream mainstream-headers nvidia-open nvidia-utils "
+kernel $STOCK linux; kernel $MS mainstream headers
 PREBUILT_STALE=1; NO_FETCH=nvidia-open-dkms
 added_once
 chk_str added-none-rc "$RC" 0
@@ -584,8 +584,8 @@ legacy_reset() {  # legacy_reset <generation> [offered|missing|<package left out
     if [[ "${2:-offered}" != missing ]]; then
         for p in $SET580; do [[ "$p" == "${2:-}" ]] || REPO+="$p "; done
     fi
-    INSTALLED=" linux-mainstream linux-mainstream-headers dkms nvidia-open-dkms nvidia-utils "
-    kernel $MS linux-mainstream module headers
+    INSTALLED=" mainstream mainstream-headers dkms nvidia-open-dkms nvidia-utils "
+    kernel $MS mainstream module headers
     NVIDIA_GEN="$1"; gpu_classify_nvidia_driver
     unlink "${GPU_NVIDIA_PENDING:?}" 2>/dev/null
     unlink "${GPU_NVIDIA_OFFERED:?}" 2>/dev/null
@@ -598,15 +598,15 @@ none_in() { local p; for p in $1; do in_set "$p" "$INSTALLED" && return 1; done;
 pending() { [[ -e "$GPU_NVIDIA_PENDING" ]] && echo there || echo none; }
 PERF=7.3.5-1-mainstream-performance
 add_perf() {  # a second kernel beside the image's
-    REPO+="linux-mainstream-performance linux-mainstream-performance-headers "
-    INSTALLED+="linux-mainstream-performance "; kernel $PERF linux-mainstream-performance
+    REPO+="mainstream-performance mainstream-performance-headers "
+    INSTALLED+="mainstream-performance "; kernel $PERF mainstream-performance
 }
 
 # The set comes in place of the image's driver and builds for its kernel.
 legacy_reset maxwell
 legacy_once
 chk_str repo-580xx-rc "$RC" 0
-chk_str repo-580xx-calls "$(calls)" "pacman -Sw --noconfirm $SET580|pacman -Rdd --noconfirm nvidia-open-dkms nvidia-utils|pacman -S --needed --noconfirm linux-mainstream linux-mainstream-headers dkms|pacman -S --needed --noconfirm $SET580 egl-wayland"
+chk_str repo-580xx-calls "$(calls)" "pacman -Sw --noconfirm $SET580|pacman -Rdd --noconfirm nvidia-open-dkms nvidia-utils|pacman -S --needed --noconfirm mainstream mainstream-headers dkms|pacman -S --needed --noconfirm $SET580 egl-wayland"
 chk_str repo-580xx-installed "$(all_in "$SET580" && echo yes)" yes
 chk_str repo-580xx-mainline-gone "$(none_in "nvidia-open-dkms nvidia-utils" && echo yes)" yes
 chk_str repo-580xx-module "$(nvidia_module_present $MS && echo yes)" yes
@@ -682,7 +682,7 @@ has noinstall-legacy-said "${GPU_FAILURES[*]}" "nvidia-580xx could not be instal
 
 # The legacy edition: the branch is already the driver and stays in place.
 legacy_reset maxwell
-INSTALLED=" linux-mainstream linux-mainstream-headers dkms $SET580 "
+INSTALLED=" mainstream mainstream-headers dkms $SET580 "
 gpu_classify_nvidia_driver
 legacy_once
 chk_str edition-rc "$RC" 0
@@ -699,7 +699,7 @@ has setup-offline-nouveau "$(calls)" "pacman -S --needed --noconfirm xf86-video-
 has setup-offline-said "${GPU_FAILURES[*]}" "installs with the next system update once the computer is online"
 # Offline with the branch installed: it is kept and its modules seen to.
 legacy_reset maxwell missing
-INSTALLED=" linux-mainstream linux-mainstream-headers dkms $SET580 "
+INSTALLED=" mainstream mainstream-headers dkms $SET580 "
 gpu_classify_nvidia_driver
 setup_once
 chk_str setup-keep-rc "$RC" 0
@@ -767,7 +767,7 @@ update_once() {
 }
 said() { local IFS='|'; printf '%s' "${SAID[*]:-}"; }
 helper() { tr '\n' '|' < "$HELPER_LOG"; }
-FAKE_NEXT=linux-mainstream; FAKE_NEXT_FAILS=""
+FAKE_NEXT=mainstream; FAKE_NEXT_FAILS=""
 # No note: an older card that is on nouveau for another reason is left there.
 legacy_reset maxwell
 update_once
@@ -798,22 +798,22 @@ chk_str update-online-rc "$URC" 0
 # The kernel the computer starts gets no module while another does: the boot
 # menu starts that one from now on.
 legacy_reset maxwell; echo nvidia-580xx > "$GPU_NVIDIA_PENDING"; add_perf
-DKMS_FAIL=" $PERF "; FAKE_NEXT=linux-mainstream-performance
+DKMS_FAIL=" $PERF "; FAKE_NEXT=mainstream-performance
 update_once
-chk_str update-start-lacks-next "$(helper)" "next linux-mainstream|"
-has update-start-lacks-said "$(said)" "linux-mainstream-performance has no NVIDIA driver, so the computer starts linux-mainstream from now on"
+chk_str update-start-lacks-next "$(helper)" "next mainstream|"
+has update-start-lacks-said "$(said)" "mainstream-performance has no NVIDIA driver, so the computer starts mainstream from now on"
 chk_str update-start-lacks-installed "$(all_in "$SET580" && echo yes)|$(pending)|${_NVIDIA_REBUILD_PENDING:-unset}" "yes|none|1"
 chk_str update-start-lacks-rc "$URC" 0
 # The same, and the boot menu cannot be changed: said, and the update reports it.
 legacy_reset maxwell; echo nvidia-580xx > "$GPU_NVIDIA_PENDING"; add_perf
-DKMS_FAIL=" $PERF "; FAKE_NEXT=linux-mainstream-performance; FAKE_NEXT_FAILS=1
+DKMS_FAIL=" $PERF "; FAKE_NEXT=mainstream-performance; FAKE_NEXT_FAILS=1
 update_once
 has update-start-stuck-said "$(said)" "choose another one in the boot menu"
 chk_str update-start-stuck-rc "$URC" 1
 FAKE_NEXT_FAILS=""
 # The kernel it starts has the module, another does not: nothing to change.
 legacy_reset maxwell; echo nvidia-580xx > "$GPU_NVIDIA_PENDING"; add_perf
-DKMS_FAIL=" $PERF "; FAKE_NEXT=linux-mainstream
+DKMS_FAIL=" $PERF "; FAKE_NEXT=mainstream
 update_once
 chk_str update-start-has-it "$(helper)|$URC" "|0"
 # No kernel gets the module: nouveau again, the note kept for a later try, and no
@@ -829,7 +829,7 @@ has update-dkmsfail-flushed "${FLUSHED[*]:-}" "did not build for any installed k
 has update-dkmsfail-said "$(said)" "until the next update tries again"
 # The branch got installed some other way since: only the note goes.
 legacy_reset maxwell; echo nvidia-580xx > "$GPU_NVIDIA_PENDING"
-INSTALLED=" linux-mainstream linux-mainstream-headers dkms $SET580 "
+INSTALLED=" mainstream mainstream-headers dkms $SET580 "
 update_once
 chk_str update-already-calls "$(calls)" ""
 chk_str update-already-pending-gone "$(pending)" none
@@ -843,13 +843,13 @@ chk_str update-kepler "$(calls)|$(pending)" "|none"
 # The standard image left a GTX 900 to Titan V card on nouveau with no note. The
 # update writes the note once and the same steps install the driver.
 nouveau_install() {
-    INSTALLED=" linux-mainstream linux-mainstream-headers dkms mesa "
+    INSTALLED=" mainstream mainstream-headers dkms mesa "
     unlink "${K:?}/${MS:?}/nvidia.ko" 2>/dev/null
     return 0
 }
 offered() { [[ -e "$GPU_NVIDIA_OFFERED" ]] && echo there || echo none; }
 NV_1060="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB] [10de:1c03] (rev a1)"
-FAKE_NEXT=linux-mainstream
+FAKE_NEXT=mainstream
 legacy_reset maxwell; nouveau_install; FIX_LSPCI="$NV_1060"
 update_once
 chk_str adopt-pascal "$(all_in "$SET580" && nvidia_module_present $MS && echo yes)|$(pending)|$(offered)|${_NVIDIA_REBUILD_PENDING:-unset}" "yes|none|there|1"
@@ -887,9 +887,9 @@ not_due turing "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU1
 not_due amd "03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
 legacy_reset maxwell
 not_due already-nvidia "$NV_1060"
-legacy_reset maxwell; INSTALLED=" linux-mainstream linux-mainstream-headers dkms nvidia-470xx-dkms nvidia-470xx-utils "
+legacy_reset maxwell; INSTALLED=" mainstream mainstream-headers dkms nvidia-470xx-dkms nvidia-470xx-utils "
 not_due 470xx-installed "$NV_1060"
-legacy_reset maxwell; INSTALLED=" linux-mainstream linux-mainstream-headers dkms nvidia-dkms "
+legacy_reset maxwell; INSTALLED=" mainstream mainstream-headers dkms nvidia-dkms "
 not_due nvidia-dkms-installed "$NV_1060"
 legacy_reset maxwell missing; nouveau_install
 not_due repo-without-set "$NV_1060"

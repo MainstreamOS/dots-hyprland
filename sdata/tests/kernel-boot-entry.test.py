@@ -52,10 +52,15 @@ class KernelBootEntryTests(unittest.TestCase):
         cases = [
             ((), 'linux'),
             (('linux',), 'linux'),
-            (('linux-mainstream',), 'linux-mainstream'),
-            (('linux', 'linux-mainstream'), 'linux-mainstream'),
-            (('linux', 'linux-mainstream-performance', 'linux-mainstream'), 'linux-mainstream-performance'),
-            (('linux-mainstream-performance', 'linux'), 'linux-mainstream-performance'),
+            (('mainstream',), 'mainstream'),
+            (('linux', 'mainstream'), 'mainstream'),
+            (('linux', 'mainstream-performance', 'mainstream'), 'mainstream-performance'),
+            (('mainstream-performance', 'linux'), 'mainstream-performance'),
+            # A snapshot from before the rename: the menu lists its kernel by the new name.
+            (('linux', 'linux-mainstream'), 'mainstream'),
+            (('linux', 'linux-mainstream-performance', 'linux-mainstream'), 'mainstream-performance'),
+            (('linux-mainstream-performance', 'mainstream'), 'mainstream-performance'),
+            (('linux-mainstream',), 'mainstream'),
             (('linux-lts', 'linux'), 'linux'),
             (('linux-t2',), 'linux-t2'),
         ]

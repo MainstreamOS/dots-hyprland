@@ -524,7 +524,7 @@ fi
 # install can choose several kernels; the first of performance, mainstream that
 # is added becomes the boot default (MAINSTREAM_KERNEL), set by
 # setup_mainstream_kernel_default once the boot loader is known.
-MAINSTREAM_KERNEL_CHOICES=${MS_INSTALL_KERNELS-linux-mainstream}
+MAINSTREAM_KERNEL_CHOICES=${MS_INSTALL_KERNELS-mainstream}
 MAINSTREAM_KERNEL=""
 MAINSTREAM_KERNEL_ADDED=false
 # Room for its boot image beside the stock one's, and for the snapshot copies of both.
@@ -536,11 +536,11 @@ function setup_mainstream_kernel(){
   local kernel
   local -a chosen=() kernels=()
   read -ra chosen <<< "$MAINSTREAM_KERNEL_CHOICES"
-  for kernel in linux-mainstream-performance linux-mainstream; do
+  for kernel in mainstream-performance mainstream; do
     [[ " ${chosen[*]} " == *" $kernel "* ]] || continue
-    if [[ "$kernel" == linux-mainstream-performance ]] && ! cpu_runs_x86_64_v3; then
-      echo -e "${STY_YELLOW}[$0]: This CPU does not support x86-64-v3, which the performance kernel needs; adding linux-mainstream instead.${STY_RST}"
-      kernel=linux-mainstream
+    if [[ "$kernel" == mainstream-performance ]] && ! cpu_runs_x86_64_v3; then
+      echo -e "${STY_YELLOW}[$0]: This CPU does not support x86-64-v3, which the performance kernel needs; adding mainstream instead.${STY_RST}"
+      kernel=mainstream
     fi
     [[ " ${kernels[*]} " == *" $kernel "* ]] || kernels+=("$kernel")
   done
@@ -558,8 +558,8 @@ function setup_mainstream_kernel(){
     return 0
   fi
   # By name: linux-t2 provides linux, and pacman -Q answers with a provider.
-  local own=false
-  for kernel in linux linux-mainstream linux-mainstream-performance; do
+  local own=false pkg
+  for kernel in linux mainstream mainstream-performance "${INSTALL_KERNEL_OLD_NAMES[@]}"; do
     [[ "$(pacman -Qq "$kernel" 2>/dev/null)" == "$kernel" ]] && own=true
   done
   if [[ $own != true ]]; then
@@ -568,20 +568,37 @@ function setup_mainstream_kernel(){
   fi
   for kernel in "${kernels[@]}"; do
     # One already in from an earlier run still counts for the boot default.
-    if [[ "$(pacman -Qq "$kernel" 2>/dev/null)" == "$kernel" ]]; then
-      gpu_kernel_nvidia_ready "$kernel" || continue
+    if pkg=$(_installed_kernel_package "$kernel"); then
+      gpu_kernel_nvidia_ready "$pkg" || continue
     else
       _add_mainstream_kernel "$kernel" || continue
+      pkg=$(_installed_kernel_package "$kernel") || pkg=$kernel
     fi
     MAINSTREAM_KERNEL_ADDED=true
-    [[ -n "$MAINSTREAM_KERNEL" ]] || MAINSTREAM_KERNEL=$kernel
+    # The boot menu names the entry after the package as installed.
+    [[ -n "$MAINSTREAM_KERNEL" ]] || MAINSTREAM_KERNEL=$pkg
   done
 }
+# The package kernel $1 is installed as, under today's name or its old one.
+function _installed_kernel_package(){
+  local name
+  for name in "$1" ${INSTALL_KERNEL_OLD_NAMES[$1]:-}; do
+    [[ "$(pacman -Qq "$name" 2>/dev/null)" == "$name" ]] && { echo "$name"; return 0; }
+  done
+  return 1
+}
 # Adds one Mainstream kernel beside the installed ones; returns 1 when it is not added.
+# Until the repositories carry today's name, the package under the old one is added.
 function _add_mainstream_kernel(){
-  local kernel=$1 esp free failures
-  if ! pacman -Si "$kernel" >/dev/null 2>&1 || ! pacman -Si "$kernel-headers" >/dev/null 2>&1; then
-    echo -e "${STY_BLUE}[$0]: No repository offers $kernel yet, so it is not added.${STY_RST}"
+  local kernel="" name esp free failures
+  for name in "$1" ${INSTALL_KERNEL_OLD_NAMES[$1]:-}; do
+    if pacman -Si "$name" >/dev/null 2>&1 && pacman -Si "$name-headers" >/dev/null 2>&1; then
+      kernel=$name
+      break
+    fi
+  done
+  if [[ -z "$kernel" ]]; then
+    echo -e "${STY_BLUE}[$0]: No repository offers $1 yet, so it is not added.${STY_RST}"
     return 1
   fi
   esp="$(bootctl --print-esp-path 2>/dev/null || true)"

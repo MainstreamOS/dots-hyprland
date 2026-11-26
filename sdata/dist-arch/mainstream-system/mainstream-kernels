@@ -4,13 +4,15 @@
 # (polkit action org.mainstreamos.kernels).
 #
 # Subcommands:
-#   install <kernel>    linux, linux-mainstream or linux-mainstream-performance,
-#                       with its headers, from a repository
+#   install <kernel>    linux, mainstream or mainstream-performance, with its
+#                       headers, from a repository
 #   remove <kernel>     one of those three, while another kernel stays installed
 #   next <kernel>       one of those three: the kernel the boot menu starts at the
 #                       next start
 #
-# A kernel is always named by its package and never by a file path.
+# A kernel is always named by its package and never by a file path. Mainstream's
+# kernels are also accepted under the names they had before (linux-mainstream,
+# linux-mainstream-performance), and the package of either name is the one changed.
 #
 # Exit codes:
 #   0   success
@@ -67,8 +69,16 @@ GPU_INSTALL_LIB="$ROOT/usr/local/lib/gpu-driver-install.sh"
 
 VERBS=(install remove next)
 STANDARD_KERNEL=linux
-PERFORMANCE_KERNEL=linux-mainstream-performance
-MAINSTREAM_KERNELS=(linux-mainstream "$PERFORMANCE_KERNEL")
+PERFORMANCE_KERNEL=mainstream-performance
+# The kernels Settings offers.
+MAINSTREAM_KERNELS=(mainstream "$PERFORMANCE_KERNEL")
+# Every Mainstream kernel as old:new package name. A system keeps the old packages
+# until an update swaps them, and an older Settings or setup still uses the old names.
+RENAMED_KERNELS=(
+    linux-mainstream:mainstream
+    linux-mainstream-performance:mainstream-performance
+    linux-mainstream-performance-eac:mainstream-performance-eac
+)
 
 ROOT_FSTYPE=""
 ROOT_SUBVOL=""
@@ -105,6 +115,39 @@ is_one_of() {  # $1 = word, $2... = the words it may be
     shift
     for w in "$@"; do
         [[ $w == "$word" ]] && return 0
+    done
+    return 1
+}
+
+# A kernel's name today, whichever of its names $1 is.
+kernel_name() {
+    local pair
+    for pair in "${RENAMED_KERNELS[@]}"; do
+        if [[ $1 == "${pair%%:*}" ]]; then
+            printf '%s' "${pair#*:}"
+            return 0
+        fi
+    done
+    printf '%s' "$1"
+}
+
+# Both names of a kernel, today's first; one name for a kernel that was never renamed.
+kernel_names() {
+    local name pair
+    name=$(kernel_name "$1")
+    printf '%s\n' "$name"
+    for pair in "${RENAMED_KERNELS[@]}"; do
+        [[ $name == "${pair#*:}" ]] && printf '%s\n' "${pair%%:*}"
+    done
+    return 0
+}
+
+# By the explicit list: a pattern would also take mainstream-system and the rest.
+is_mainstream_kernel() {
+    local name pair
+    name=$(kernel_name "$1")
+    for pair in "${RENAMED_KERNELS[@]}"; do
+        [[ $name == "${pair#*:}" ]] && return 0
     done
     return 1
 }
@@ -193,6 +236,31 @@ pkg_in_repo() {
     pacman -Si -- "$1" >/dev/null 2>&1
 }
 
+# The installed package of kernel $1, under either of its names.
+installed_package() {
+    local name
+    while IFS= read -r name; do
+        if pkg_installed "$name"; then
+            printf '%s' "$name"
+            return 0
+        fi
+    done < <(kernel_names "$1")
+    return 1
+}
+
+# The package a repository offers, with its headers, for kernel $1: today's name, or
+# the old one while the repositories still carry that.
+repo_package() {
+    local name
+    while IFS= read -r name; do
+        if pkg_in_repo "$name" && pkg_in_repo "$name-headers"; then
+            printf '%s' "$name"
+            return 0
+        fi
+    done < <(kernel_names "$1")
+    return 1
+}
+
 # The package of the kernel that is running. Its module tree is gone once the package
 # was updated or removed under it, and the release still ends in the package's name.
 running_kernel() {
@@ -203,8 +271,9 @@ running_kernel() {
     fi
     if [[ -z $base ]]; then
         case $rel in
+            *-mainstream-performance-eac) base=mainstream-performance-eac ;;
             *-mainstream-performance) base=$PERFORMANCE_KERNEL ;;
-            *-mainstream) base=linux-mainstream ;;
+            *-mainstream) base=mainstream ;;
             *-arch[0-9]*) base=$STANDARD_KERNEL ;;
         esac
     fi
@@ -323,7 +392,8 @@ entry_is_installed_kernel() {
     [[ $ENTRY == */Snapshots/* ]] && return 1
     [[ $ENTRY == ?*/?* ]] || return 1
     # shellcheck disable=SC2046
-    is_one_of "${ENTRY##*/}" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" $(installed_kernels)
+    is_one_of "$(kernel_name "${ENTRY##*/}")" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" \
+        || is_one_of "${ENTRY##*/}" $(installed_kernels)
 }
 
 # efivarfs marks its files immutable and takes a variable in one write.
@@ -339,16 +409,22 @@ write_last_entry() {  # $1 = the entry's path in the menu
 
 # The kernel the boot menu goes to once $1 is removed: the first left of the
 # performance, Mainstream and Arch kernels, then any other, taking one with the
-# NVIDIA module where another kernel has one. Fails when none is left.
+# NVIDIA module where another kernel has one. Fails when none is left. Prints the
+# package as installed, which is what its boot menu entry is named after.
 fallback_kernel() {  # $1 = the removed kernel
-    local k
+    local k want
     local -a left=() order=()
     while IFS= read -r k; do
         [[ -n $k && $k != "$1" ]] && left+=("$k")
     done < <(installed_kernels)
     (( ${#left[@]} )) || return 1
-    for k in "$PERFORMANCE_KERNEL" linux-mainstream "$STANDARD_KERNEL" "${left[@]}"; do
-        is_one_of "$k" "${left[@]}" && ! is_one_of "$k" "${order[@]}" && order+=("$k")
+    for want in "$PERFORMANCE_KERNEL" mainstream "$STANDARD_KERNEL"; do
+        for k in "${left[@]}"; do
+            [[ $(kernel_name "$k") == "$want" ]] && ! is_one_of "$k" "${order[@]}" && order+=("$k")
+        done
+    done
+    for k in "${left[@]}"; do
+        is_one_of "$k" "${order[@]}" || order+=("$k")
     done
     for k in "${order[@]}"; do
         if kernel_has_nvidia_module "$k"; then
@@ -433,7 +509,8 @@ nvidia_modules_for_all_kernels() {
 
 cmd_install() {
     (( $# == 1 )) || die 2 "usage: install <kernel>"
-    local kernel=$1
+    local kernel pkg
+    kernel=$(kernel_name "$1")
     is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
         die 2 "not a kernel that can be installed here"
 
@@ -443,63 +520,64 @@ cmd_install() {
         die 5 "this processor cannot run $kernel, which needs AVX2 and the rest of x86-64-v3"
     fi
     require_esp_room
-    pkg_in_repo "$kernel" && pkg_in_repo "$kernel-headers" || \
+    pkg=$(repo_package "$kernel") || \
         die 11 "no repository offers $kernel and $kernel-headers yet"
 
     # The headers always come with the kernel: they are what lets DKMS drivers build
     # for it, and a later driver install must not find them missing.
-    log "install: pacman -S --needed --noconfirm $kernel $kernel-headers"
-    pacman -S --needed --noconfirm "$kernel" "$kernel-headers" </dev/null >>"$LOG" 2>&1 || \
+    log "install: pacman -S --needed --noconfirm $pkg $pkg-headers"
+    pacman -S --needed --noconfirm "$pkg" "$pkg-headers" </dev/null >>"$LOG" 2>&1 || \
         die 4 "$kernel could not be installed; see $LOG"
-    pkg_installed "$kernel" || die 4 "$kernel is not installed after the transaction; see $LOG"
+    pkg_installed "$pkg" || die 4 "$kernel is not installed after the transaction; see $LOG"
 
     if ! nvidia_modules_for_all_kernels; then
         die 7 "$kernel is installed, but the graphics driver could not be built for it; keep using the kernel you are on (see $LOG)"
     fi
-    log "install: $kernel installed"
+    log "install: $pkg installed"
 }
 
 cmd_remove() {
     (( $# == 1 )) || die 2 "usage: remove <kernel>"
-    local kernel=$1 other others=0 was_next=0 parent="" fallback
+    local kernel pkg other others=0 was_next=0 parent="" fallback
     local -a pkgs
+    kernel=$(kernel_name "$1")
     is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
         die 2 "not a kernel that can be removed here"
 
     require_installed_system
     require_limine_tools
-    pkg_installed "$kernel" || die 8 "$kernel is not installed"
-    [[ $(running_kernel) != "$kernel" ]] || \
+    pkg=$(installed_package "$kernel") || die 8 "$kernel is not installed"
+    [[ $(kernel_name "$(running_kernel)") != "$kernel" ]] || \
         die 8 "$kernel is the kernel running now; restart with another kernel first"
     while IFS= read -r other; do
-        [[ -n $other && $other != "$kernel" ]] && others=$((others + 1))
+        [[ -n $other && $other != "$pkg" ]] && others=$((others + 1))
     done < <(installed_kernels)
     (( others > 0 )) || die 8 "removing $kernel would leave this system with no kernel"
     # A T2 Mac's keyboard and trackpad run only on Mainstream's kernels, which
     # carry the T2 drivers (PCI 106b:1801/1802).
-    if [[ $kernel == linux-mainstream* ]] && lspci -n 2>/dev/null | grep -qE ' 106b:180[12]( |$)'; then
+    if is_mainstream_kernel "$kernel" && lspci -n 2>/dev/null | grep -qE ' 106b:180[12]( |$)'; then
         others=0
         while IFS= read -r other; do
-            [[ $other == linux-mainstream* && $other != "$kernel" ]] && others=$((others + 1))
+            is_mainstream_kernel "$other" && [[ $other != "$pkg" ]] && others=$((others + 1))
         done < <(installed_kernels)
         (( others > 0 )) || die 8 "removing $kernel would leave this Mac's keyboard and trackpad without a driver"
     fi
 
-    if read_last_entry && entry_is_installed_kernel && [[ ${ENTRY##*/} == "$kernel" ]]; then
+    if read_last_entry && entry_is_installed_kernel && [[ ${ENTRY##*/} == "$pkg" ]]; then
         was_next=1
         parent=${ENTRY%/*}
     fi
 
-    pkgs=("$kernel")
-    pkg_installed "$kernel-headers" && pkgs+=("$kernel-headers")
+    pkgs=("$pkg")
+    pkg_installed "$pkg-headers" && pkgs+=("$pkg-headers")
     log "remove: pacman -Rns --noconfirm ${pkgs[*]}"
     pacman -Rns --noconfirm "${pkgs[@]}" </dev/null >>"$LOG" 2>&1 || \
         die 4 "$kernel could not be removed; see $LOG"
 
-    fallback=$(fallback_kernel "$kernel") || fallback=""
+    fallback=$(fallback_kernel "$pkg") || fallback=""
     if [[ -z $fallback ]]; then
         log "remove: no other kernel is installed, so the boot menu is left as it is"
-    elif ! repoint_default_entry "$kernel" "$fallback"; then
+    elif ! repoint_default_entry "$pkg" "$fallback"; then
         log "remove: could not point the boot menu's default entry at $fallback"
         printf 'mainstream-kernels: %s was removed, but the boot menu'"'"'s default entry could not be pointed at %s\n' \
             "$kernel" "$fallback" >&2
@@ -514,17 +592,19 @@ cmd_remove() {
                 "$kernel" "$fallback" >&2
         fi
     fi
-    log "remove: $kernel removed"
+    log "remove: $pkg removed"
 }
 
 cmd_next() {
     (( $# == 1 )) || die 2 "usage: next <kernel>"
-    local kernel=$1 target other have_module=0
+    local kernel pkg="" target other have_module=0
+    kernel=$(kernel_name "$1")
     is_one_of "$kernel" "$STANDARD_KERNEL" "${MAINSTREAM_KERNELS[@]}" || \
         die 2 "not a kernel that can be chosen here"
 
     require_installed_system
-    pkg_installed "$kernel" && is_one_of "$kernel" $(installed_kernels) || \
+    # Its boot menu entry is named after the package as installed.
+    pkg=$(installed_package "$kernel") && is_one_of "$pkg" $(installed_kernels) || \
         die 9 "$kernel is not installed"
     [[ -d $EFIVARS_DIR ]] || \
         die 9 "this computer does not start through UEFI, so the choice cannot be stored; choose the kernel in the boot menu"
@@ -537,7 +617,7 @@ cmd_next() {
 
     # A kernel with no NVIDIA module on a machine whose other kernels have one would
     # start without graphics.
-    if ! kernel_has_nvidia_module "$kernel"; then
+    if ! kernel_has_nvidia_module "$pkg"; then
         while IFS= read -r other; do
             [[ -n $other ]] && kernel_has_nvidia_module "$other" && have_module=1
         done < <(installed_kernels)
@@ -545,7 +625,7 @@ cmd_next() {
             die 12 "the graphics driver is not built for $kernel; keep using the kernel you are on"
     fi
 
-    target="${ENTRY%/*}/$kernel"
+    target="${ENTRY%/*}/$pkg"
     if [[ $target == "$ENTRY" ]]; then
         log "next: the boot menu already starts $kernel next"
         return 0

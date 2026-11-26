@@ -160,18 +160,18 @@ chk helper-serial-quiet "$(exists "$R/modprobe.log")" no
 #     package name, so a Mainstream-only install never asks for Arch's.
 MAC_MODULES_DIR="$WORK/modules"
 kernel() { mkdir -p "$MAC_MODULES_DIR/$1"; : > "$MAC_MODULES_DIR/$1/vmlinuz"; echo "$2" > "$MAC_MODULES_DIR/$1/pkgbase"; }
-FIX_REPO="linux-headers linux-mainstream-headers linux-mainstream-performance-headers linux-t2-headers"
+FIX_REPO="linux-headers mainstream-headers mainstream-performance-headers linux-t2-headers"
 _mac_pkg_available() { [[ " $FIX_REPO " == *" $1 "* ]]; }
 chk wl-no-kernel "$(mac_wl_packages)" "broadcom-wl-dkms dkms linux-headers"
-kernel 7.3.6-1-mainstream linux-mainstream
-chk wl-mainstream-only "$(mac_wl_packages)" "broadcom-wl-dkms dkms linux-mainstream-headers"
-kernel 7.3.6-1-mainstream-performance linux-mainstream-performance
+kernel 7.3.6-1-mainstream mainstream
+chk wl-mainstream-only "$(mac_wl_packages)" "broadcom-wl-dkms dkms mainstream-headers"
+kernel 7.3.6-1-mainstream-performance mainstream-performance
 kernel 7.3.6-arch1-1 linux
-chk wl-every-kernel "$(mac_wl_packages | tr ' ' '\n' | sort | paste -sd' ')" "broadcom-wl-dkms dkms linux-headers linux-mainstream-headers linux-mainstream-performance-headers"
+chk wl-every-kernel "$(mac_wl_packages | tr ' ' '\n' | sort | paste -sd' ')" "broadcom-wl-dkms dkms linux-headers mainstream-headers mainstream-performance-headers"
 rm -rf "$MAC_MODULES_DIR"; kernel 7.3.6-arch1-1-t2 linux-t2
 chk wl-t2 "$(mac_wl_packages)" "broadcom-wl-dkms dkms linux-t2-headers"
 # A headers-only tree is no kernel; headers no repository carries are left out.
-mkdir -p "$MAC_MODULES_DIR/7.3.5-1-mainstream"; echo linux-mainstream > "$MAC_MODULES_DIR/7.3.5-1-mainstream/pkgbase"
+mkdir -p "$MAC_MODULES_DIR/7.3.5-1-mainstream"; echo mainstream > "$MAC_MODULES_DIR/7.3.5-1-mainstream/pkgbase"
 kernel 7.2.0-1-custom linux-custom
 chk wl-skips "$(mac_wl_packages 2>/dev/null)" "broadcom-wl-dkms dkms linux-t2-headers"
 chk wl-skips-says "$(mac_wl_packages 2>&1 >/dev/null)" "mac-config: no linux-custom-headers in the repositories"
