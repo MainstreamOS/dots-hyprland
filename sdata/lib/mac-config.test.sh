@@ -11,10 +11,12 @@ source "$DIR/mac-config.sh"
 
 # Drive detection from fixture globals instead of real hardware.
 FIX_VENDOR=""; FIX_PRODUCT=""; FIX_PCI=""; FIX_T2_SUPPORT=false; FIX_PROC=""
+FIX_T2FANRD=false
 _mac_sys_vendor()   { printf '%s\n' "$FIX_VENDOR"; }
 _mac_product()      { printf '%s\n' "$FIX_PRODUCT"; }
 _mac_pci()          { printf '%s\n' "$FIX_PCI"; }
 _mac_proc_cmdline() { printf '%s\n' "$FIX_PROC"; }
+_mac_t2fanrd_installed() { [[ $FIX_T2FANRD == true ]]; }
 eval "real_$(declare -f mac_has_t2_support)"
 mac_has_t2_support() { [[ $FIX_T2_SUPPORT == true ]]; }
 
@@ -34,6 +36,7 @@ setup() {
     mkdir -p "$R/modprobe" "$R/systemd" "$R/acpi" "$R/helper"
     MODPROBE_DIR="$R/modprobe" SYSTEMD_DIR="$R/systemd" MAC_ACPI_DIR="$R/acpi"
     MAC_HELPER_DIR="$R/helper" MAC_STATE_DIR="$R/state" KERNEL_CMDLINE="$R/cmdline" MKINITCPIO_CONF="$R/mkinitcpio.conf"
+    MODULES_LOAD_DIR="$R/modules-load" MAC_T2FAND_CONF="$R/t2fand.conf" MAC_HWMON_DIR="$R/hwmon"
     printf 'MODULES=()\n' > "$MKINITCPIO_CONF"
     [[ "$2" == - ]] || printf '%s\n' "$2" > "$KERNEL_CMDLINE"
 }
@@ -216,6 +219,52 @@ chk support-chroot-none "$(supported)" no
 tree 7.3.4-1-mainstream dep
 chk support-chroot-headers-only "$(supported)" no
 unset MAC_MODULES_DIR
+
+# 13. A T2 Mac whose kernel drives it: the keyboard early, at boot and in the
+#     initramfs, and fan control with a section for every fan t2fanrd will find.
+setup t2-early "root=UUID=1313 rw"
+FIX_PRODUCT="MacBookPro16,1"; FIX_PCI="$T2_4377_PCI"; FIX_T2_SUPPORT=true; FIX_T2FANRD=true
+mac_apply_autoconfig
+chk t2-early-modules-load "$(cat "$R/modules-load/mainstream-t2.conf" 2>/dev/null | tr '\n' ' ')" "t2bce_vhci t2bce_ave "
+chk t2-early-initramfs "$(tr ' ' '\n' < "$R/mkinitcpio.conf" | sed 's/^MODULES=(//; s/)$//' | grep -v '^$' | sort | paste -sd' ')" \
+    "hid_apple hid_generic t2bce_vhci? usbhid xhci_hcd xhci_pci"
+chk t2-early-fan1 "$(sed -n '/^\[Fan1\]$/,/^$/p' "$R/t2fand.conf" | grep -c -e '^low_temp=55$' -e '^high_temp=75$' -e '^speed_curve=linear$' -e '^always_full_speed=false$')" 4
+chk t2-early-fan2 "$(grep -c '^\[Fan2\]$' "$R/t2fand.conf")" 1
+chk t2-early-two-fans "$(grep -c '^\[Fan' "$R/t2fand.conf")" 2
+mac_apply_autoconfig
+chk t2-early-rerun-once "$(grep -o 't2bce_vhci?' "$R/mkinitcpio.conf" | wc -l | tr -d ' ')" 1
+chk t2-early-report "$(mac_report | grep -c -e 'T2 keyboard: t2bce_vhci' -e 'T2 fan control: t2fanrd enabled')" 2
+# A configuration that is already there is the user's.
+printf '[Fan1]\nlow_temp=40\n' > "$R/t2fand.conf"
+mac_apply_autoconfig
+chk t2-fan-conf-kept "$(cat "$R/t2fand.conf")" "$(printf '[Fan1]\nlow_temp=40')"
+# Three fans t2fanrd would count, and the GPU's that it leaves out.
+setup t2-fans "root=UUID=1314 rw"
+for h in 0:macsmc_hwmon:fan1 0:macsmc_hwmon:fan2 1:macsmc_hwmon:fan3 2:amdgpu:fan1; do
+    IFS=: read -r n name fan <<<"$h"
+    mkdir -p "$R/hwmon/hwmon$n"; echo "$name" > "$R/hwmon/hwmon$n/name"; : > "$R/hwmon/hwmon$n/${fan}_input"
+done
+mac_apply_autoconfig
+chk t2-fans-three "$(grep -c '^\[Fan' "$R/t2fand.conf")" 3
+# Without t2fanrd there is no configuration for it.
+setup t2-no-fanrd "root=UUID=1315 rw"
+FIX_T2FANRD=false
+mac_apply_autoconfig
+chk t2-no-fanrd-conf "$(exists "$R/t2fand.conf")" no
+chk t2-no-fanrd-keyboard "$(exists "$R/modules-load/mainstream-t2.conf")" yes
+# A kernel without the T2 drivers gets neither.
+setup t2-unsupported "root=UUID=1316 rw"
+FIX_T2_SUPPORT=false; FIX_T2FANRD=true
+mac_apply_autoconfig
+chk t2-unsupported-modules-load "$(exists "$R/modules-load/mainstream-t2.conf")" no
+chk t2-unsupported-initramfs "$(cat "$R/mkinitcpio.conf")" "MODULES=()"
+chk t2-unsupported-fan "$(exists "$R/t2fand.conf")" no
+# A Mac without the T2 gets neither.
+setup t2-none "root=UUID=1317 rw"
+FIX_PRODUCT="MacBookPro14,1"; FIX_PCI="02:00.0 Network controller [0280]: Broadcom Inc. [14e4:43ba]"; FIX_T2_SUPPORT=true
+mac_apply_autoconfig
+chk t2-none-modules-load "$(exists "$R/modules-load/mainstream-t2.conf")" no
+chk t2-none-fan "$(exists "$R/t2fand.conf")" no
 
 if [[ $FAILS -eq 0 ]]; then echo "mac_config: all $CASES cases PASS"; exit 0
 else echo "mac_config: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi

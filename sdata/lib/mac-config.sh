@@ -9,10 +9,10 @@
 #
 # T2 machines (2018-2020) need the T2 drivers for the internal keyboard,
 # trackpad, audio and fans, which Mainstream's kernels carry and Arch's does
-# not. On a kernel that has them this also sets the boot options they want.
-# Wi-Fi and Bluetooth run on stock drivers either way, with the Broadcom
-# firmware fetched where the chip needs it, and the UART Bluetooth models get a
-# recovery service.
+# not. On a kernel that has them this also sets the boot options they want,
+# loads the keyboard early and turns on fan control. Wi-Fi and Bluetooth run
+# on stock drivers either way, with the Broadcom firmware fetched where the
+# chip needs it, and the UART Bluetooth models get a recovery service.
 #
 # Write seams match gpu-config.sh so both libraries behave the same when sourced
 # together:
@@ -23,6 +23,8 @@
 #   KERNEL_CMDLINE  default /etc/kernel/cmdline
 #   MAC_HELPER_DIR  default /usr/local/lib/mainstream-mac
 #   MAC_STATE_DIR   default /var/lib/mainstream
+#   MODULES_LOAD_DIR default /etc/modules-load.d
+#   MAC_T2FAND_CONF default /etc/t2fand.conf
 
 # ── Hardware probes (overridable for testing) ───────────────────────────────
 _mac_sys_vendor()  { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
@@ -30,6 +32,7 @@ _mac_product()     { cat /sys/class/dmi/id/product_name 2>/dev/null || true; }
 _mac_pci()         { lspci -nn 2>/dev/null || true; }
 _mac_proc_cmdline() { cat /proc/cmdline 2>/dev/null || true; }
 _mac_uname_r()     { uname -r; }
+_mac_t2fanrd_installed() { [ -x /usr/bin/t2fanrd ]; }
 # ACPI lists devices the firmware hides (the MacPro7,1's) too, so status bit 0
 # decides; no status file means no _STA, which ACPI reads as present.
 _mac_acpi_uart_bt() {
@@ -334,12 +337,32 @@ done
 SH
 }
 
+# t2fanrd refuses to start when a fan it finds has no section, so there is one
+# per fan it counts (the hwmon fans other than amdgpu's) and at least the two of
+# a MacBook Pro, in case the fan driver is not loaded yet. Omarchy's curve (MIT).
+_mac_t2fand_conf() {
+    local n=0 i=1 f
+    for f in "${MAC_HWMON_DIR:-/sys/class/hwmon}"/hwmon*/fan*_input; do
+        [ -e "$f" ] || continue
+        [ "$(cat "${f%/*}/name" 2>/dev/null)" = amdgpu ] && continue
+        n=$((n + 1))
+    done
+    [ "$n" -ge 2 ] || n=2
+    while [ "$i" -le "$n" ]; do
+        [ "$i" -eq 1 ] || echo
+        printf '[Fan%s]\nlow_temp=55\nhigh_temp=75\nspeed_curve=linear\nalways_full_speed=false\n' "$i"
+        i=$((i + 1))
+    done
+}
+
 # ── mac_apply_autoconfig ────────────────────────────────────────────────────
 # Idempotent. A no-op on anything that is not an Apple machine.
 mac_apply_autoconfig() {
     local modprobe_dir="${MODPROBE_DIR:-/etc/modprobe.d}"
     local systemd_dir="${SYSTEMD_DIR:-/etc/systemd/system}"
     local helper="${MAC_HELPER_DIR:-/usr/local/lib/mainstream-mac}/t2-bluetooth-recover"
+    local modules_load_dir="${MODULES_LOAD_DIR:-/etc/modules-load.d}"
+    local fan_conf="${MAC_T2FAND_CONF:-/etc/t2fand.conf}"
     mac_is_apple || return 0
 
     # Media keys without holding fn, the way the keycaps read and the way the
@@ -425,6 +448,26 @@ mac_apply_autoconfig() {
     fi
 
     mac_apply_t2_cmdline
+
+    if mac_has_t2 && mac_has_t2_support; then
+        # The internal keyboard hangs off t2bce_vhci, the T2 bridge's virtual USB
+        # host controller, and the camera off t2bce_ave; nothing loads either on its
+        # own. In the initramfs vhci is the keyboard at the disk encryption prompt;
+        # the ? lets a kernel without it still build its image. As Omarchy does (MIT).
+        printf 't2bce_vhci\nt2bce_ave\n' | _mac_write_file "$modules_load_dir/mainstream-t2.conf" 644
+        if command -v mkinitcpio_add_modules >/dev/null 2>&1; then
+            mkinitcpio_add_modules 't2bce_vhci?' usbhid hid_apple hid_generic xhci_pci xhci_hcd
+        fi
+        if _mac_t2fanrd_installed; then
+            [ -e "$fan_conf" ] || _mac_t2fand_conf | _mac_write_file "$fan_conf" 644
+            if [ "$systemd_dir" = /etc/systemd/system ]; then
+                ${GPU_SUDO:-} systemctl enable t2fanrd.service >/dev/null 2>&1 || true
+                if [ -d /run/systemd/system ] && ! systemd-detect-virt --chroot -q 2>/dev/null; then
+                    ${GPU_SUDO:-} systemctl start --no-block t2fanrd.service >/dev/null 2>&1 || true
+                fi
+            fi
+        fi
+    fi
 
     if mac_needs_t2_uart_bt; then
         _mac_t2_bt_recover_script | _mac_write_file "$helper" 755
@@ -568,7 +611,11 @@ mac_report() {
     mac_needs_spi_input      && echo "  SPI keyboard and trackpad: applespi added to the initramfs"
     mac_needs_nvme_quirk     && echo "  NVMe suspend quirk applied"
     mac_needs_brcmfmac_quirk && echo "  Broadcom WPA offload disabled"
-    mac_needs_t2_cmdline     && echo "  T2 boot options: $(mac_t2_cmdline_tokens)"
+    if mac_needs_t2_cmdline; then
+        echo "  T2 boot options: $(mac_t2_cmdline_tokens)"
+        echo "  T2 keyboard: t2bce_vhci loaded at boot and in the initramfs"
+        _mac_t2fanrd_installed && echo "  T2 fan control: t2fanrd enabled"
+    fi
     mac_needs_t2_uart_bt     && echo "  UART Bluetooth (BCM2E7C): recovery service at boot and after sleep"
     mac_needs_wl_driver      && echo "  Broadcom wl driver: $(mac_wl_packages)"
     if mac_needs_apple_firmware; then
