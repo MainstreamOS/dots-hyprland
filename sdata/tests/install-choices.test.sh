@@ -157,5 +157,28 @@ chk "only swapped-in Flatpaks may fall back to native" \
   "$(swapped --profile custom --app-source flatpak --apps chromium,steam,org.gimp.GIMP)" "org.chromium.Chromium"
 chk "native source swaps in no Flatpak" "$(swapped --profile custom --app-source native --apps org.gimp.GIMP)" ""
 
+# setup_mainstream_kernel on a first install, with the installed kernels as $1, the choices as $2 and
+# a stand-in pacman. Prints the kernels it added, then the boot default it picked.
+kernel_step() {
+  (
+    eval "$(sed -n '/^function setup_mainstream_kernel(){/,/^}/p' "$ROOT/sdata/subcmd-install/2.setups.sh")"
+    OS_GROUP_ID=arch INSTALL_FIRSTRUN=true MAINSTREAM_KERNEL_CHOICES=$2 MAINSTREAM_KERNEL="" STY_BLUE="" STY_YELLOW="" STY_RST=""
+    INSTALLED=" $1 "
+    pacman() { [[ $1 == -Qq && $INSTALLED == *" $2 "* ]] && echo "$2"; }
+    cpu_runs_x86_64_v3() { true; }
+    gpu_kernel_nvidia_ready() { true; }
+    _add_mainstream_kernel() { printf '+%s ' "$1"; }
+    setup_mainstream_kernel >"$WORK/kernel-step" 2>/dev/null
+    printf '%s|%s' "$(grep -o '+[^ ]*' "$WORK/kernel-step" | tr '\n' ' ')" "$MAINSTREAM_KERNEL"
+  )
+}
+chk "Arch's kernel: Mainstream is added beside it" "$(kernel_step linux linux-mainstream)" "+linux-mainstream |linux-mainstream"
+chk "Mainstream only: the installed kernel stays the default" "$(kernel_step linux-mainstream linux-mainstream)" "|linux-mainstream"
+chk "Mainstream only: performance is added beside it" \
+  "$(kernel_step linux-mainstream "linux-mainstream-performance linux-mainstream")" \
+  "+linux-mainstream-performance |linux-mainstream-performance"
+chk "another kernel only: nothing is added" "$(kernel_step linux-zen linux-mainstream)" "|"
+chk "linux-t2 only: nothing is added" "$(kernel_step linux-t2 linux-mainstream)" "|"
+
 echo "install-choices: $((CASES - FAILS))/$CASES passed"
 (( FAILS == 0 ))

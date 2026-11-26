@@ -532,11 +532,11 @@ if [[ "${SKIP_GPUDRIVERS}" != true ]]; then
 fi
 
 # Mainstream's kernel is the default of a new install where a repository offers
-# it, as on the ISO. Arch's linux stays installed beside it as the fallback, and
-# a system on any other kernel is left as it is. A Custom install can choose
-# several kernels; the first of performance, mainstream that is added becomes the
-# boot default (MAINSTREAM_KERNEL), set by setup_mainstream_kernel_default once
-# the boot loader is known.
+# it, as on the ISO. A system set up from Arch keeps Arch's linux beside it as
+# the fallback, and a system on any other kernel is left as it is. A Custom
+# install can choose several kernels; the first of performance, mainstream that
+# is added becomes the boot default (MAINSTREAM_KERNEL), set by
+# setup_mainstream_kernel_default once the boot loader is known.
 MAINSTREAM_KERNEL_CHOICES=${MS_INSTALL_KERNELS-linux-mainstream}
 MAINSTREAM_KERNEL=""
 MAINSTREAM_KERNEL_ADDED=false
@@ -571,8 +571,12 @@ function setup_mainstream_kernel(){
     return 0
   fi
   # By name: linux-t2 provides linux, and pacman -Q answers with a provider.
-  if [[ "$(pacman -Qq linux 2>/dev/null)" != linux ]]; then
-    echo -e "${STY_BLUE}[$0]: Arch's linux kernel is not installed, so ${kernels[*]} is not added.${STY_RST}"
+  local own=false
+  for kernel in linux linux-mainstream linux-mainstream-performance; do
+    [[ "$(pacman -Qq "$kernel" 2>/dev/null)" == "$kernel" ]] && own=true
+  done
+  if [[ $own != true ]]; then
+    echo -e "${STY_BLUE}[$0]: Neither Arch's kernel nor a Mainstream kernel is installed, so ${kernels[*]} is not added.${STY_RST}"
     return 0
   fi
   for kernel in "${kernels[@]}"; do
@@ -586,7 +590,7 @@ function setup_mainstream_kernel(){
     [[ -n "$MAINSTREAM_KERNEL" ]] || MAINSTREAM_KERNEL=$kernel
   done
 }
-# Adds one Mainstream kernel beside Arch's; returns 1 when it is not added.
+# Adds one Mainstream kernel beside the installed ones; returns 1 when it is not added.
 function _add_mainstream_kernel(){
   local kernel=$1 esp free failures
   if ! pacman -Si "$kernel" >/dev/null 2>&1 || ! pacman -Si "$kernel-headers" >/dev/null 2>&1; then
@@ -600,7 +604,7 @@ function _add_mainstream_kernel(){
     echo -e "${STY_YELLOW}[$0]: $esp has ${free:-unknown} MiB free and another kernel needs $MAINSTREAM_KERNEL_MIN_FREE_MIB MiB, so $kernel is not added.${STY_RST}"
     return 1
   fi
-  echo -e "${STY_CYAN}[$0]: Installing $kernel beside Arch's kernel...${STY_RST}"
+  echo -e "${STY_CYAN}[$0]: Installing $kernel...${STY_RST}"
   if ! sudo pacman -S --needed --noconfirm "$kernel" "$kernel-headers"; then
     echo -e "${STY_YELLOW}[$0]: $kernel could not be installed.${STY_RST}"
     return 1
@@ -615,7 +619,7 @@ function _add_mainstream_kernel(){
   if ! gpu_kernel_nvidia_ready "$kernel"; then
     echo -e "${STY_YELLOW}[$0]: No NVIDIA driver could be built for $kernel, so it is removed again.${STY_RST}"
     sudo pacman -Rns --noconfirm "$kernel" "$kernel-headers" \
-      || echo -e "${STY_YELLOW}[$0]: $kernel could not be removed; choose Arch's kernel in the boot menu.${STY_RST}"
+      || echo -e "${STY_YELLOW}[$0]: $kernel could not be removed; choose another kernel in the boot menu.${STY_RST}"
     return 1
   fi
   (( ${#GPU_FAILURES[@]} > failures )) && flush_failures
