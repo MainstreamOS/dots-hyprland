@@ -3624,5 +3624,7 @@
   "Arch's kernel, as Arch ships it.": "Arch's kernel, as Arch ships it.",
   "Each kernel installs beside the ones you have, and the boot menu lists every installed kernel. Nothing changes until you restart.": "Each kernel installs beside the ones you have, and the boot menu lists every installed kernel. Nothing changes until you restart.",
   "Update Mainstream to install or remove this kernel.": "Update Mainstream to install or remove this kernel.",
-  "This is the only kernel installed.": "This is the only kernel installed."
+  "This is the only kernel installed.": "This is the only kernel installed.",
+  "Apple T2 fan control and audio profile installed": "Apple T2 fan control and audio profile installed",
+  "Could not install the Apple T2 fan control and audio profile": "Could not install the Apple T2 fan control and audio profile"
 }

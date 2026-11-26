@@ -11,12 +11,13 @@ source "$DIR/mac-config.sh"
 
 # Drive detection from fixture globals instead of real hardware.
 FIX_VENDOR=""; FIX_PRODUCT=""; FIX_PCI=""; FIX_T2_SUPPORT=false; FIX_PROC=""
-FIX_T2FANRD=false
+FIX_T2FANRD=false; FIX_INSTALLED=""
 _mac_sys_vendor()   { printf '%s\n' "$FIX_VENDOR"; }
 _mac_product()      { printf '%s\n' "$FIX_PRODUCT"; }
 _mac_pci()          { printf '%s\n' "$FIX_PCI"; }
 _mac_proc_cmdline() { printf '%s\n' "$FIX_PROC"; }
 _mac_t2fanrd_installed() { [[ $FIX_T2FANRD == true ]]; }
+_mac_pkg_installed() { [[ " $FIX_INSTALLED " == *" $1 "* ]]; }
 eval "real_$(declare -f mac_has_t2_support)"
 mac_has_t2_support() { [[ $FIX_T2_SUPPORT == true ]]; }
 
@@ -265,6 +266,18 @@ FIX_PRODUCT="MacBookPro14,1"; FIX_PCI="02:00.0 Network controller [0280]: Broadc
 mac_apply_autoconfig
 chk t2-none-modules-load "$(exists "$R/modules-load/mainstream-t2.conf")" no
 chk t2-none-fan "$(exists "$R/t2fand.conf")" no
+
+# 14. The T2 packages: on a T2 Mac only, those not installed that a repository offers.
+FIX_REPO="t2fanrd apple-t2-audio-config"; FIX_INSTALLED=""
+chk t2-pkgs-not-t2 "$(mac_t2_packages)" ""
+FIX_PCI="$T2_PCI"
+chk t2-pkgs-both "$(mac_t2_packages)" "t2fanrd apple-t2-audio-config"
+FIX_INSTALLED="t2fanrd"
+chk t2-pkgs-missing-one "$(mac_t2_packages)" "apple-t2-audio-config"
+FIX_INSTALLED=""; FIX_REPO="apple-t2-audio-config"
+chk t2-pkgs-offered-only "$(mac_t2_packages)" "apple-t2-audio-config"
+FIX_REPO=""
+chk t2-pkgs-none-offered "$(mac_t2_packages)" ""
 
 if [[ $FAILS -eq 0 ]]; then echo "mac_config: all $CASES cases PASS"; exit 0
 else echo "mac_config: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi

@@ -32,6 +32,7 @@ _mac_product()     { cat /sys/class/dmi/id/product_name 2>/dev/null || true; }
 _mac_pci()         { lspci -nn 2>/dev/null || true; }
 _mac_proc_cmdline() { cat /proc/cmdline 2>/dev/null || true; }
 _mac_uname_r()     { uname -r; }
+_mac_pkg_installed() { [ "$(pacman -Qq "$1" 2>/dev/null)" = "$1" ]; }
 _mac_t2fanrd_installed() { [ -x /usr/bin/t2fanrd ]; }
 # ACPI lists devices the firmware hides (the MacPro7,1's) too, so status bit 0
 # decides; no status file means no _STA, which ACPI reads as present.
@@ -193,6 +194,20 @@ mac_has_t2_support() {
         [ -f "${d}vmlinuz" ] && _mac_tree_has_t2bce "${d%/}" && return 0
     done
     return 1
+}
+
+# The T2 drivers' own userspace from the [mainstream] repository: fan control
+# and the audio profile for the T2's sound card. Prints those this machine lacks
+# and a repository offers, so a mirror or an image without them is skipped
+# quietly.
+mac_t2_packages() {
+    local p out=""
+    mac_has_t2 || return 0
+    for p in t2fanrd apple-t2-audio-config; do
+        _mac_pkg_installed "$p" && continue
+        _mac_pkg_available "$p" && out="$out $p"
+    done
+    [ -z "$out" ] || echo "${out# }"
 }
 
 # ── mac_needs_apple_firmware ────────────────────────────────────────────────

@@ -1377,6 +1377,10 @@ function setup_gpu_autoconfig(){
       # shellcheck disable=SC2046
       x sudo pacman -S --needed --noconfirm $(mac_wl_packages)
     fi
+    local t2_packages
+    t2_packages="$(mac_t2_packages)"
+    # shellcheck disable=SC2086
+    [[ -n "$t2_packages" ]] && x sudo pacman -S --needed --noconfirm $t2_packages
     if mac_needs_apple_firmware; then
       x sudo pacman -S --needed --noconfirm 7zip
       x sudo install -Dm755 "${REPO_ROOT}/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware

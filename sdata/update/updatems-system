@@ -645,7 +645,8 @@ fi
 # ── Apple hardware ─────────────────────────────────────────────────────────
 # The Mac quirks ran at install time only, so a Mac installed before one
 # existed never gained it: the firmware fetch for the T2 chips, the wl driver
-# for the 2012-2015 Broadcom parts, the SPI and NVMe fixes. Applied here from
+# for the 2012-2015 Broadcom parts, the SPI and NVMe fixes, and the T2 setup
+# that follows a kernel with the T2 drivers. Applied here from
 # the same library the installer uses; a no-op on anything that is not a Mac.
 # A module added to the initramfs list lands on the next kernel update; changed
 # T2 boot options get a rebuild of their own further down.
@@ -666,6 +667,16 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
             ok "$(t "Broadcom wl driver installed")"
         else
             warn "$(t "Could not install the Broadcom wl driver")"
+            RC=1
+        fi
+    fi
+    t2_packages="$(mac_t2_packages)"
+    if [[ -n "$t2_packages" ]]; then
+        # shellcheck disable=SC2086
+        if _pacman_needed $t2_packages; then
+            ok "$(t "Apple T2 fan control and audio profile installed")"
+        else
+            warn "$(t "Could not install the Apple T2 fan control and audio profile")"
             RC=1
         fi
     fi
