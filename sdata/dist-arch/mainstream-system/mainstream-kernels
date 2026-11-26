@@ -9,6 +9,8 @@
 #   remove <kernel>     one of those three, while another kernel stays installed
 #   next <kernel>       one of those three: the kernel the boot menu starts at the
 #                       next start
+#   migrate             move what still names a renamed kernel package to its new
+#                       name (mainstream-system's pacman hook; refused through pkexec)
 #
 # A kernel is always named by its package and never by a file path. Mainstream's
 # kernels are also accepted under the names they had before (linux-mainstream,
@@ -513,8 +515,8 @@ nvidia_modules_for_all_kernels() {
 # the boot tools' removal hooks take the old entries, images and preset away. What
 # names the old package stays: BOOT_ORDER, a default entry by path and the firmware's
 # boot record, and another boot loader's menu. Whatever the hooks left behind goes
-# too. updatems-system runs this after the package step; it changes only what still
-# names an old package, so a second run does nothing. Prints one line per
+# too. updatems-system and mainstream-system's pacman hook run this; it changes only
+# what still names an old package, so a second run does nothing. Prints one line per
 # change, sets BOOT_ORDER_MOVED to the kernels whose place in the menu changed, and
 # returns 1 when a step failed.
 BOOT_ORDER_MOVED=()
@@ -957,6 +959,34 @@ cmd_next() {
     log "next: the boot menu starts \"$target\" next (was \"$ENTRY\")"
 }
 
+# migrate: run as root by mainstream-system's pacman hook once a kernel package
+# changes. Quiet when nothing names an old package, and never fails the transaction:
+# a busy lock leaves the work to the next run, or to the update holding it, which
+# runs the same step after its package step.
+cmd_migrate() {
+    (( $# == 0 )) || die 2 "usage: migrate"
+    [[ -z ${PKEXEC_UID:-} ]] || die 2 "migrate is run by the system, not through pkexec"
+    detect_root_info
+    [[ $ROOT_FSTYPE == overlay || $ROOT_SUBVOL =~ (^|/)(@|@?\.)snapshots/[0-9]+/snapshot$ ]] && return 0
+    if ! try_lock 9 "$LOCK_FILE" || ! try_lock 8 "$SECURITY_LOCK" || ! try_lock 7 "$UPDATE_LOCK"; then
+        log "migrate: another change or an update is running, so this run is left to it"
+        return 0
+    fi
+    migrate_renamed_kernels || \
+        printf 'mainstream-kernels: some boot settings still name an old kernel package; see %s\n' "$LOG"
+    (( ${#BOOT_ORDER_MOVED[@]} )) && command -v limine-mkinitcpio >/dev/null 2>&1 || return 0
+    # The boot tools sort the menu by BOOT_ORDER when they write a kernel's entry.
+    limine-mkinitcpio "${BOOT_ORDER_MOVED[@]}" </dev/null >>"$LOG" 2>&1 || \
+        printf 'mainstream-kernels: the boot menu keeps its old order until the next kernel update\n'
+    return 0
+}
+
+try_lock() {  # $1 = file descriptor, $2 = lock file; fails when it is held
+    { eval "exec $1>>\"\$2\""; } 2>/dev/null || return 1
+    flock -n "$1" || return 1
+    { enable -f /usr/lib/bash/fdflags fdflags && fdflags -s +cloexec "$1"; } 2>/dev/null || true
+}
+
 take_lock() {  # $1 = file descriptor, $2 = lock file, $3 = what holds it
     local fd=$1 file=$2
     # In braces: a redirection on a bare exec stays for the rest of the run, and every
@@ -978,6 +1008,11 @@ main() {
     refuse_symlinks "$LOG" "$LOCK_FILE" "$SECURITY_LOCK" "$UPDATE_LOCK"
     mkdir -p -m 755 -- "$LOG_DIR" "$LOCK_DIR" 2>/dev/null || true
     log "invoked: $verb $* (uid=${PKEXEC_UID:-$EUID})"
+
+    if [[ $verb == migrate ]]; then
+        cmd_migrate "$@"
+        exit 0
+    fi
 
     is_one_of "$verb" "${VERBS[@]}" || \
         die 2 "usage: mainstream-kernels $(IFS='|'; printf '%s' "${VERBS[*]}") <kernel>"

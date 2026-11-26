@@ -1856,4 +1856,45 @@ out=$(migrate) && rc=0 || rc=$?
 assert_eq "$rc|$out" "0|" "a system that never had the old packages has nothing to migrate"
 check "and nothing is run" test "$(calls '^limine-entry-tool\|^sbctl remove\|^limine-enroll\|^grub-mkconfig')" = 0
 
+# 4.10 The migrate verb, as mainstream-system's pacman hook runs it
+HOOK_FILE="$SCRIPT_DIR/95-mainstream-kernel-names.hook"
+check "the hook ships with the package" \
+    grep -q 'install -Dm644 "$srcdir/95-mainstream-kernel-names.hook" "$pkgdir/usr/share/libalpm/hooks/95-mainstream-kernel-names.hook"' "$PKGBUILD_FILE"
+check "it runs after the transaction" grep -qxF 'When = PostTransaction' "$HOOK_FILE"
+check "and runs the migrate verb" grep -qxF 'Exec = /usr/lib/mainstream/mainstream-kernels migrate' "$HOOK_FILE"
+for target in mainstream mainstream-performance mainstream-performance-eac mainstream-system; do
+    check "it is triggered by $target" grep -qxF "Target = $target" "$HOOK_FILE"
+done
+check "it sorts after the boot tools' hooks and before sbctl's" \
+    test "$(printf '%s\n' 90-mkinitcpio-install.hook 90-limine-mkinitcpio-remove-post.hook 91-mainstream-repair-fred.hook \
+        95-mainstream-kernel-names.hook zz-sbctl.hook | LC_ALL=C sort | sed -n 4p)" = 95-mainstream-kernel-names.hook
+
+m_old_system
+m_swap_plain
+: >"$T_ROOT/var/lib/pacman/db.lck"
+out=$(run_helper migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "migrate runs inside a package transaction"
+check "it moves the settings" settings_moved
+check "it prints what changed" grep -q 'BOOT_ORDER names mainstream' <<<"$out"
+check "and writes the moved kernel's entry again for the new order" \
+    test "$(calls "^limine-mkinitcpio $PLAIN\$")" = 1
+: >"$T_STATE/calls.log"
+out=$(run_helper migrate) && rc=0 || rc=$?
+assert_eq "$rc|$out" "0|" "migrate is quiet when nothing is left to move"
+check "and builds nothing" test "$(calls '^limine-mkinitcpio')" = 0
+m_old_system
+m_swap_plain
+exec {T_UPDATE_FD}>>"$T_ROOT/run/lock/mainstream-update.lock"
+flock -n "$T_UPDATE_FD"
+out=$(run_helper migrate) && rc=0 || rc=$?
+exec {T_UPDATE_FD}>&-
+assert_eq "$rc|$out" "0|" "while a Mainstream update runs, migrate leaves the step to it"
+check "and changes nothing" settings_stay_old
+echo 1 >"$T_STATE/entry_tool_rc"
+out=$(run_helper migrate) && rc=0 || rc=$?
+assert_eq "$rc" "0" "a failed step never fails the transaction"
+check "and is reported" grep -q 'some boot settings still name an old kernel package' <<<"$out"
+rm -f "$T_ROOT/var/lib/pacman/db.lck" "$T_CONF"
+expect_rc 2 "migrate takes no kernel" run_helper migrate "$PLAIN"
+
 printf '\nAll %d tests passed.\n' "$PASS_COUNT"

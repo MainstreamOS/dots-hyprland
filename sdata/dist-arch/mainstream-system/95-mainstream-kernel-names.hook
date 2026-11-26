@@ -1,0 +1,15 @@
+# After the Limine and mkinitcpio hooks have built the new kernels' entries, and
+# before zz-sbctl.hook signs sbctl's list again.
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = mainstream
+Target = mainstream-performance
+Target = mainstream-performance-eac
+Target = mainstream-system
+
+[Action]
+Description = Checking the boot menu for renamed kernel packages...
+When = PostTransaction
+Exec = /usr/lib/mainstream/mainstream-kernels migrate

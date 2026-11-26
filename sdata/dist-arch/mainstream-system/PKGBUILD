@@ -88,6 +88,7 @@ source=(
   org.mainstreamos.system-security.policy
   mainstream-kernels
   org.mainstreamos.kernels.policy
+  95-mainstream-kernel-names.hook
   limine-signed-copies
   mainstream-secure-boot-restore.service
   limine-remember-installed
@@ -102,7 +103,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -134,6 +135,7 @@ package() {
   install -Dm644 "$srcdir/95-scrolloverview-rebuild.hook" "$pkgdir/usr/share/libalpm/hooks/95-scrolloverview-rebuild.hook"
   install -Dm644 "$srcdir/61-limine-bios.hook"           "$pkgdir/usr/share/libalpm/hooks/61-limine-bios.hook"
   install -Dm644 "$srcdir/91-mainstream-repair-fred.hook" "$pkgdir/usr/share/libalpm/hooks/91-mainstream-repair-fred.hook"
+  install -Dm644 "$srcdir/95-mainstream-kernel-names.hook" "$pkgdir/usr/share/libalpm/hooks/95-mainstream-kernel-names.hook"
   install -Dm644 "$srcdir/mainstream.preset"             "$pkgdir/usr/lib/systemd/system-preset/80-mainstream.preset"
   install -Dm644 "$srcdir/hyprbars.conf"                 "$pkgdir/usr/share/mainstream/hyprbars.conf"
   install -Dm644 "$srcdir/scrolloverview.conf"           "$pkgdir/usr/share/mainstream/scrolloverview.conf"
