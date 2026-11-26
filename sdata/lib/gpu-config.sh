@@ -795,6 +795,31 @@ nvidia_is_display_gpu() {
     return 0
 }
 
+# ── _gpu_branch_drives <branch> <generation> ───────────────────────────────
+# Whether an NVIDIA driver branch (mainline, 580xx, 470xx, 390xx) drives a card of
+# that generation (gpu_detect's NVIDIA_GEN).
+_gpu_branch_drives() {
+    case "$1:$2" in
+        mainline:turing|580xx:turing|580xx:maxwell|470xx:turing|470xx:maxwell|470xx:kepler \
+        |390xx:maxwell|390xx:kepler|390xx:fermi) return 0 ;;
+    esac
+    return 1
+}
+
+# ── gpu_live_needs_nouveau ──────────────────────────────────────────────────
+# Whether a live session should load nouveau for the NVIDIA card: the card
+# drives the screen and the NVIDIA driver the image carries cannot drive it.
+# Reads gpu_detect's results. A laptop whose Intel or AMD GPU drives the screen
+# keeps the session there, so its NVIDIA GPU is left alone.
+gpu_live_needs_nouveau() {
+    [[ ${HAS_NVIDIA:-false} == true ]] || return 1
+    case "${NVIDIA_GEN:-none}" in turing|none) return 1 ;; esac
+    nvidia_is_display_gpu || return 1
+    local installed
+    installed="$(_gpu_installed_nvidia_branch)"
+    ! _gpu_branch_drives "${installed:-mainline}" "$NVIDIA_GEN"
+}
+
 # Exact Mainstream-written NVIDIA session env lines retired from custom/env.lua.
 # Matches single or double quotes, flexible whitespace around parens and comma,
 # optional Lua statement semicolon, and optional trailing `-- ...` comments,

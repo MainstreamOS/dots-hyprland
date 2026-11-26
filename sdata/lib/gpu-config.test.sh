@@ -1084,5 +1084,59 @@ chk_str resume-override-off "$RCL" "$RBASE"
 chk_str resume-override-quiet "$RERR" ""
 rm -rf "$RTMP"; unset FSTAB_FILE
 
+# ── gpu_live_needs_nouveau: the live session's driver for an older card ─────
+# Hermetic again: the sections above re-sourced the lib and changed the probes.
+_gpu_installed_nvidia_branch() { printf '%s' "$FIX_INSTALLED_BRANCH"; }
+_gpu_lspci_nn() { printf '%s\n' "$FIX_LSPCI"; }
+_gpu_lspci()    { printf '%s\n' "$FIX_LSPCI"; }
+_gpu_sys_vendor() { printf '%s' "$FIX_SYSVENDOR"; }
+LTMP="$(mktemp -d)"; export GPU_PCI_DEVICES_PATH="$LTMP/pci" GPU_DRM_PATH="$LTMP/drm"
+pcidev() {  # pcidev <slot> <vendor> <boot_vga>
+    mkdir -p "$GPU_PCI_DEVICES_PATH/$1"
+    echo 0x030000 > "$GPU_PCI_DEVICES_PATH/$1/class"; echo "$2" > "$GPU_PCI_DEVICES_PATH/$1/vendor"; echo "$3" > "$GPU_PCI_DEVICES_PATH/$1/boot_vga"
+}
+NV_MAXWELL="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GP107 [GeForce GTX 1050 Ti] [10de:1c82] (rev a1)"
+NV_KEPLER="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 710] [10de:128b] (rev a1)"
+NV_FERMI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF110 [GeForce GTX 580] [10de:1080] (rev a1)"
+NV_TESLA="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GT216 [GeForce GT 220] [10de:0a20] (rev a2)"
+NV_TURING="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
+NV_OPTIMUS="00:02.0 VGA compatible controller [0300]: Intel Corporation HD Graphics 630 [8086:591b] (rev 04)
+01:00.0 3D controller [0302]: NVIDIA Corporation GM107M [GeForce GTX 960M] [10de:139b] (rev a2)"
+live() {  # live <name> <lspci> <installed branch> <want>
+    CASES=$((CASES + 1)); FIX_LSPCI="$2"; FIX_SYSVENDOR=""; FIX_INSTALLED_BRANCH="$3"
+    gpu_detect || true
+    chk_str "live-$1" "$(gpu_live_needs_nouveau && echo nouveau || echo keep)" "$4"
+}
+# A desktop: the NVIDIA card is the only display device.
+rm -rf "$GPU_PCI_DEVICES_PATH"; pcidev 0000:01:00.0 0x10de 1
+live maxwell "$NV_MAXWELL" "" nouveau
+live kepler "$NV_KEPLER" "" nouveau
+live fermi "$NV_FERMI" "" nouveau
+live prefermi "$NV_TESLA" "" nouveau
+live turing "$NV_TURING" "" keep
+# The legacy edition carries 580xx, which drives Maxwell to Volta itself.
+live legacy-edition-maxwell "$NV_MAXWELL" 580xx keep
+live legacy-edition-kepler "$NV_KEPLER" 580xx nouveau
+live legacy-edition-turing "$NV_TURING" 580xx keep
+live no-nvidia "03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)" "" keep
+# A hybrid laptop: the Intel GPU drives the screen, so the session stays on it.
+rm -rf "$GPU_PCI_DEVICES_PATH"; pcidev 0000:00:02.0 0x8086 1; pcidev 0000:01:00.0 0x10de 0
+live hybrid-igpu "$NV_OPTIMUS" "" keep
+# Firmware that marks neither as the boot GPU: the panel on the Intel GPU decides.
+echo 0 > "$GPU_PCI_DEVICES_PATH/0000:00:02.0/boot_vga"
+mkdir -p "$GPU_DRM_PATH/card0/device" "$GPU_DRM_PATH/card0-eDP-1"
+echo 0x8086 > "$GPU_DRM_PATH/card0/device/vendor"; echo connected > "$GPU_DRM_PATH/card0-eDP-1/status"
+live hybrid-ambiguous "$NV_OPTIMUS" "" keep
+# A laptop switched to the NVIDIA GPU at its MUX: that card is the display.
+echo 1 > "$GPU_PCI_DEVICES_PATH/0000:01:00.0/boot_vga"
+live hybrid-mux "$NV_OPTIMUS" "" nouveau
+unset GPU_PCI_DEVICES_PATH GPU_DRM_PATH; rm -rf "$LTMP"; FIX_INSTALLED_BRANCH=""
+# Which branch drives which generation.
+drives() { CASES=$((CASES + 1)); chk_str "drives-$1-$2" "$(_gpu_branch_drives "$1" "$2" && echo yes || echo no)" "$3"; }
+drives mainline turing yes; drives mainline maxwell no
+drives 580xx maxwell yes; drives 580xx turing yes; drives 580xx kepler no
+drives 470xx kepler yes; drives 470xx fermi no
+drives 390xx fermi yes; drives 390xx turing no; drives none maxwell no
+
 if [[ $FAILS -eq 0 ]]; then echo "gpu_detect: all $CASES cases PASS"; exit 0
 else echo "gpu_detect: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi
