@@ -279,5 +279,39 @@ chk t2-pkgs-offered-only "$(mac_t2_packages)" "apple-t2-audio-config"
 FIX_REPO=""
 chk t2-pkgs-none-offered "$(mac_t2_packages)" ""
 
+# 15. The live session: a T2 Mac gets its keyboard and camera drivers and its fan
+#     control started; anything else gets neither.
+CALLS="$WORK/calls"
+modprobe() { echo "modprobe $*" >> "$CALLS"; }
+systemctl() { echo "systemctl $*" >> "$CALLS"; }
+systemd-run() { echo "systemd-run $*" >> "$CALLS"; }
+session() {  # name pci product t2-support fanrd
+    setup "session-$1" -
+    : > "$CALLS"
+    MAC_FNMODE_PARAM="$R/fnmode" MAC_SPI_FNMODE_PARAM="$R/spi-fnmode" MAC_INPUT_DEVICES="$R/input"
+    FIX_VENDOR="Apple Inc."; FIX_PCI="$2"; FIX_PRODUCT="$3"; FIX_T2_SUPPORT="$4"; FIX_T2FANRD="$5"
+    mac_apply_session_quirks
+}
+session t2 "$T2_PCI" "MacBookPro15,1" true true
+chk session-t2-drivers "$(count 'modprobe -a t2bce_vhci t2bce_ave' "$CALLS")" 1
+chk session-t2-fan-conf "$(grep -c '^\[Fan' "$R/t2fand.conf")" 2
+chk session-t2-fan-start "$( [[ -d /run/systemd/system ]] && count 'systemctl start --no-block t2fanrd.service' "$CALLS" || echo 1)" 1
+printf '[Fan1]\nlow_temp=40\n' > "$R/t2fand.conf"
+mac_apply_session_quirks
+chk session-t2-fan-conf-kept "$(cat "$R/t2fand.conf")" "$(printf '[Fan1]\nlow_temp=40')"
+session t2-no-fanrd "$T2_PCI" "MacBookPro15,1" true false
+chk session-no-fanrd-drivers "$(count 'modprobe -a t2bce_vhci' "$CALLS")" 1
+chk session-no-fanrd-start "$(count 't2fanrd' "$CALLS")" 0
+chk session-no-fanrd-conf "$(exists "$R/t2fand.conf")" no
+session t2-unsupported "$T2_PCI" "MacBookPro15,1" false true
+chk session-unsupported "$(count 't2bce\|t2fanrd' "$CALLS") $(exists "$R/t2fand.conf")" "0 no"
+session no-t2 "02:00.0 Network controller [0280]: Broadcom Inc. [14e4:43ba]" "MacBookPro14,1" true true
+chk session-no-t2 "$(count 't2bce\|t2fanrd' "$CALLS") $(exists "$R/t2fand.conf")" "0 no"
+setup session-non-apple -
+: > "$CALLS"; FIX_VENDOR="LENOVO"; FIX_PCI="$T2_PCI"; FIX_T2_SUPPORT=true; FIX_T2FANRD=true
+mac_apply_session_quirks
+chk session-non-apple "$(wc -l < "$CALLS" | tr -d '[:space:]') $(exists "$R/t2fand.conf")" "0 no"
+unset -f modprobe systemctl systemd-run
+
 if [[ $FAILS -eq 0 ]]; then echo "mac_config: all $CASES cases PASS"; exit 0
 else echo "mac_config: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi

@@ -572,9 +572,22 @@ mac_apply_session_quirks() {
     local modprobe_dir="${MODPROBE_DIR:-/etc/modprobe.d}"
     local fnmode="${MAC_FNMODE_PARAM:-/sys/module/hid_apple/parameters/fnmode}"
     local spi_fnmode="${MAC_SPI_FNMODE_PARAM:-/sys/module/applespi/parameters/fnmode}"
+    local fan_conf="${MAC_T2FAND_CONF:-/etc/t2fand.conf}"
     mac_is_apple || return 0
 
     mac_load_spi_input
+
+    # The session's share of what mac_apply_autoconfig sets up for good: the
+    # T2's keyboard, trackpad and camera drivers, and its fan control.
+    if mac_has_t2 && mac_has_t2_support; then
+        ${GPU_SUDO:-} modprobe -a t2bce_vhci t2bce_ave 2>/dev/null || true
+        if _mac_t2fanrd_installed; then
+            [ -e "$fan_conf" ] || _mac_t2fand_conf | _mac_write_file "$fan_conf" 644
+            if [ -d /run/systemd/system ]; then
+                ${GPU_SUDO:-} systemctl start --no-block t2fanrd.service >/dev/null 2>&1 || true
+            fi
+        fi
+    fi
 
     printf 'options hid_apple fnmode=1\n' \
         | _mac_write_file "$modprobe_dir/mainstream-apple.conf" 644
