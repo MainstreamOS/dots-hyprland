@@ -4,11 +4,10 @@
 # (polkit action org.mainstreamos.kernels).
 #
 # Subcommands:
-#   install <kernel>    linux, mainstream or mainstream-performance, with its
-#                       headers, from a repository
-#   remove <kernel>     one of those three, while another kernel stays installed
-#   next <kernel>       one of those three: the kernel the boot menu starts at the
-#                       next start
+#   install <kernel>    linux, mainstream, mainstream-performance or
+#                       mainstream-performance-eac, with its headers, from a repository
+#   remove <kernel>     one of those, while another kernel stays installed
+#   next <kernel>       one of those: the kernel the boot menu starts at the next start
 #   migrate             move what still names a renamed kernel package to its new
 #                       name (mainstream-system's pacman hook; refused through pkexec)
 #
@@ -23,7 +22,7 @@
 #   3   precondition not met (started from a snapshot, or a boot setup this helper
 #       cannot change)
 #   4   the package transaction failed
-#   5   this processor cannot run the performance kernel
+#   5   this processor cannot run the performance or anti-cheat kernel
 #   6   the EFI partition does not have room for another kernel, or the room could
 #       not be measured
 #   7   the kernel is installed, but the graphics driver could not be built for it
@@ -33,6 +32,7 @@
 #   10  another change is running (kernel, Secure Boot, update, or package manager)
 #   11  no repository offers the kernel
 #   12  next refused: the kernel has no graphics driver while another kernel has one
+#   13  install refused: the anti-cheat kernel cannot load the NVIDIA driver in use
 
 set -uo pipefail
 umask 022
@@ -72,8 +72,9 @@ GPU_INSTALL_LIB="$ROOT/usr/local/lib/gpu-driver-install.sh"
 VERBS=(install remove next)
 STANDARD_KERNEL=linux
 PERFORMANCE_KERNEL=mainstream-performance
+EAC_KERNEL=mainstream-performance-eac
 # The kernels Settings offers.
-MAINSTREAM_KERNELS=(mainstream "$PERFORMANCE_KERNEL")
+MAINSTREAM_KERNELS=(mainstream "$PERFORMANCE_KERNEL" "$EAC_KERNEL")
 # Every Mainstream kernel as old:new package name. A system keeps the old packages
 # until an update swaps them, and an older Settings or setup still uses the old names.
 RENAMED_KERNELS=(
@@ -304,13 +305,24 @@ kernel_has_nvidia_module() {  # $1 = kernel package
         [[ $base == "$1" ]] || continue
         for f in "${d}"updates/dkms/nvidia.ko* "${d}"extramodules/nvidia.ko* \
                  "${d}"kernel/drivers/video/nvidia.ko*; do
+            # The anti-cheat kernel loads only modules signed with its own key, which
+            # a DKMS build never is.
+            [[ $1 == "$EAC_KERNEL" && $f == "${d}"updates/dkms/* ]] && continue
             [[ -f $f ]] && return 0
         done
     done
     return 1
 }
 
-# The performance kernel is built for x86-64-v3.
+# Whether an NVIDIA kernel driver package is installed: none of them loads on the
+# anti-cheat kernel, so a card that uses one would start it without graphics.
+nvidia_driver_installed() {
+    local pkgs
+    pkgs=$(pacman -Qq 2>/dev/null) || return 1
+    grep -qxE 'nvidia(-open)?(-[0-9]+xx)?(-dkms|-lts)?' <<<"$pkgs"
+}
+
+# The performance and anti-cheat kernels are built for x86-64-v3.
 cpu_runs_performance_kernel() {
     local line flags="" flag
     [[ -r $CPUINFO ]] || return 1
@@ -841,8 +853,11 @@ cmd_install() {
 
     require_installed_system
     require_limine_tools
-    if [[ $kernel == "$PERFORMANCE_KERNEL" ]] && ! cpu_runs_performance_kernel; then
+    if is_one_of "$kernel" "$PERFORMANCE_KERNEL" "$EAC_KERNEL" && ! cpu_runs_performance_kernel; then
         die 5 "this processor cannot run $kernel, which needs AVX2 and the rest of x86-64-v3"
+    fi
+    if [[ $kernel == "$EAC_KERNEL" ]] && nvidia_driver_installed; then
+        die 13 "$kernel loads only drivers signed for it, so the NVIDIA driver this computer uses would not load"
     fi
     require_esp_room
     pkg=$(repo_package "$kernel") || \

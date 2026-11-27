@@ -25,6 +25,7 @@ Singleton {
     readonly property string messageScope: "kernel"
 
     readonly property string standardKernel: "linux"
+    readonly property string eacKernel: "mainstream-performance-eac"
 
     property bool loaded: false
     // The last probe gave no usable answer. What was read before stays.
@@ -37,6 +38,8 @@ Singleton {
     // Whether the helper knows Mainstream's kernels by their package names today.
     // Older ones know only the names the packages had before.
     property bool canUseNewNames: false
+    // Whether the helper knows the anti-cheat kernel.
+    property bool canUseEac: false
     property bool uefi: false
     // -1 while not known. Only root can read most EFI partitions, so the size
     // of the boot image is often not known here and the helper checks it.
@@ -61,7 +64,8 @@ Singleton {
         available: false,
         cpuSupported: true,
         downloadBytes: -1,
-        driverMissing: false
+        driverMissing: false,
+        driverUnsupported: false
     })
 
     function info(name) {
@@ -85,6 +89,8 @@ Singleton {
             return Translation.tr("Mainstream");
         case "mainstream-performance":
             return Translation.tr("Mainstream Performance");
+        case "mainstream-performance-eac":
+            return Translation.tr("Mainstream Anti-Cheat");
         default:
             return name;
         }
@@ -241,7 +247,9 @@ Singleton {
                 available: k.available === true,
                 cpuSupported: k.cpuSupported === true,
                 downloadBytes: root.bytesOrUnknown(k.downloadBytes),
-                driverMissing: k.driverMissing === true
+                driverMissing: k.driverMissing === true,
+                // The NVIDIA driver in use cannot load on this kernel.
+                driverUnsupported: k.driverUnsupported === true
             });
         }
 
@@ -249,6 +257,7 @@ Singleton {
         root.helper = s.helper === true;
         root.canChangeStandard = s.canChangeStandard === true;
         root.canUseNewNames = s.canUseNewNames === true;
+        root.canUseEac = s.canUseEac === true;
         root.uefi = s.uefi === true;
         root.espFreeBytes = root.bytesOrUnknown(s.espFreeBytes);
         root.standardImageBytes = root.bytesOrUnknown(s.standardImageBytes);
@@ -325,6 +334,8 @@ Singleton {
             return Translation.tr("Not available yet.");
         case 12:
             return Translation.tr("The graphics driver is not built for this kernel. Keep using the kernel you are on.");
+        case 13:
+            return Translation.tr("NVIDIA's driver does not load on this kernel yet.");
         default:
             return Translation.tr("The change could not be applied.");
         }

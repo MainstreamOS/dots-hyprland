@@ -143,19 +143,19 @@ check "PKGBUILD installs the policy among the polkit actions" \
 # one that is not listed here, fails.
 PROBE_SHAPE='
     (type == "object") and
-    (keys == (["helper", "canChangeStandard", "canUseNewNames", "unsupportedReason", "uefi",
+    (keys == (["helper", "canChangeStandard", "canUseNewNames", "canUseEac", "unsupportedReason", "uefi",
                "espFreeBytes", "standardImageBytes", "nextKernel", "canChooseNext",
                "installedKernels", "kernels"] | sort)) and
-    ([.helper, .canChangeStandard, .canUseNewNames, .uefi, .canChooseNext] | all(type == "boolean")) and
+    ([.helper, .canChangeStandard, .canUseNewNames, .canUseEac, .uefi, .canChooseNext] | all(type == "boolean")) and
     (.unsupportedReason | IN("", "snapshot", "boot-tools")) and
     ([.espFreeBytes, .standardImageBytes] | all(type == "number" or type == "null")) and
     (.nextKernel | type == "string") and
     (.installedKernels | type == "array" and all(type == "string")) and
-    ([.kernels[].name] == ["linux", "mainstream", "mainstream-performance"]) and
+    ([.kernels[].name] == ["linux", "mainstream", "mainstream-performance", "mainstream-performance-eac"]) and
     (.kernels | all(
         (keys == (["name", "package", "installed", "version", "running", "available",
-                   "cpuSupported", "downloadBytes", "driverMissing"] | sort)) and
-        ([.installed, .running, .available, .cpuSupported, .driverMissing] | all(type == "boolean")) and
+                   "cpuSupported", "downloadBytes", "driverMissing", "driverUnsupported"] | sort)) and
+        ([.installed, .running, .available, .cpuSupported, .driverMissing, .driverUnsupported] | all(type == "boolean")) and
         ([.version, .package] | all(type == "string")) and
         (.downloadBytes | type == "number" or type == "null")))
 '
@@ -209,6 +209,8 @@ shift
 case \$op in
     -Q)
         grep -m1 -- "^\$1 " "$S_ENV/installed" || exit 1 ;;
+    -Qq)
+        while read -r name _; do printf '%s\n' "\$name"; done <"$S_ENV/installed" ;;
     -Si)
         rc=0
         for name in "\$@"; do
@@ -299,11 +301,11 @@ assert_jq "$json_3a" '
 ' "Scenario 3A: an installed UEFI system whose menu starts the standard kernel next"
 assert_jq "$json_3a" '.kernels[0] == {
     name: "linux", package: "linux", installed: true, version: "7.3.5.arch1-1", running: true, available: true,
-    cpuSupported: true, downloadBytes: null, driverMissing: false
+    cpuSupported: true, downloadBytes: null, driverMissing: false, driverUnsupported: false
 }' "Scenario 3A: the standard kernel is installed and running"
 assert_jq "$json_3a" '.kernels[1] == {
     name: "mainstream", package: "mainstream", installed: false, version: "", running: false, available: true,
-    cpuSupported: true, downloadBytes: 189267968, driverMissing: false
+    cpuSupported: true, downloadBytes: 189267968, driverMissing: false, driverUnsupported: false
 }' "Scenario 3A: the Mainstream kernel is on offer, with the size of it and its headers"
 assert_eq "$(kernel_field "$json_3a" mainstream-performance downloadBytes)" "246558592" \
     "Scenario 3A: packages the headers pull in are counted in the download"
@@ -352,7 +354,7 @@ truncate -s 99999999 "$S_ESP/EFI/Linux/mainstream_mainstream.efi"
 json_3b=$(probe EFIVARS_DIR="$S_ENV/efivars" ESP_CANDIDATES="$S_ESP")
 assert_jq "$json_3b" "$PROBE_SHAPE" "Scenario 3B: exactly the agreed fields"
 assert_jq "$json_3b" '
-    (.kernels | all(.installed)) and
+    ([.kernels[] | select(.installed) | .name] == ["linux", "mainstream", "mainstream-performance"]) and
     ([.kernels[] | select(.running) | .name] == ["mainstream-performance"]) and
     .nextKernel == "mainstream-performance" and .canChooseNext == true and .helper == false
 ' "Scenario 3B: all three installed, the performance kernel running and started next"
@@ -404,8 +406,8 @@ rm "$S_MODULES/7.3.5-arch1-1/extramodules/nvidia.ko.zst" "$S_MODULES/7.3.5-arch1
 write_cpuinfo "$S_CPU" "${V3_FLAGS/ avx2/}"
 json_3c=$(probe)
 assert_jq "$json_3c" "$PROBE_SHAPE" "Scenario 3C: exactly the agreed fields"
-assert_jq "$json_3c" '[.kernels[] | .cpuSupported] == [true, true, false]' \
-    "Scenario 3C: a processor without AVX2 cannot run the performance kernel, and runs the others"
+assert_jq "$json_3c" '[.kernels[] | .cpuSupported] == [true, true, false, false]' \
+    "Scenario 3C: a processor without AVX2 cannot run the performance or anti-cheat kernel, and runs the others"
 for flag in avx bmi1 bmi2 f16c fma movbe xsave; do
     write_cpuinfo "$S_CPU" "${V3_FLAGS/ $flag / }"
     assert_eq "$(kernel_field "$(probe)" mainstream-performance cpuSupported)" "false" \
@@ -483,7 +485,7 @@ assert_eq "$(next_pair)" '["mainstream",true]' "Scenario 3E: a Mainstream kernel
 grep -v '^mainstream-performance-headers ' "$S_ENV/repo" >"$S_ENV/repo.new"
 mv "$S_ENV/repo.new" "$S_ENV/repo"
 json_3f=$(probe)
-assert_jq "$json_3f" '[.kernels[] | .available] == [true, true, false]' \
+assert_jq "$json_3f" '[.kernels[] | .available] == [true, true, false, false]' \
     "Scenario 3F: a kernel whose headers no repository offers is not available"
 assert_eq "$(kernel_field "$json_3f" mainstream-performance downloadBytes)" "null" \
     "Scenario 3F: and has no download size"
@@ -535,7 +537,7 @@ json_3h=$(probe)
 assert_jq "$json_3h" "$PROBE_SHAPE" "Scenario 3H: exactly the agreed fields"
 assert_jq "$json_3h" '.kernels[0] == {
     name: "linux", package: "linux", installed: false, version: "", running: false, available: true,
-    cpuSupported: true, downloadBytes: 189918003, driverMissing: false
+    cpuSupported: true, downloadBytes: 189918003, driverMissing: false, driverUnsupported: false
 }' "Scenario 3H: Arch's kernel is on offer, with the size of it and its headers"
 assert_jq "$json_3h" '[.kernels[] | select(.installed) | .name] == ["mainstream"]' \
     "Scenario 3H: the Mainstream kernel is the one installed"
@@ -569,7 +571,7 @@ assert_jq "$json_3i" "$PROBE_SHAPE" "Scenario 3I: exactly the agreed fields"
 assert_jq "$json_3i" '.canUseNewNames == true' "Scenario 3I: the helper knows today's names"
 assert_jq "$json_3i" '.kernels[1] == {
     name: "mainstream", package: "linux-mainstream", installed: true, version: "7.3.5-1", running: true,
-    available: true, cpuSupported: true, downloadBytes: null, driverMissing: false
+    available: true, cpuSupported: true, downloadBytes: null, driverMissing: false, driverUnsupported: false
 }' "Scenario 3I: the kernel installed under its old name is the Mainstream kernel, running"
 assert_jq "$json_3i" '.kernels[2] | .name == "mainstream-performance" and .package == "linux-mainstream-performance"
     and .installed == false and .available == true and .downloadBytes == 168558592' \
@@ -605,6 +607,20 @@ assert_jq "$(probe KERNELS_HELPER="$S_ENV/old-helper")" '.kernels[2] | .availabl
 assert_jq "$(probe KERNELS_HELPER="$HELPER_SCRIPT")" \
     '.kernels[2] | .package == "mainstream-performance" and .available' \
     "Scenario 3I: while the current helper installs it"
+
+# Scenario 3J: the anti-cheat kernel, which loads no NVIDIA kernel driver.
+printf 'mainstream-performance-eac 160.00 MiB\nmainstream-performance-eac-headers 30.00 MiB\n' >>"$S_ENV/repo"
+json_3j=$(probe KERNELS_HELPER="$HELPER_SCRIPT")
+assert_jq "$json_3j" '.canUseEac and (.kernels[3] | .name == "mainstream-performance-eac" and .available and (.driverUnsupported | not))' \
+    "Scenario 3J: the anti-cheat kernel is on offer where no NVIDIA driver is installed"
+printf 'nvidia-open-dkms 620.73.04-1\n' >>"$S_ENV/installed"
+json_3j=$(probe KERNELS_HELPER="$HELPER_SCRIPT")
+assert_jq "$json_3j" '[.kernels[] | .driverUnsupported] == [false, false, false, true]' \
+    "Scenario 3J: an installed NVIDIA driver rules out the anti-cheat kernel alone"
+assert_jq "$(probe KERNELS_HELPER="$S_ENV/old-helper")" '.canUseEac | not' \
+    "Scenario 3J: an older helper does not know the anti-cheat kernel"
+grep -v '^nvidia-open-dkms ' "$S_ENV/installed" >"$S_ENV/installed.new"
+mv "$S_ENV/installed.new" "$S_ENV/installed"
 
 printf '\n=== 4. Privileged Helper mainstream-kernels Tests ===\n'
 
@@ -728,6 +744,7 @@ release_of() {
         linux) echo 7.3.5-arch1-1 ;;
         mainstream|linux-mainstream) echo 7.3.5-arch1-1-mainstream ;;
         mainstream-performance|linux-mainstream-performance) echo 7.3.5-1-mainstream-performance ;;
+        mainstream-performance-eac) echo 7.3.5-1-mainstream-performance-eac ;;
         *) echo "6.0.0-\$1" ;;
     esac
 }
@@ -736,6 +753,7 @@ shift
 case \$op in
     -Qq)
         [[ \${1:-} == -- ]] && shift
+        (( \$# )) || { cat "$T_STATE/installed"; exit 0; }
         grep -qxF -- "\$1" "$T_STATE/installed" || exit 1
         printf '%s\n' "\$1" ;;
     -Si)
@@ -897,7 +915,7 @@ done
 SENTINEL="$TMP_BASE/metacharacter-ran"
 for name in linux-lts linux-zen mainstream-headers mainstream-performance-headers \
             mainstream-anticheat LINUX-MAINSTREAM "" " " "mainstream " " mainstream" \
-            mainstream-system mainstream-performance-eac linux-mainstream-performance-eac \
+            mainstream-system mainstream-performance-eac-headers \
             linux-mainstream-headers linux-mainstream-performance-headers \
             "mainstream mainstream-headers" "mainstream;touch $SENTINEL" \
             "\$(touch $SENTINEL)" "\`touch $SENTINEL\`" "mainstream|touch $SENTINEL" \
@@ -956,6 +974,43 @@ write_cpuinfo "$T_ROOT/proc/cpuinfo" "${V3_FLAGS/ abm / lzcnt }"
 t_reset
 check "the performance kernel installs on a processor that names lzcnt in place of abm" run_helper install "$PERF"
 write_cpuinfo "$T_ROOT/proc/cpuinfo" "$V3_FLAGS"
+
+# The anti-cheat kernel needs the performance kernel's processor, and is refused where
+# an NVIDIA driver is in use: it loads only modules signed with its own key.
+EAC=mainstream-performance-eac
+t_reset
+printf '%s\n' "$EAC" "$EAC-headers" >>"$T_STATE/repo"
+write_cpuinfo "$T_ROOT/proc/cpuinfo" "${V3_FLAGS/ avx2/}"
+expect_rc 5 "install of the anti-cheat kernel on a processor without AVX2 exits 5" run_helper install "$EAC"
+write_cpuinfo "$T_ROOT/proc/cpuinfo" "$V3_FLAGS"
+for driver in nvidia-open-dkms nvidia-580xx-dkms nvidia; do
+    t_reset
+    printf '%s\n' "$EAC" "$EAC-headers" >>"$T_STATE/repo"
+    printf '%s\n' "$driver" nvidia-utils >>"$T_STATE/installed"
+    expect_rc 13 "install of the anti-cheat kernel beside $driver exits 13" run_helper install "$EAC"
+    check "and nothing is installed beside $driver" no_package_change
+done
+t_reset
+printf '%s\n' "$EAC" "$EAC-headers" >>"$T_STATE/repo"
+printf '%s\n' nvidia-utils >>"$T_STATE/installed"
+check "the anti-cheat kernel installs where no NVIDIA kernel driver is" run_helper install "$EAC"
+check "and its headers come with it" is_installed "$EAC-headers"
+# DKMS builds NVIDIA's module for it too, but that module does not load there.
+nvidia_module_counts() {  # $1 = kernel package
+    (
+        export MAINSTREAM_KERNELS_TEST_ROOT="$T_ROOT" MAINSTREAM_KERNELS_TEST_BIN="$T_BIN"
+        # shellcheck source=/dev/null
+        source "$HELPER_SCRIPT"
+        kernel_has_nvidia_module "$1"
+    )
+}
+mkdir -p "$T_MODULES/7.3.5-1-mainstream-performance-eac/updates/dkms"
+: >"$T_MODULES/7.3.5-1-mainstream-performance-eac/updates/dkms/nvidia.ko.zst"
+refute "a DKMS-built NVIDIA module does not count for the anti-cheat kernel" nvidia_module_counts "$EAC"
+mkdir -p "$T_MODULES/7.3.5-1-mainstream-performance-eac/kernel/drivers/video"
+: >"$T_MODULES/7.3.5-1-mainstream-performance-eac/kernel/drivers/video/nvidia.ko.zst"
+check "one built with the kernel does" nvidia_module_counts "$EAC"
+t_reset
 
 t_reset
 printf '%s\n' "$((NEEDED_BYTES - 1))" >"$T_STATE/esp_avail"

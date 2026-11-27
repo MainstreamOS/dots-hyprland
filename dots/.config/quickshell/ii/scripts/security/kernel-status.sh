@@ -20,7 +20,8 @@ ESP_CANDIDATES="${ESP_CANDIDATES:-/boot/efi /efi /boot /limine}"
 
 STANDARD_KERNEL=linux
 PERFORMANCE_KERNEL=mainstream-performance
-KERNELS=("$STANDARD_KERNEL" mainstream "$PERFORMANCE_KERNEL")
+EAC_KERNEL=mainstream-performance-eac
+KERNELS=("$STANDARD_KERNEL" mainstream "$PERFORMANCE_KERNEL" "$EAC_KERNEL")
 # Mainstream's kernels under the package names they had before. A system keeps the
 # old packages until an update swaps them, and each kernel is reported under its
 # name today with the package it is installed or offered as.
@@ -45,6 +46,8 @@ kernel_name() {
 helper=false
 can_change_standard=false
 can_use_new_names=false
+can_use_eac=false
+nvidia_driver=false
 uefi=false
 unsupported_reason=""
 esp_free=null
@@ -63,6 +66,14 @@ if [[ $helper == true ]]; then
     (( rc == 1 )) && can_change_standard=true
     # Older helpers know Mainstream's kernels by their old package names alone.
     grep -qF -- 'RENAMED_KERNELS=(' "$KERNELS_HELPER" 2>/dev/null && can_use_new_names=true
+    grep -qF -- 'EAC_KERNEL=' "$KERNELS_HELPER" 2>/dev/null && can_use_eac=true
+fi
+
+# No NVIDIA kernel driver loads on the anti-cheat kernel, which takes only modules
+# signed with its own key.
+if command -v pacman >/dev/null 2>&1 && packages=$(pacman -Qq 2>/dev/null) \
+   && grep -qxE 'nvidia(-open)?(-[0-9]+xx)?(-dkms|-lts)?' <<<"$packages"; then
+    nvidia_driver=true
 fi
 
 root_fstype=""
@@ -79,7 +90,7 @@ elif ! command -v limine-update >/dev/null 2>&1 || ! command -v limine-mkinitcpi
     unsupported_reason=boot-tools
 fi
 
-# The performance kernel is built for x86-64-v3.
+# The performance and anti-cheat kernels are built for x86-64-v3.
 if [[ -r $PROC_CPUINFO ]]; then
     flags=""
     while IFS= read -r line; do
@@ -108,6 +119,7 @@ for dir in "$MODULES_DIR"/*/; do
     installed_names+=("$(kernel_name "$base")")
     for module in "${dir}"updates/dkms/nvidia.ko* "${dir}"extramodules/nvidia.ko* \
                   "${dir}"kernel/drivers/video/nvidia.ko*; do
+        [[ $(kernel_name "$base") == "$EAC_KERNEL" && $module == "${dir}"updates/dkms/* ]] && continue
         if [[ -f $module ]]; then
             with_nvidia+=("$base")
             break
@@ -261,7 +273,10 @@ for kernel in "${KERNELS[@]}"; do
     fi
 
     cpu_supported=true
-    [[ $kernel == "$PERFORMANCE_KERNEL" ]] && cpu_supported=$performance_cpu
+    [[ $kernel == "$PERFORMANCE_KERNEL" || $kernel == "$EAC_KERNEL" ]] && cpu_supported=$performance_cpu
+
+    driver_unsupported=false
+    [[ $kernel == "$EAC_KERNEL" ]] && driver_unsupported=$nvidia_driver
 
     is_running=false
     [[ $running == "$kernel" ]] && is_running=true
@@ -283,6 +298,7 @@ for kernel in "${KERNELS[@]}"; do
         --argjson cpuSupported "$cpu_supported" \
         --argjson downloadBytes "$download" \
         --argjson driverMissing "$driver_missing" \
+        --argjson driverUnsupported "$driver_unsupported" \
         '. + [{
             name: $name,
             package: $package,
@@ -292,7 +308,8 @@ for kernel in "${KERNELS[@]}"; do
             available: $available,
             cpuSupported: $cpuSupported,
             downloadBytes: $downloadBytes,
-            driverMissing: $driverMissing
+            driverMissing: $driverMissing,
+            driverUnsupported: $driverUnsupported
         }]' <<<"$kernels_json") || exit 1
 done
 
@@ -300,6 +317,7 @@ exec jq -nc \
     --argjson helper "$helper" \
     --argjson canChangeStandard "$can_change_standard" \
     --argjson canUseNewNames "$can_use_new_names" \
+    --argjson canUseEac "$can_use_eac" \
     --arg unsupportedReason "$unsupported_reason" \
     --argjson uefi "$uefi" \
     --argjson espFreeBytes "$esp_free" \
@@ -311,6 +329,7 @@ exec jq -nc \
         helper: $helper,
         canChangeStandard: $canChangeStandard,
         canUseNewNames: $canUseNewNames,
+        canUseEac: $canUseEac,
         unsupportedReason: $unsupportedReason,
         uefi: $uefi,
         espFreeBytes: $espFreeBytes,

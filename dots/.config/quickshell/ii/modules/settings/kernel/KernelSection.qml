@@ -36,6 +36,12 @@ ContentSection {
             icon: "speed",
             shown: Translation.tr("Mainstream Performance"),
             about: Translation.tr("Tuned for games and a responsive desktop.")
+        },
+        {
+            name: "mainstream-performance-eac",
+            icon: "sports_esports",
+            shown: Translation.tr("Mainstream Anti-Cheat"),
+            about: Translation.tr("The performance kernel, locked down for anti-cheat games. It loads only drivers Mainstream signed, so drivers built on this computer do not load, and hibernation is off.")
         }
     ]
 
@@ -136,11 +142,17 @@ ContentSection {
             readonly property bool showInstall: !card.installed && !card.confirmingInstall
             readonly property bool showNext: card.installed && !card.startsNext
             readonly property bool showRemove: card.installed && !card.confirmingRemove
-            // An older helper refuses the standard kernel, and Mainstream's kernels under
-            // the package names they carry today.
-            readonly property bool helperRefuses: SystemKernels.helper && (card.standard
-                ? !SystemKernels.canChangeStandard
-                : !SystemKernels.canUseNewNames && card.info.package === card.kernel)
+            // An older helper refuses the standard kernel, the anti-cheat kernel, and
+            // Mainstream's kernels under the package names they carry today.
+            readonly property bool helperRefuses: {
+                if (!SystemKernels.helper)
+                    return false;
+                if (card.standard)
+                    return !SystemKernels.canChangeStandard;
+                if (card.kernel === SystemKernels.eacKernel)
+                    return !SystemKernels.canUseEac;
+                return !SystemKernels.canUseNewNames && card.info.package === card.kernel;
+            }
             // Why this kernel cannot be installed here, or nothing.
             readonly property string installBlocked: {
                 if (card.helperRefuses)
@@ -149,6 +161,8 @@ ContentSection {
                     return Translation.tr("This processor cannot run this kernel. It needs AVX2 (Intel from about 2013, AMD from about 2015).");
                 if (!card.info.available)
                     return Translation.tr("Not available yet.");
+                if (card.info.driverUnsupported)
+                    return Translation.tr("NVIDIA's driver does not load on this kernel yet.");
                 if (SystemKernels.roomShort)
                     return Translation.tr("The boot partition does not have room for another kernel.");
                 return "";
