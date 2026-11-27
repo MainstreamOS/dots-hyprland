@@ -965,7 +965,12 @@ cmd_next() {
 # runs the same step after its package step.
 cmd_migrate() {
     (( $# == 0 )) || die 2 "usage: migrate"
-    [[ -z ${PKEXEC_UID:-} ]] || die 2 "migrate is run by the system, not through pkexec"
+    # The Kernel page's own pacman runs this hook with pkexec's PKEXEC_UID kept,
+    # while it holds the lock below, so that run and a direct pkexec call step aside.
+    if [[ -n ${PKEXEC_UID:-} ]]; then
+        log "migrate: started under pkexec, so this run is left to the next one"
+        return 0
+    fi
     detect_root_info
     [[ $ROOT_FSTYPE == overlay || $ROOT_SUBVOL =~ (^|/)(@|@?\.)snapshots/[0-9]+/snapshot$ ]] && return 0
     if ! try_lock 9 "$LOCK_FILE" || ! try_lock 8 "$SECURITY_LOCK" || ! try_lock 7 "$UPDATE_LOCK"; then

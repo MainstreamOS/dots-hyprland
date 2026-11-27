@@ -1754,6 +1754,20 @@ drop_first_entry "$PLAIN"
 sed -i "s|^    //$OLD_PLAIN\$|    //$PLAIN|2" "$T_CONF"
 assert_eq "$(migrate)" "" "today's name in another system's part of the menu moves nothing"
 
+# The Kernel page's own pacman runs the hook with PKEXEC_UID kept: it steps aside
+# without failing, so pacman reports no failed hook, and nothing moves.
+m_old_system
+m_swap_plain
+out=$(
+    export MAINSTREAM_KERNELS_TEST_ROOT="$T_ROOT" MAINSTREAM_KERNELS_TEST_BIN="$T_BIN"
+    # shellcheck source=/dev/null
+    source "$HELPER_SCRIPT"
+    export PKEXEC_UID=1000
+    cmd_migrate
+) && rc=0 || rc=$?
+assert_eq "$rc|$out" "0|" "migrate under pkexec steps aside without failing"
+refute "and moves nothing" settings_moved
+
 # The entry tool fails: reported, and the files the menu still names stay.
 m_old_system
 m_swap_plain
