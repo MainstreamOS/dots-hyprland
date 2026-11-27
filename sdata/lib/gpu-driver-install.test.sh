@@ -768,8 +768,9 @@ update_once() {
 said() { local IFS='|'; printf '%s' "${SAID[*]:-}"; }
 helper() { tr '\n' '|' < "$HELPER_LOG"; }
 FAKE_NEXT=mainstream; FAKE_NEXT_FAILS=""
-# No note: an older card that is on nouveau for another reason is left there.
-legacy_reset maxwell
+# No note, and the one-time offer used up: an older card that is on nouveau for
+# another reason is left there.
+legacy_reset maxwell; : > "$GPU_NVIDIA_OFFERED"
 update_once
 chk_str update-no-note "$(calls)|$(said)" "|"
 # Still offline: the note stays and the next update tries again.
@@ -885,12 +886,16 @@ not_due kepler "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK2
 not_due fermi "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF110 [GeForce GTX 580] [10de:1080] (rev a1)"
 not_due turing "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 not_due amd "03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
-legacy_reset maxwell
-not_due already-nvidia "$NV_1060"
 legacy_reset maxwell; INSTALLED=" mainstream mainstream-headers dkms nvidia-470xx-dkms nvidia-470xx-utils "
 not_due 470xx-installed "$NV_1060"
-legacy_reset maxwell; INSTALLED=" mainstream mainstream-headers dkms nvidia-dkms "
-not_due nvidia-dkms-installed "$NV_1060"
+# NVIDIA's current drivers do not run the card, so a system that kept the image's
+# one, or Arch's, gets the branch in its place.
+legacy_reset maxwell; FIX_LSPCI="$NV_1060"
+update_once
+chk_str adopt-from-open "$(all_in "$SET580" && none_in "nvidia-open-dkms nvidia-utils" && echo yes)|$(pending)|$(offered)" "yes|none|there"
+legacy_reset maxwell; INSTALLED=" mainstream mainstream-headers dkms nvidia-dkms nvidia-utils "; FIX_LSPCI="$NV_1060"
+update_once
+chk_str adopt-from-nvidia-dkms "$(all_in "$SET580" && none_in "nvidia-dkms nvidia-utils" && echo yes)|$(pending)" "yes|none"
 legacy_reset maxwell missing; nouveau_install
 not_due repo-without-set "$NV_1060"
 legacy_reset maxwell lib32-nvidia-580xx-utils; nouveau_install

@@ -342,13 +342,14 @@ gpu_nvidia_legacy_offered() {
 
 # ── gpu_nvidia_legacy_due ───────────────────────────────────────────────────
 # Whether a system set up before the repositories carried the 580xx branch should
-# get it now: the card is one 580xx is the driver for, no NVIDIA kernel driver is
-# installed, and the repositories offer it. Reads gpu_classify_nvidia_driver.
+# get it now: the card is one 580xx is the driver for, no frozen branch is
+# installed, and the repositories offer it. NVIDIA's current drivers do not run
+# these cards, so a system that kept the image's one is due as well. Reads
+# gpu_classify_nvidia_driver.
 gpu_nvidia_legacy_due() {
     local p
     [[ "${NVIDIA_DRIVER_FAMILY:-none}" == nvidia-580xx ]] || return 1
-    for p in nvidia nvidia-lts nvidia-dkms nvidia-open nvidia-open-lts nvidia-open-dkms \
-             nvidia-580xx-dkms nvidia-470xx-dkms nvidia-390xx-dkms; do
+    for p in nvidia-580xx-dkms nvidia-470xx-dkms nvidia-390xx-dkms; do
         _gpu_pkg_installed "$p" && return 1
     done
     gpu_nvidia_legacy_offered
