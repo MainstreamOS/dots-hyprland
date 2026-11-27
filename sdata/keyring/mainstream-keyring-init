@@ -271,11 +271,18 @@ case "${1:-}" in
     *  ) warn "unknown argument: $1"; exit 2 ;;
 esac
 
-# Racing a user's own transaction would fail this run and leave a lock behind,
-# and a skipped tick costs nothing.
-if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
-    log "pacman database is locked by another process; retrying on the next tick."
-    exit 0
+# Racing a user's own transaction would fail this run and leave a lock behind.
+# The next tick is hours away, and until this runs a new install's [mainstream]
+# is still the install's local folder, so a transaction like the first boot's
+# Steam preload is waited out, and a longer one hands over to the unit's restart.
+pacman_busy() { [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; }
+for (( waited = 0; waited < 600; waited += 5 )); do
+    pacman_busy || break
+    sleep 5
+done
+if pacman_busy; then
+    log "pacman database is still locked by another process; trying again in two minutes."
+    exit 1
 fi
 
 restore_unsigned_t2_repo
