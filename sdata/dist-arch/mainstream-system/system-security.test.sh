@@ -1110,8 +1110,19 @@ case "\${1:-}" in
 esac
 exit 0
 EOF
+echo mainstream-performance-eac >"$T_STATE/installed_pkgs"
+cat >"$T_BIN/pacman" <<EOF
+#!/usr/bin/env bash
+echo "pacman \$*" >>"$T_STATE/calls.log"
+if [[ \$1 == -Qq ]]; then
+    grep -qxF -- "\${@: -1}" "$T_STATE/installed_pkgs" && echo "\${@: -1}"
+    exit 0
+fi
+[[ \$1 == -S && \$(<"$T_STATE/pacman_fail") == 1 ]] && exit 1
+exit 0
+EOF
 chmod +x "$T_BIN/findmnt" "$T_BIN/lsblk" "$T_BIN/efibootmgr" "$T_BIN/sbverify" "$T_BIN/mkinitcpio" \
-         "$T_BIN/systemctl" "$T_BIN/sbctl"
+         "$T_BIN/systemctl" "$T_BIN/sbctl" "$T_BIN/pacman"
 
 AC_REL=7.3.6-arch1-3-mainstream-performance-eac
 AC_MODS="$T_ROOT/usr/lib/modules/$AC_REL"
@@ -1210,7 +1221,16 @@ echo 1 >"$T_STATE/mkinitcpio_fail"
 expect_rc 1 "an initramfs that does not build is reported" run_helper ac-refresh
 check "and leaves the one it had" test "$(<"$AC_ON_ESP/initramfs.img")" = "initramfs for $AC_REL"
 echo 0 >"$T_STATE/mkinitcpio_fail"
+# limine-snapper-sync runs the boot hooks where the kernels' files cannot be seen and the
+# firmware's variables cannot be written: the start stays as it is.
+mv "$AC_MODS" "$T_STATE/hidden-kernel"
+: >"$T_STATE/calls.log"
+check "ac-refresh where the kernel files cannot be seen succeeds" run_helper ac-refresh
+check "and takes nothing away" test -e "$AC_ON_ESP/vmlinuz" -a -e "$AC_ENTRY_FILE" -a -s "$T_STATE/efi_entries"
+check "and changes nothing" test "$(calls '^efibootmgr --quiet\|^mkinitcpio')" = 0
+mv "$T_STATE/hidden-kernel" "$AC_MODS"
 rm -rf "$AC_MODS"
+: >"$T_STATE/installed_pkgs"
 check "ac-refresh after the kernel is removed succeeds" run_helper ac-refresh
 refute "and takes the start off the EFI partition" test -e "$AC_ON_ESP"
 check "with its entry, its loader.conf and its firmware entry" \

@@ -898,11 +898,15 @@ cmd_ac_refresh() {
     find_esp || return 0
     [[ -d "$ESP/$AC_DIR" ]] || return 0
     ac_take_lock
-    if ! ac_kernel_release >/dev/null; then
+    # Gone by pacman's database: limine-snapper-sync runs the boot hooks in a sandbox
+    # that hides the kernels' files and keeps the firmware's variables read-only, and
+    # nothing a snapshot changes is in the start, so there it leaves everything be.
+    if [[ $(pacman -Qq -- "$AC_KERNEL" 2>/dev/null) != "$AC_KERNEL" ]]; then
         log "ac-refresh: the anti-cheat kernel is gone, so its start is removed"
         ac_remove_files || die 1 "the anti-cheat start could not be removed"
         return 0
     fi
+    ac_kernel_release >/dev/null || return 0
     ac_write_files || die 1 "the anti-cheat start could not be brought up to date; see $LOG"
     log "ac-refresh: completed"
 }
