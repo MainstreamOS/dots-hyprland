@@ -23,6 +23,7 @@
 #   4  package install failed (sbctl)
 #   5  sb-after-restore only: the restored system starts, but only while Secure Boot
 #      is off
+#   6  ac-setup only: the EFI partition does not have room for the anti-cheat start
 
 set -uo pipefail
 umask 022
@@ -59,7 +60,26 @@ KEYS_KEPT_STAMP="$LOG_DIR/secure-boot-keys"
 COPIES_TOOL=/usr/lib/mainstream/limine-signed-copies
 [[ -n $ROOT ]] && COPIES_TOOL="${BASH_SOURCE[0]%/*}/limine-signed-copies"
 
-VERBS=(status-sync sb-enable sb-sign sb-restore sb-after-restore)
+VERBS=(status-sync sb-enable sb-sign sb-restore sb-after-restore ac-setup ac-start ac-remove ac-refresh)
+
+# The anti-cheat start: a systemd-boot signed by Mainstream in a firmware entry of its
+# own, starting the anti-cheat kernel as Mainstream signed it with the options Easy
+# Anti-Cheat asks for. As CachyOS's eac-setup does (GPL-3.0).
+AC_KERNEL=mainstream-performance-eac
+AC_CA_CRT="$ROOT/usr/share/mainstream-eac/mainstream-secure-boot-ca.crt"
+AC_CA_DER="$ROOT/usr/share/mainstream-eac/mainstream-secure-boot-ca.der"
+AC_SDBOOT="$ROOT/usr/lib/mainstream/anticheat/systemd-bootx64.efi"
+AC_DIR=EFI/mainstream-eac
+AC_ENTRY=mainstream-eac.conf
+AC_LABEL="Mainstream OS (Anti-Cheat)"
+AC_LOADER='\EFI\mainstream-eac\systemd-bootx64.efi'
+AC_OPTIONS="lockdown=integrity lsm=landlock,lockdown,yama,integrity,bpf iommu.passthrough=0 intel_iommu=on module.sig_enforce=1 sysctl.kernel.kexec_load_disabled=1"
+AC_LOADER_MARK="# Mainstream OS anti-cheat start"
+AC_LOCK_FILE="$ROOT/run/lock/mainstream-anticheat.lock"
+AC_PACKAGES=(mainstream-eac-signing-key systemd-boot-mainstream-signed sbsigntools efibootmgr)
+KERNEL_CMDLINE_FILE="$ROOT/etc/kernel/cmdline"
+MODULES_DIR="$ROOT/usr/lib/modules"
+SYSTEMD_EFI_GUID=4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
 
 TMP_BTRFS_MNT=""
 TMP_NEW_ROOT=""
@@ -412,13 +432,164 @@ mark_keys_kept() {
     atomic_write "$KEYS_KEPT_STAMP" 644 <<<"$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 }
 
+# ── Anti-cheat start ─────────────────────────────────────────────────────────
+
+# The release of the installed anti-cheat kernel, or nothing.
+ac_kernel_release() {
+    local d base
+    for d in "$MODULES_DIR"/*/; do
+        [[ -f "${d}vmlinuz" && -r "${d}pkgbase" ]] || continue
+        IFS= read -r base <"${d}pkgbase" || true
+        [[ $base == "$AC_KERNEL" ]] || continue
+        d=${d%/}
+        printf '%s' "${d##*/}"
+        return 0
+    done
+    return 1
+}
+
+# Easy Anti-Cheat accepts the kernel and the boot manager with Mainstream's signature
+# alone: a second one, such as the owner's own, fails its check.
+signed_by_mainstream_only() {
+    [[ -f $1 && -r $AC_CA_CRT ]] || return 1
+    sbverify --cert "$AC_CA_CRT" "$1" >/dev/null 2>&1 || return 1
+    [[ $(sbverify --list "$1" 2>/dev/null | grep -c '^signature') == 1 ]]
+}
+
+ac_ca_enrolled() {
+    local tmp der rc=1
+    [[ -r $AC_CA_DER ]] || return 1
+    tmp=$(mktemp -d) || return 1
+    if sbctl --disable-landlock --quiet export-enrolled-keys --dir "$tmp/keys" >/dev/null 2>&1; then
+        for der in "$tmp"/keys/DB/*.der "$tmp"/keys/db/*.der; do
+            [[ -f $der ]] && cmp -s -- "$der" "$AC_CA_DER" && rc=0
+        done
+    fi
+    rm -rf -- "$tmp"
+    return "$rc"
+}
+
+# The system's own options without what a boot manager adds, a resume from
+# hibernation (which lockdown refuses), and earlier anti-cheat options, followed by
+# the anti-cheat options.
+ac_cmdline() {
+    local line="" opt key out=()
+    local -a drop=(BOOT_IMAGE initrd resume resume_offset)
+    if [[ -r $KERNEL_CMDLINE_FILE ]]; then
+        line=$(tr '\n' ' ' <"$KERNEL_CMDLINE_FILE")
+    elif [[ -z $ROOT ]]; then
+        line=$(</proc/cmdline)
+    fi
+    for opt in $AC_OPTIONS; do
+        drop+=("${opt%%=*}")
+    done
+    for opt in $line; do
+        for key in "${drop[@]}"; do
+            [[ $opt == "$key" || $opt == "$key="* ]] && continue 2
+        done
+        out+=("$opt")
+    done
+    [[ " ${out[*]} " == *" root="* ]] || return 1
+    printf '%s %s' "${out[*]}" "$AC_OPTIONS"
+}
+
+ac_set_up() {
+    [[ -n $ESP && -f "$ESP/$AC_DIR/systemd-bootx64.efi" && -f "$ESP/loader/entries/$AC_ENTRY" ]]
+}
+
+# The firmware entry that starts this EFI partition's anti-cheat systemd-boot; another
+# install's on another disk carries the same name.
+ac_firmware_entry() {
+    local line partuuid
+    partuuid=$(lsblk -no PARTUUID -- "$(findmnt -no SOURCE -- "$ESP" 2>/dev/null | head -n1)" 2>/dev/null | head -n1)
+    [[ -n $partuuid ]] || return 1
+    while IFS= read -r line; do
+        [[ $line == *"$AC_LABEL"* && ${line,,} == *"${partuuid,,}"* ]] || continue
+        [[ ${line,,} == *'\efi\mainstream-eac\systemd-bootx64.efi'* ]] || continue
+        [[ $line =~ ^Boot([0-9A-Fa-f]{4})\*?[[:space:]] ]] && { printf '%s' "${BASH_REMATCH[1]}"; return 0; }
+    done < <(efibootmgr 2>/dev/null)
+    return 1
+}
+
+ac_make_firmware_entry() {
+    local src disk part
+    ac_firmware_entry >/dev/null && return 0
+    src=$(findmnt -no SOURCE -- "$ESP" 2>/dev/null | head -n1)
+    [[ -n $src ]] || return 1
+    disk=$(lsblk -no PKNAME -- "$src" 2>/dev/null | head -n1)
+    part=$(cat "$ROOT/sys/class/block/${src##*/}/partition" 2>/dev/null)
+    [[ -n $disk && -n $part ]] || return 1
+    efibootmgr --quiet --create-only --disk "/dev/$disk" --part "$part" \
+        --label "$AC_LABEL" --loader "$AC_LOADER" >>"$LOG" 2>&1 || return 1
+    ac_firmware_entry >/dev/null
+}
+
+# What systemd-boot starts: Mainstream's signed copy of itself, the anti-cheat kernel
+# exactly as packaged, its initramfs, and the entry. The initramfs is built without
+# the post hooks, so sbctl's never adds a second signature to the packaged kernel.
+ac_write_files() {
+    local rel dir="$ESP/$AC_DIR" options tmp
+    rel=$(ac_kernel_release) || return 1
+    signed_by_mainstream_only "$MODULES_DIR/$rel/vmlinuz" || { log "ac: the anti-cheat kernel is not signed by Mainstream alone"; return 1; }
+    signed_by_mainstream_only "$AC_SDBOOT" || { log "ac: systemd-boot is not signed by Mainstream alone"; return 1; }
+    options=$(ac_cmdline) || { log "ac: no root= in the system's kernel options"; return 1; }
+    mkdir -p -m 755 -- "$dir" "$ESP/loader/entries" || return 1
+    cmp -s -- "$AC_SDBOOT" "$dir/systemd-bootx64.efi" || install -m 644 -- "$AC_SDBOOT" "$dir/systemd-bootx64.efi" || return 1
+    cmp -s -- "$MODULES_DIR/$rel/vmlinuz" "$dir/vmlinuz" || install -m 644 -- "$MODULES_DIR/$rel/vmlinuz" "$dir/vmlinuz" || return 1
+    tmp="$dir/initramfs.img.new"
+    if ! mkinitcpio --nopost -k "$rel" -g "$tmp" >>"$LOG" 2>&1; then
+        rm -f -- "$tmp"
+        log "ac: the initramfs for $rel was not built"
+        return 1
+    fi
+    mv -f -- "$tmp" "$dir/initramfs.img" || return 1
+    atomic_write "$ESP/loader/entries/$AC_ENTRY" 644 < <(printf 'title   %s\nlinux   /%s/vmlinuz\ninitrd  /%s/initramfs.img\noptions %s\n' \
+        "$AC_LABEL" "$AC_DIR" "$AC_DIR" "$options")
+    # A loader.conf another system's systemd-boot keeps is left alone; the start then
+    # names the entry through the boot loader's one-shot variable.
+    if [[ ! -e "$ESP/loader/loader.conf" ]] || grep -qxF -- "$AC_LOADER_MARK" "$ESP/loader/loader.conf"; then
+        atomic_write "$ESP/loader/loader.conf" 644 < <(printf '%s\ndefault %s\ntimeout 0\neditor no\n' "$AC_LOADER_MARK" "$AC_ENTRY")
+    fi
+    sync -f "$dir" 2>/dev/null || true
+}
+
+# sbctl signs every file in its list again on updates, so none of Mainstream's signed
+# files may be in it.
+ac_protect_from_sbctl() {
+    local f
+    while IFS= read -r f; do
+        case $f in
+            "$ESP/$AC_DIR"/* | "$AC_SDBOOT" | "$MODULES_DIR"/*-"$AC_KERNEL"/vmlinuz)
+                sbctl remove-file "$f" >>"$LOG" 2>&1 || true ;;
+        esac
+    done < <(sbctl list-files 2>/dev/null | grep '^/' || true)
+}
+
+ac_remove_files() {
+    local num
+    if num=$(ac_firmware_entry); then
+        efibootmgr --quiet --bootnum "$num" --delete-bootnum >>"$LOG" 2>&1 || return 1
+    fi
+    [[ -n $ESP ]] || return 0
+    rm -f -- "$ESP/loader/entries/$AC_ENTRY"
+    if [[ -f "$ESP/loader/loader.conf" ]] && grep -qxF -- "$AC_LOADER_MARK" "$ESP/loader/loader.conf"; then
+        rm -f -- "$ESP/loader/loader.conf"
+    fi
+    rm -rf -- "${ESP:?}/$AC_DIR"
+}
+
+ac_take_lock() {
+    { exec 8>"$AC_LOCK_FILE"; } 2>/dev/null || die 1 "could not open lock file $AC_LOCK_FILE"
+    flock -w 300 8 || die 1 "the anti-cheat start is being changed already"
+}
+
 # ── Subcommands ──────────────────────────────────────────────────────────────
 
 cmd_status_sync() {
     (( $# == 0 )) || die 2 "usage: status-sync"
     refuse_symlinks "$STATE_FILE" "$LOG"
 
-    local sb_keys=false sb_verified=false synced_at
+    local sb_keys=false sb_verified=false ac_ready=false ac_ca=false synced_at
 
     if has_sbctl; then
         if sbctl_has_keys; then
@@ -427,7 +598,9 @@ cmd_status_sync() {
         if [[ $sb_keys == true ]] && verify_boot_efi_files; then
             sb_verified=true
         fi
+        ac_ca_enrolled && ac_ca=true
     fi
+    find_esp && ac_set_up && ac_firmware_entry >/dev/null && ac_ready=true
 
     synced_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
@@ -435,10 +608,14 @@ cmd_status_sync() {
     state=$(jq -nc \
         --argjson sbctlKeysExist "$sb_keys" \
         --argjson sbctlVerified "$sb_verified" \
+        --argjson antiCheatReady "$ac_ready" \
+        --argjson antiCheatCaEnrolled "$ac_ca" \
         --arg lastSynced "$synced_at" \
         '{
             sbctlKeysExist: $sbctlKeysExist,
             sbctlVerified: $sbctlVerified,
+            antiCheatReady: $antiCheatReady,
+            antiCheatCaEnrolled: $antiCheatCaEnrolled,
             lastSynced: $lastSynced
         }') || die 1 "could not build the security state"
     atomic_write "$STATE_FILE" 644 <<<"$state"
@@ -641,6 +818,95 @@ cmd_sb_sign() {
     log "sb-sign: completed successfully"
 }
 
+cmd_ac_setup() {
+    (( $# == 0 )) || die 2 "usage: ac-setup"
+    refuse_symlinks "$STATE_FILE" "$LOG"
+
+    [[ -d $EFIVARS_DIR ]] || die 3 "the anti-cheat start requires UEFI firmware"
+    require_installed_system
+    has_sbctl && sbctl_has_keys || die 3 "set up Secure Boot first"
+    read_efivar_flag "$EFIVARS_DIR/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c" && \
+        die 3 "the firmware is in Setup Mode; enroll the Secure Boot keys first"
+    ac_kernel_release >/dev/null || die 3 "install the anti-cheat kernel first"
+    find_esp || die 1 "could not find the EFI partition"
+
+    log "ac-setup: pacman -S --needed --noconfirm ${AC_PACKAGES[*]}"
+    pacman -S --needed --noconfirm "${AC_PACKAGES[@]}" </dev/null >>"$LOG" 2>&1 || \
+        die 4 "the anti-cheat packages could not be installed"
+
+    local rel need avail
+    rel=$(ac_kernel_release)
+    need=$(( $(stat -c %s -- "$MODULES_DIR/$rel/vmlinuz") * 4 + 64 * 1024 * 1024 ))
+    avail=$(df -B1 --output=avail -- "$ESP" 2>/dev/null | tail -n1 | tr -d ' ')
+    [[ $avail =~ ^[0-9]+$ ]] && (( avail >= need )) || \
+        [[ -d "$ESP/$AC_DIR" ]] || die 6 "the EFI partition does not have room for the anti-cheat start"
+
+    if ! ac_ca_enrolled; then
+        log "ac-setup: adding the Mainstream OS Secure Boot CA to the firmware's db"
+        mkdir -p -m 700 -- "$SBCTL_DIR/keys/custom/db" || die 1 "could not create sbctl's custom key folder"
+        install -m 644 -- "$AC_CA_DER" "$SBCTL_DIR/keys/custom/db/mainstream-secure-boot-ca.der" || \
+            die 1 "could not hand the certificate to sbctl"
+        sbctl enroll-keys --append --partial db --custom --ignore-immutable >>"$LOG" 2>&1 || \
+            die 1 "the firmware did not accept the Mainstream OS certificate"
+        ac_ca_enrolled || die 1 "the Mainstream OS certificate is not in the firmware's db after enrolling it"
+    fi
+
+    ac_take_lock
+    ac_write_files || die 1 "the anti-cheat start could not be written to the EFI partition; see $LOG"
+    ac_make_firmware_entry || die 1 "the anti-cheat start's firmware entry could not be created"
+    ac_protect_from_sbctl
+
+    cmd_status_sync
+    log "ac-setup: completed"
+}
+
+# Restarts into the anti-cheat start once. A restart that does not happen takes the
+# choice back, so the next ordinary restart does not land there.
+cmd_ac_start() {
+    (( $# == 0 )) || die 2 "usage: ac-start"
+    local num name
+    find_esp && ac_set_up || die 3 "the anti-cheat start is not set up"
+    num=$(ac_firmware_entry) || die 1 "the anti-cheat start's firmware entry is missing; set it up again"
+    efibootmgr --quiet --bootnext "$num" >>"$LOG" 2>&1 || die 1 "the firmware did not take the choice"
+    if ! grep -qxF -- "$AC_LOADER_MARK" "$ESP/loader/loader.conf" 2>/dev/null; then
+        name="$EFIVARS_DIR/LoaderEntryOneShot-$SYSTEMD_EFI_GUID"
+        chattr -i -- "$name" 2>/dev/null || true
+        { printf '\x07\x00\x00\x00'; printf '%s\0' "$AC_ENTRY" | iconv -f UTF-8 -t UTF-16LE; } >"$name" 2>>"$LOG" || \
+            log "ac-start: the boot loader's one-shot entry was not set"
+    fi
+    log "ac-start: restarting into Boot$num"
+    if ! systemctl reboot; then
+        efibootmgr --quiet --delete-bootnext >>"$LOG" 2>&1 || true
+        die 1 "the restart did not start"
+    fi
+}
+
+cmd_ac_remove() {
+    (( $# == 0 )) || die 2 "usage: ac-remove"
+    refuse_symlinks "$STATE_FILE" "$LOG"
+    find_esp || die 1 "could not find the EFI partition"
+    ac_take_lock
+    ac_remove_files || die 1 "the anti-cheat start's firmware entry could not be removed"
+    cmd_status_sync
+    log "ac-remove: completed"
+}
+
+# After every boot image rebuild and systemd-boot update: the copies follow the
+# installed kernel, and a kernel that is gone takes the start with it.
+cmd_ac_refresh() {
+    (( $# == 0 )) || die 2 "usage: ac-refresh"
+    find_esp || return 0
+    [[ -d "$ESP/$AC_DIR" ]] || return 0
+    ac_take_lock
+    if ! ac_kernel_release >/dev/null; then
+        log "ac-refresh: the anti-cheat kernel is gone, so its start is removed"
+        ac_remove_files || die 1 "the anti-cheat start could not be removed"
+        return 0
+    fi
+    ac_write_files || die 1 "the anti-cheat start could not be brought up to date; see $LOG"
+    log "ac-refresh: completed"
+}
+
 main() {
     local verb=${1:-} v known=0
     (( $# )) && shift
@@ -659,9 +925,12 @@ main() {
     (( known )) || die 2 "usage: system-security $(IFS='|'; printf '%s' "${VERBS[*]}")"
 
     # In braces: a redirection on a bare exec stays for the rest of the run, and every
-    # reason printed after it would be lost.
-    { exec 9>"$LOCK_FILE"; } 2>/dev/null || die 1 "could not open lock file $LOCK_FILE"
-    flock -w 120 9 || die 1 "another security operation is already running"
+    # reason printed after it would be lost. ac-refresh runs from the boot tools' hook,
+    # which a Secure Boot change can be waiting on, so it keeps to its own lock.
+    if [[ $verb != ac-refresh ]]; then
+        { exec 9>"$LOCK_FILE"; } 2>/dev/null || die 1 "could not open lock file $LOCK_FILE"
+        flock -w 120 9 || die 1 "another security operation is already running"
+    fi
 
     "cmd_${verb//-/_}" "$@"
     exit 0

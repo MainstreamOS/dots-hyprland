@@ -118,8 +118,10 @@ PROBE_SHAPE='
     (.unsupportedReason | IN("", "snapshot", "boot-tools")) and
     (.antiCheat | type == "object") and
     (.antiCheat | keys == (["tpm2", "measuredBoot", "iommu", "iommuPassthrough",
-                            "lockdown", "kexecDisabled", "bpfLsm"] | sort)) and
-    (.antiCheat | [.tpm2, .measuredBoot, .iommu, .iommuPassthrough, .kexecDisabled, .bpfLsm]
+                            "lockdown", "kexecDisabled", "bpfLsm", "kernelInstalled",
+                            "startReady", "certificateEnrolled", "startedThroughIt"] | sort)) and
+    (.antiCheat | [.tpm2, .measuredBoot, .iommu, .iommuPassthrough, .kexecDisabled, .bpfLsm,
+                   .kernelInstalled, .startReady, .certificateEnrolled, .startedThroughIt]
         | all(type == "boolean")) and
     (.antiCheat.lockdown | IN("none", "integrity", "confidentiality", "unknown"))
 '
@@ -190,6 +192,8 @@ probe() {  # the arguments are this run's settings, as NAME=value
         SBCTL_DB_KEY="$S_NONE/db.key" \
         SBCTL_DB_KEY_ALT="$S_NONE/db.key.alt" \
         KEYS_KEPT_STAMP="$S_NONE/secure-boot-keys" \
+        MODULES_DIR="$S_NONE/modules" \
+        KERNEL_RELEASE="" \
         "$@" "$STATUS_SCRIPT"
 }
 
@@ -320,7 +324,8 @@ anticheat() {  # prints one antiCheat field for the given settings
 json_3e=$(probe)
 assert_jq "$json_3e" '.antiCheat == {
     tpm2: false, measuredBoot: false, iommu: false, iommuPassthrough: false,
-    lockdown: "unknown", kexecDisabled: false, bpfLsm: false
+    lockdown: "unknown", kexecDisabled: false, bpfLsm: false,
+    kernelInstalled: false, startReady: false, certificateEnrolled: false, startedThroughIt: false
 }' "Scenario 3E: a machine with none of it reports nothing"
 assert_jq "$json_3e" "$PROBE_SHAPE" "Scenario 3E: exactly the agreed fields"
 
@@ -428,7 +433,8 @@ json_3e=$(probe TPM_VERSION_FILE="$AC/tpm_version_major" TPM_PCR_DIR="$AC/pcr-sh
                 PROC_KEXEC_LOAD_DISABLED="$AC/kexec_load_disabled" SYS_LSM="$AC/lsm")
 assert_jq "$json_3e" '.antiCheat == {
     tpm2: true, measuredBoot: true, iommu: false, iommuPassthrough: false,
-    lockdown: "none", kexecDisabled: false, bpfLsm: true
+    lockdown: "none", kexecDisabled: false, bpfLsm: true,
+    kernelInstalled: false, startReady: false, certificateEnrolled: false, startedThroughIt: false
 }' "Scenario 3E: every field together"
 assert_jq "$json_3e" "$PROBE_SHAPE" "Scenario 3E: exactly the agreed fields with everything set"
 
@@ -721,7 +727,7 @@ check "status-sync succeeds while sbctl is not installed" run_helper_without_sbc
 assert_jq "$(<"$STATE_JSON")" '
     .sbctlKeysExist == false and .sbctlVerified == false and
     (.lastSynced | type == "string") and
-    (keys == ["lastSynced", "sbctlKeysExist", "sbctlVerified"])
+    (keys == ["antiCheatCaEnrolled", "antiCheatReady", "lastSynced", "sbctlKeysExist", "sbctlVerified"])
 ' "status-sync records no keys and nothing verified, and nothing else"
 
 # 4.3 A boot file that is not signed stops sb-enable before the firmware is touched
@@ -1001,5 +1007,226 @@ assert_eq "$AR_RC" 1 "sb-after-restore exits 1 when a loader cannot be replaced"
 check "no temporary directory is left mounted" test -z "$(find "${TMPDIR:-/tmp}" -maxdepth 2 -name .restored-root 2>/dev/null)"
 enrolled_loaders
 rm -f "$STAMP"
+
+
+printf '\n=== 5. The anti-cheat start ===\n'
+
+# The ESP is its own partition here, with a PARTUUID the firmware entries name.
+cat >"$T_BIN/findmnt" <<EOF
+#!/usr/bin/env bash
+if [[ "\$*" == *SOURCE* && "\${@: -1}" == "$ESP_T" ]]; then
+    echo /dev/nvme0n1p1
+    exit 0
+fi
+echo "/dev/nvme0n1p2[\$(<"$T_STATE/subvol")] \$(<"$T_STATE/fstype") 3a2c52e5-9d08-4bc4-9ff3-2c2f14815f5c"
+EOF
+cat >"$T_BIN/lsblk" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+    *PARTUUID*) echo 5a1f0b2c-7e3d-4c8a-9b1e-0123456789ab ;;
+    *PKNAME*) echo nvme0n1 ;;
+esac
+EOF
+mkdir -p "$T_ROOT/sys/class/block/nvme0n1p1"
+echo 1 >"$T_ROOT/sys/class/block/nvme0n1p1/partition"
+: >"$T_STATE/efi_entries"
+cat >"$T_BIN/efibootmgr" <<EOF
+#!/usr/bin/env bash
+echo "efibootmgr \$*" >>"$T_STATE/calls.log"
+args=" \$* "
+if [[ \$args == *" --create-only "* ]]; then
+    label="" loader=""
+    while (( \$# )); do
+        case \$1 in --label) label=\$2; shift ;; --loader) loader=\$2; shift ;; esac
+        shift
+    done
+    printf 'Boot000A* %s\tHD(1,GPT,5A1F0B2C-7E3D-4C8A-9B1E-0123456789AB,0x800,0x100000)/%s\n' "\$label" "\$loader" >>"$T_STATE/efi_entries"
+    exit 0
+fi
+if [[ \$args == *" --delete-bootnum "* ]]; then
+    : >"$T_STATE/efi_entries"
+    exit 0
+fi
+[[ \$args == *" --bootnext "* || \$args == *" --delete-bootnext "* ]] && exit 0
+echo "BootCurrent: 0001"
+printf 'Boot0001* Mainstream\tHD(1,GPT,5A1F0B2C-7E3D-4C8A-9B1E-0123456789AB,0x800,0x100000)/\\\\EFI\\\\limine\\\\limine_x64.efi\n'
+cat "$T_STATE/efi_entries"
+EOF
+# Every file Mainstream signed says so; "and the owner too" stands for a second signature.
+cat >"$T_BIN/sbverify" <<'EOF'
+#!/usr/bin/env bash
+file=${@: -1}
+if [[ $1 == --list ]]; then
+    echo "signature 1"
+    grep -q 'and the owner too' "$file" && echo "signature 2"
+    exit 0
+fi
+grep -q 'signed by Mainstream' "$file"
+EOF
+echo 0 >"$T_STATE/mkinitcpio_fail"
+cat >"$T_BIN/mkinitcpio" <<EOF
+#!/usr/bin/env bash
+echo "mkinitcpio \$*" >>"$T_STATE/calls.log"
+[[ \$(<"$T_STATE/mkinitcpio_fail") == 1 ]] && exit 1
+out="" rel=""
+while (( \$# )); do
+    case \$1 in -g) out=\$2; shift ;; -k) rel=\$2; shift ;; esac
+    shift
+done
+echo "initramfs for \$rel" >"\$out"
+EOF
+echo 0 >"$T_STATE/reboot_rc"
+cat >"$T_BIN/systemctl" <<EOF
+#!/usr/bin/env bash
+echo "systemctl \$*" >>"$T_STATE/calls.log"
+[[ \$1 == reboot ]] && exit "\$(<"$T_STATE/reboot_rc")"
+exit 0
+EOF
+mkdir -p "$T_STATE/enrolled_db"
+: >"$T_STATE/sbctl_files"
+cat >"$T_BIN/sbctl" <<EOF
+#!/usr/bin/env bash
+echo "sbctl \$*" >>"$T_STATE/calls.log"
+args=" \$* "
+if [[ \$args == *" export-enrolled-keys "* ]]; then
+    dir=\${@: -1}
+    mkdir -p "\$dir/DB"
+    cp "$T_STATE/enrolled_db/." "\$dir/DB/" -r 2>/dev/null
+    exit 0
+fi
+case "\${1:-}" in
+    status)
+        if [[ -f "$T_ROOT/var/lib/sbctl/keys/db/db.key" ]]; then
+            echo '{"installed": true}'
+        else
+            echo '{"installed": false}'
+        fi
+        ;;
+    enroll-keys)
+        [[ \$args == *" --append "* ]] && cp "$T_ROOT/var/lib/sbctl/keys/custom/db/"*.der "$T_STATE/enrolled_db/"
+        ;;
+    list-files) cat "$T_STATE/sbctl_files" ;;
+    verify) echo "✓ \${2:-} is signed" ;;
+esac
+exit 0
+EOF
+chmod +x "$T_BIN/findmnt" "$T_BIN/lsblk" "$T_BIN/efibootmgr" "$T_BIN/sbverify" "$T_BIN/mkinitcpio" \
+         "$T_BIN/systemctl" "$T_BIN/sbctl"
+
+AC_REL=7.3.6-arch1-3-mainstream-performance-eac
+AC_MODS="$T_ROOT/usr/lib/modules/$AC_REL"
+AC_ON_ESP="$ESP_T/EFI/mainstream-eac"
+AC_ENTRY_FILE="$ESP_T/loader/entries/mainstream-eac.conf"
+mkdir -p "$T_ROOT/usr/share/mainstream-eac" "$T_ROOT/usr/lib/mainstream/anticheat" "$T_ROOT/etc/kernel" \
+         "$T_ROOT/var/lib/sbctl/keys/db"
+printf 'the CA\n' >"$T_ROOT/usr/share/mainstream-eac/mainstream-secure-boot-ca.crt"
+printf 'the CA in DER\n' >"$T_ROOT/usr/share/mainstream-eac/mainstream-secure-boot-ca.der"
+printf 'systemd-boot, signed by Mainstream\n' >"$T_ROOT/usr/lib/mainstream/anticheat/systemd-bootx64.efi"
+touch "$T_ROOT/var/lib/sbctl/keys/db/db.key"
+printf 'root=UUID=3a2c52e5 rw rootflags=subvol=@ quiet resume=UUID=9f1c resume_offset=533760 lockdown=none\n' \
+    >"$T_ROOT/etc/kernel/cmdline"
+write_efivar "$SETUP_VAR" 0
+printf 'btrfs\n' >"$T_STATE/fstype"
+printf '/@\n' >"$T_STATE/subvol"
+ac_kernel() {  # $1 = what the packaged kernel says about itself
+    mkdir -p "$AC_MODS"
+    printf '%s\n' "$1" >"$AC_MODS/vmlinuz"
+    echo mainstream-performance-eac >"$AC_MODS/pkgbase"
+}
+
+: >"$T_STATE/calls.log"
+expect_rc 3 "ac-setup without the anti-cheat kernel exits 3" run_helper ac-setup
+check "the reason names the kernel" grep -q 'install the anti-cheat kernel first' <<<"$(stderr_of run_helper ac-setup)"
+ac_kernel 'kernel 1, signed by Mainstream'
+write_efivar "$SETUP_VAR" 1
+expect_rc 3 "ac-setup while the firmware is in Setup Mode exits 3" run_helper ac-setup
+write_efivar "$SETUP_VAR" 0
+mv "$T_ROOT/var/lib/sbctl/keys/db/db.key" "$T_STATE/db.key.aside"
+expect_rc 3 "ac-setup before Secure Boot is set up exits 3" run_helper ac-setup
+mv "$T_STATE/db.key.aside" "$T_ROOT/var/lib/sbctl/keys/db/db.key"
+check "nothing is installed or enrolled before then" test "$(calls '^pacman -S\|enroll-keys\|efibootmgr --create')" = 0
+
+printf '%s\n' "$AC_ON_ESP/vmlinuz" "/boot/efi/EFI/Linux/mainstream_linux.efi" >"$T_STATE/sbctl_files"
+: >"$T_STATE/calls.log"
+check "ac-setup succeeds" run_helper ac-setup
+check "it installs the certificate, the signed systemd-boot and their tools" \
+    test "$(calls '^pacman -S --needed --noconfirm mainstream-eac-signing-key systemd-boot-mainstream-signed sbsigntools efibootmgr$')" = 1
+check "the certificate is handed to sbctl as a custom db key" \
+    cmp -s "$T_ROOT/usr/share/mainstream-eac/mainstream-secure-boot-ca.der" \
+           "$T_ROOT/var/lib/sbctl/keys/custom/db/mainstream-secure-boot-ca.der"
+check "and appended to the firmware's db with the owner's keys" \
+    test "$(calls '^sbctl enroll-keys --append --partial db --custom --ignore-immutable$')" = 1
+check "systemd-boot is copied as packaged" \
+    cmp -s "$T_ROOT/usr/lib/mainstream/anticheat/systemd-bootx64.efi" "$AC_ON_ESP/systemd-bootx64.efi"
+check "the kernel is copied as packaged" cmp -s "$AC_MODS/vmlinuz" "$AC_ON_ESP/vmlinuz"
+assert_eq "$(<"$AC_ON_ESP/initramfs.img")" "initramfs for $AC_REL" "its initramfs is built for that kernel"
+check "without the post hooks, so sbctl never signs the packaged kernel" test "$(calls "^mkinitcpio --nopost -k $AC_REL -g ")" = 1
+assert_eq "$(sed -n 's/^options //p' "$AC_ENTRY_FILE")" \
+    "root=UUID=3a2c52e5 rw rootflags=subvol=@ quiet lockdown=integrity lsm=landlock,lockdown,yama,integrity,bpf iommu.passthrough=0 intel_iommu=on module.sig_enforce=1 sysctl.kernel.kexec_load_disabled=1" \
+    "the entry keeps the system's options, drops resume and its own old ones, and adds the anti-cheat set"
+check "the entry starts the copied kernel" grep -qx 'linux   /EFI/mainstream-eac/vmlinuz' "$AC_ENTRY_FILE"
+check "systemd-boot starts that entry at once and lets nobody edit it" \
+    test "$(cat "$ESP_T/loader/loader.conf")" = "$(printf '# Mainstream OS anti-cheat start\ndefault mainstream-eac.conf\ntimeout 0\neditor no')"
+check "a firmware entry is made, outside the boot order" \
+    test "$(calls '^efibootmgr --quiet --create-only --disk /dev/nvme0n1 --part 1 --label Mainstream OS (Anti-Cheat) --loader \\EFI\\mainstream-eac\\systemd-bootx64.efi$')" = 1
+check "a copy sbctl had on its list is taken off it" test "$(calls "^sbctl remove-file $AC_ON_ESP/vmlinuz$")" = 1
+check "and the owner's own images stay on it" test "$(calls 'remove-file /boot/efi/EFI/Linux')" = 0
+assert_jq "$(<"$STATE_JSON")" '.antiCheatReady == true and .antiCheatCaEnrolled == true' \
+    "the state records the start as ready and the certificate as enrolled"
+
+: >"$T_STATE/calls.log"
+check "ac-setup a second time succeeds" run_helper ac-setup
+check "and neither enrolls nor makes a firmware entry again" test "$(calls 'enroll-keys\|efibootmgr --quiet --create')" = 0
+
+ac_kernel 'kernel 2, signed by Mainstream and the owner too'
+expect_rc 1 "a kernel that carries a second signature is refused" run_helper ac-setup
+ac_kernel 'kernel 2, signed by Mainstream'
+
+printf 'default arch.conf\ntimeout 3\n' >"$ESP_T/loader/loader.conf"
+check "ac-setup beside another system's systemd-boot succeeds" run_helper ac-setup
+assert_eq "$(<"$ESP_T/loader/loader.conf")" "$(printf 'default arch.conf\ntimeout 3')" "that system's loader.conf is left alone"
+
+: >"$T_STATE/calls.log"
+check "ac-start restarts into the start" run_helper ac-start
+check "it names the anti-cheat firmware entry for the next start alone" test "$(calls '^efibootmgr --quiet --bootnext 000A$')" = 1
+check "and restarts" test "$(calls '^systemctl reboot$')" = 1
+ONESHOT="$T_ROOT/sys/firmware/efi/efivars/LoaderEntryOneShot-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+assert_eq "$(tail -c +5 "$ONESHOT" | iconv -f UTF-16LE -t UTF-8 | tr -d '\0')" "mainstream-eac.conf" \
+    "beside another loader.conf, systemd-boot is told the entry through its one-shot variable"
+echo 1 >"$T_STATE/reboot_rc"
+: >"$T_STATE/calls.log"
+expect_rc 1 "a restart that does not happen fails" run_helper ac-start
+check "and takes the choice back" test "$(calls '^efibootmgr --quiet --delete-bootnext$')" = 1
+echo 0 >"$T_STATE/reboot_rc"
+rm -f "$ESP_T/loader/loader.conf" "$ONESHOT"
+run_helper ac-setup
+
+: >"$T_STATE/calls.log"
+ac_kernel 'kernel 3, signed by Mainstream'
+check "ac-refresh follows a kernel update" run_helper ac-refresh
+check "with the new kernel copied" cmp -s "$AC_MODS/vmlinuz" "$AC_ON_ESP/vmlinuz"
+check "and its initramfs built again" test "$(calls '^mkinitcpio --nopost')" = 1
+echo 1 >"$T_STATE/mkinitcpio_fail"
+expect_rc 1 "an initramfs that does not build is reported" run_helper ac-refresh
+check "and leaves the one it had" test "$(<"$AC_ON_ESP/initramfs.img")" = "initramfs for $AC_REL"
+echo 0 >"$T_STATE/mkinitcpio_fail"
+rm -rf "$AC_MODS"
+check "ac-refresh after the kernel is removed succeeds" run_helper ac-refresh
+refute "and takes the start off the EFI partition" test -e "$AC_ON_ESP"
+check "with its entry, its loader.conf and its firmware entry" \
+    test ! -e "$AC_ENTRY_FILE" -a ! -e "$ESP_T/loader/loader.conf" -a ! -s "$T_STATE/efi_entries"
+: >"$T_STATE/calls.log"
+check "ac-refresh where nothing is set up does nothing" run_helper ac-refresh
+check "not even a build" test ! -s "$T_STATE/calls.log"
+
+ac_kernel 'kernel 3, signed by Mainstream'
+run_helper ac-setup
+check "ac-remove succeeds" run_helper ac-remove
+check "and leaves nothing of the start behind" \
+    test ! -e "$AC_ON_ESP" -a ! -e "$AC_ENTRY_FILE" -a ! -s "$T_STATE/efi_entries"
+assert_jq "$(<"$STATE_JSON")" '.antiCheatReady == false and .antiCheatCaEnrolled == true' \
+    "the state records the start as gone, with the certificate still enrolled"
+expect_rc 3 "ac-start with nothing set up exits 3" run_helper ac-start
+
 
 printf '\nAll %d tests passed.\n' "$PASS_COUNT"

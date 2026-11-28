@@ -23,6 +23,9 @@ PROC_KEXEC_LOAD_DISABLED="${PROC_KEXEC_LOAD_DISABLED:-/proc/sys/kernel/kexec_loa
 SBCTL_DB_KEY="${SBCTL_DB_KEY:-/var/lib/sbctl/keys/db/db.key}"
 SBCTL_DB_KEY_ALT="${SBCTL_DB_KEY_ALT:-/usr/share/secureboot/keys/db/db.key}"
 KEYS_KEPT_STAMP="${KEYS_KEPT_STAMP:-/var/log/mainstream/secure-boot-keys}"
+MODULES_DIR="${MODULES_DIR:-/usr/lib/modules}"
+KERNEL_RELEASE="${KERNEL_RELEASE-$(uname -r 2>/dev/null)}"
+AC_KERNEL=mainstream-performance-eac
 
 read_efivar_flag() {
     local file=$1 val=""
@@ -64,6 +67,8 @@ iommu_passthrough=false
 lockdown=unknown
 kexec_disabled=false
 bpf_lsm=false
+ac_kernel=false
+ac_start=false
 
 # What the helper last recorded, and what stands in for it until it has.
 state_default='{"sbctlKeysExist":false,"sbctlVerified":false}'
@@ -178,6 +183,18 @@ read_line "$PROC_KEXEC_LOAD_DISABLED"
 read_line "$SYS_LSM"
 [[ ,$REPLY, == *,bpf,* ]] && bpf_lsm=true
 
+for pkgbase in "$MODULES_DIR"/*/pkgbase; do
+    read_line "$pkgbase"
+    [[ $REPLY == "$AC_KERNEL" && -f ${pkgbase%/pkgbase}/vmlinuz ]] && ac_kernel=true
+done
+# This start came through the anti-cheat systemd-boot, which names its own file in
+# the boot loader's variables, and runs the anti-cheat kernel.
+loader_image="$EFIVARS_DIR/LoaderImageIdentifier-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+if [[ $KERNEL_RELEASE == *-"$AC_KERNEL" && -r $loader_image ]] \
+   && tail -c +5 -- "$loader_image" 2>/dev/null | tr -d '\0' | grep -qi 'mainstream-eac'; then
+    ac_start=true
+fi
+
 exec jq -nc \
     --argjson helper "$helper" \
     --arg unsupportedReason "$unsupported_reason" \
@@ -197,6 +214,8 @@ exec jq -nc \
     --arg lockdown "$lockdown" \
     --argjson kexecDisabled "$kexec_disabled" \
     --argjson bpfLsm "$bpf_lsm" \
+    --argjson acKernel "$ac_kernel" \
+    --argjson acStart "$ac_start" \
     '{
         helper: $helper,
         unsupportedReason: $unsupportedReason,
@@ -216,6 +235,10 @@ exec jq -nc \
             iommuPassthrough: $iommuPassthrough,
             lockdown: $lockdown,
             kexecDisabled: $kexecDisabled,
-            bpfLsm: $bpfLsm
+            bpfLsm: $bpfLsm,
+            kernelInstalled: $acKernel,
+            startReady: ($state.antiCheatReady == true),
+            certificateEnrolled: ($state.antiCheatCaEnrolled == true),
+            startedThroughIt: $acStart
         }
     }'

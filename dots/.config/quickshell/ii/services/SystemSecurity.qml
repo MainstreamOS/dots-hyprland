@@ -46,6 +46,12 @@ Singleton {
     property string lockdown: "unknown"
     property bool kexecDisabled: false
     property bool bpfLsm: false
+    // The anti-cheat start: the kernel, its separate signed start, and whether this
+    // session came through it.
+    property bool acKernelInstalled: false
+    property bool acStartReady: false
+    property bool acCertificateEnrolled: false
+    property bool acStartedThroughIt: false
     readonly property bool lockedDown: root.lockdown === "integrity" || root.lockdown === "confidentiality"
 
     readonly property string unsupportedText: {
@@ -232,6 +238,10 @@ Singleton {
         root.lockdown = typeof ac.lockdown === "string" ? ac.lockdown : "unknown";
         root.kexecDisabled = ac.kexecDisabled === true;
         root.bpfLsm = ac.bpfLsm === true;
+        root.acKernelInstalled = ac.kernelInstalled === true;
+        root.acStartReady = ac.startReady === true;
+        root.acCertificateEnrolled = ac.certificateEnrolled === true;
+        root.acStartedThroughIt = ac.startedThroughIt === true;
         root.probeFailed = false;
         root.loaded = true;
     }
@@ -289,6 +299,14 @@ Singleton {
             return Translation.tr("Could not re-sign boot files.");
         case "sb-restore":
             return Translation.tr("Could not set up signing again.");
+        case "ac-setup":
+            return code === 6
+                ? Translation.tr("The boot partition does not have room for the anti-cheat start.")
+                : Translation.tr("Could not set up the anti-cheat start.");
+        case "ac-start":
+            return Translation.tr("Could not restart into the anti-cheat start.");
+        case "ac-remove":
+            return Translation.tr("Could not remove the anti-cheat start.");
         default:
             return Translation.tr("The change could not be applied.");
         }
@@ -302,6 +320,10 @@ Singleton {
             return Translation.tr("Boot files re-signed and verified.");
         case "sb-restore":
             return Translation.tr("Signing is set up again, and the boot files are signed and verified.");
+        case "ac-setup":
+            return Translation.tr("The anti-cheat start is set up. Restart into it before playing a protected game.");
+        case "ac-remove":
+            return Translation.tr("The anti-cheat start was removed.");
         default:
             return "";
         }
@@ -344,5 +366,17 @@ Singleton {
 
     function restoreSigning() {
         root.runHelper("sb-restore", "secureBoot");
+    }
+
+    function setUpAntiCheat() {
+        root.runHelper("ac-setup", "antiCheat");
+    }
+
+    function startAntiCheat() {
+        root.runHelper("ac-start", "antiCheat");
+    }
+
+    function removeAntiCheat() {
+        root.runHelper("ac-remove", "antiCheat");
     }
 }

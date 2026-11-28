@@ -54,12 +54,45 @@ ContentSection {
             fix: Translation.tr("Not set for this start.")
         },
         {
+            // Met once Epic lists Mainstream's key.
             met: false,
             what: Translation.tr("Kernel is signed by a maker games trust"),
-            fix: Translation.tr("Not available on Mainstream yet. Games do not accept keys made on this computer.")
+            fix: SystemSecurity.acStartedThroughIt
+                ? Translation.tr("This start is signed by Mainstream. Games accept it once Epic adds Mainstream's key to its list.")
+                : Translation.tr("Use the anti-cheat start below. Games accept it once Epic adds Mainstream's key to its list.")
         }
     ]
     readonly property int metCount: root.checks.filter(check => check.met).length
+
+    // One confirmation is open at a time.
+    property string openPanel: ""
+
+    function togglePanel(name) {
+        root.openPanel = root.openPanel === name ? "" : name;
+    }
+
+    function closePanel() {
+        root.openPanel = "";
+    }
+
+    // Why the anti-cheat start cannot be set up here, or nothing.
+    readonly property string startBlocked: {
+        if (!SystemSecurity.uefi)
+            return Translation.tr("The anti-cheat start needs UEFI firmware.");
+        if (!SystemSecurity.sbctlKeysExist)
+            return Translation.tr("Set up Secure Boot in the Secure Boot section first.");
+        if (!SystemSecurity.acKernelInstalled)
+            return Translation.tr("Install the Mainstream Anti-Cheat kernel in the Kernel section first.");
+        return "";
+    }
+
+    Connections {
+        target: SystemSecurity
+        function onBusyChanged() {
+            if (SystemSecurity.busy)
+                root.closePanel();
+        }
+    }
 
     Component.onCompleted: SystemSecurity.watch()
     Component.onDestruction: SystemSecurity.unwatch()
@@ -119,5 +152,101 @@ ContentSection {
                 }
             }
         }
+    }
+
+    SecurityCard {
+        id: startCard
+        readonly property bool confirmingStart: root.openPanel === "ac-start"
+        readonly property bool confirmingRemove: root.openPanel === "ac-remove"
+
+        available: SystemSecurity.loaded
+        icon: "rocket_launch"
+        title: Translation.tr("Anti-cheat start")
+        pillText: {
+            if (!SystemSecurity.loaded)
+                return SystemSecurity.pendingPill;
+            if (SystemSecurity.acStartedThroughIt)
+                return Translation.tr("In use");
+            return SystemSecurity.acStartReady ? Translation.tr("Ready") : Translation.tr("Not set up");
+        }
+        pillTone: SystemSecurity.acStartedThroughIt ? "success" : SystemSecurity.acStartReady ? "accent" : "neutral"
+        description: Translation.tr("A separate start for protected games: the anti-cheat kernel, started by a boot manager Mainstream signed, with the settings Epic asks for. Your everyday start stays as it is, and the next restart after this one returns to it.")
+        detailVisible: startCard.confirmingStart || startCard.confirmingRemove
+
+        StyledText {
+            Layout.fillWidth: true
+            visible: !SystemSecurity.acStartReady && root.startBlocked.length > 0
+            wrapMode: Text.WordWrap
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            color: Appearance.colors.colSubtext
+            text: root.startBlocked
+        }
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: 8
+
+            ActionButton {
+                visible: !SystemSecurity.acStartReady
+                variant: "primary"
+                materialIcon: "rocket_launch"
+                caption: Translation.tr("Set up")
+                busyCaption: Translation.tr("Setting up…")
+                busy: SystemSecurity.busyAction === "ac-setup"
+                enabled: SystemSecurity.canChangeBoot && root.startBlocked.length === 0
+                onClicked: SystemSecurity.setUpAntiCheat()
+            }
+
+            ActionButton {
+                visible: SystemSecurity.acStartReady && !SystemSecurity.acStartedThroughIt
+                variant: "primary"
+                materialIcon: "restart_alt"
+                caption: Translation.tr("Restart into it")
+                enabled: SystemSecurity.canChangeBoot
+                onClicked: root.togglePanel("ac-start")
+            }
+
+            ActionButton {
+                visible: SystemSecurity.acStartReady
+                materialIcon: "delete"
+                caption: Translation.tr("Remove")
+                busyCaption: Translation.tr("Removing…")
+                busy: SystemSecurity.busyAction === "ac-remove"
+                enabled: SystemSecurity.canChangeBoot && !SystemSecurity.acStartedThroughIt
+                onClicked: root.togglePanel("ac-remove")
+            }
+        }
+
+        detail: [
+            ConfirmRow {
+                visible: startCard.confirmingStart
+                prompt: Translation.tr("Restart into the anti-cheat start now? Save any open work first.")
+                actionVariant: "primary"
+                actionIcon: "restart_alt"
+                actionText: Translation.tr("Restart now")
+                actionEnabled: SystemSecurity.canChangeBoot
+                onCanceled: root.closePanel()
+                onConfirmed: {
+                    root.closePanel();
+                    SystemSecurity.startAntiCheat();
+                }
+            },
+            ConfirmRow {
+                visible: startCard.confirmingRemove
+                prompt: Translation.tr("Remove the anti-cheat start? The anti-cheat kernel stays installed, and your everyday start is not changed.")
+                actionIcon: "delete"
+                actionText: Translation.tr("Remove")
+                actionEnabled: SystemSecurity.canChangeBoot
+                onCanceled: root.closePanel()
+                onConfirmed: {
+                    root.closePanel();
+                    SystemSecurity.removeAntiCheat();
+                }
+            }
+        ]
+    }
+
+    ScopeMessage {
+        forScope: "antiCheat"
     }
 }

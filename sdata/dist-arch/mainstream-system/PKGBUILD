@@ -94,6 +94,8 @@ source=(
   limine-remember-installed
   mainstream-limine-remember.service
   mainstream-anticheat-kexec.service
+  anticheat-boot-hook
+  96-mainstream-anticheat.hook
   efi-old-partition-hook
   mglru.tmpfiles
   memory.sysctl
@@ -104,7 +106,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -211,6 +213,8 @@ package() {
       "$pkgdir/usr/lib/systemd/system/mainstream-limine-remember.service"
   install -Dm644 "$srcdir/mainstream-anticheat-kexec.service" \
       "$pkgdir/usr/lib/systemd/system/mainstream-anticheat-kexec.service"
+  install -Dm755 "$srcdir/anticheat-boot-hook"            "$pkgdir/etc/boot/hooks/post.d/97-mainstream-anticheat"
+  install -Dm644 "$srcdir/96-mainstream-anticheat.hook"   "$pkgdir/usr/share/libalpm/hooks/96-mainstream-anticheat.hook"
   install -Dm644 "$srcdir/org.mainstreamos.system-security.policy" \
       "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.system-security.policy"
   install -Dm755 "$srcdir/mainstream-kernels"            "$pkgdir/usr/lib/mainstream/mainstream-kernels"

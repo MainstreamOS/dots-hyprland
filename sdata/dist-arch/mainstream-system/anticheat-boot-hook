@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Boot hook (/etc/boot/hooks/post.d): the anti-cheat start's copies of its kernel and
+# initramfs follow every rebuild. A failure is reported and never stops the update.
+[[ -x /usr/lib/mainstream/system-security ]] || exit 0
+/usr/lib/mainstream/system-security ac-refresh || exit 1
