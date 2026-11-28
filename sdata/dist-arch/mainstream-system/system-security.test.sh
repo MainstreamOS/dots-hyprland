@@ -1162,6 +1162,7 @@ printf '%s\n' "$AC_ON_ESP/vmlinuz" "/boot/efi/EFI/Linux/mainstream_linux.efi" >"
 check "ac-setup succeeds" run_helper ac-setup
 check "it installs the certificate, the signed systemd-boot and their tools" \
     test "$(calls '^pacman -S --needed --noconfirm mainstream-eac-signing-key systemd-boot-mainstream-signed sbsigntools efibootmgr$')" = 1
+check "and removes nothing when the kernel has no headers" test "$(calls '^pacman -R')" = 0
 check "the certificate is handed to sbctl as a custom db key" \
     cmp -s "$T_ROOT/usr/share/mainstream-eac/mainstream-secure-boot-ca.der" \
            "$T_ROOT/var/lib/sbctl/keys/custom/db/mainstream-secure-boot-ca.der"
@@ -1188,6 +1189,13 @@ assert_jq "$(<"$STATE_JSON")" '.antiCheatReady == true and .antiCheatCaEnrolled 
 : >"$T_STATE/calls.log"
 check "ac-setup a second time succeeds" run_helper ac-setup
 check "and neither enrolls nor makes a firmware entry again" test "$(calls 'enroll-keys\|efibootmgr --quiet --create')" = 0
+
+# Headers an earlier install brought along go, so DKMS puts the kernel's own modules back.
+echo mainstream-performance-eac-headers >>"$T_STATE/installed_pkgs"
+: >"$T_STATE/calls.log"
+check "ac-setup beside the anti-cheat kernel's headers succeeds" run_helper ac-setup
+check "and removes them" test "$(calls '^pacman -R --noconfirm mainstream-performance-eac-headers$')" = 1
+echo mainstream-performance-eac >"$T_STATE/installed_pkgs"
 
 ac_kernel 'kernel 2, signed by Mainstream and the owner too'
 expect_rc 1 "a kernel that carries a second signature is refused" run_helper ac-setup

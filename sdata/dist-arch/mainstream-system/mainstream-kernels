@@ -863,10 +863,14 @@ cmd_install() {
     pkg=$(repo_package "$kernel") || \
         die 11 "no repository offers $kernel and $kernel-headers yet"
 
-    # The headers always come with the kernel: they are what lets DKMS drivers build
-    # for it, and a later driver install must not find them missing.
-    log "install: pacman -S --needed --noconfirm $pkg $pkg-headers"
-    pacman -S --needed --noconfirm "$pkg" "$pkg-headers" </dev/null >>"$LOG" 2>&1 || \
+    # The headers come with the kernel: they are what lets DKMS drivers build for it,
+    # and a later driver install must not find them missing. Not for the anti-cheat
+    # kernel, which loads no module DKMS builds, and where a DKMS build sets the
+    # kernel's own signed copy of a module aside.
+    local -a pkgs=("$pkg" "$pkg-headers")
+    [[ $kernel == "$EAC_KERNEL" ]] && pkgs=("$pkg")
+    log "install: pacman -S --needed --noconfirm ${pkgs[*]}"
+    pacman -S --needed --noconfirm "${pkgs[@]}" </dev/null >>"$LOG" 2>&1 || \
         die 4 "$kernel could not be installed; see $LOG"
     pkg_installed "$pkg" || die 4 "$kernel is not installed after the transaction; see $LOG"
 

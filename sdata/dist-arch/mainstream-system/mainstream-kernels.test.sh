@@ -994,7 +994,8 @@ t_reset
 printf '%s\n' "$EAC" "$EAC-headers" >>"$T_STATE/repo"
 printf '%s\n' nvidia-utils >>"$T_STATE/installed"
 check "the anti-cheat kernel installs where no NVIDIA kernel driver is" run_helper install "$EAC"
-check "and its headers come with it" is_installed "$EAC-headers"
+refute "and without its headers, so DKMS never builds for it" is_installed "$EAC-headers"
+check "it is installed by itself" test "$(calls "^pacman -S --needed --noconfirm $EAC\$")" = 1
 # DKMS builds NVIDIA's module for it too, but that module does not load there.
 nvidia_module_counts() {  # $1 = kernel package
     (

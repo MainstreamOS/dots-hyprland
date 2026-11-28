@@ -833,6 +833,14 @@ cmd_ac_setup() {
     log "ac-setup: pacman -S --needed --noconfirm ${AC_PACKAGES[*]}"
     pacman -S --needed --noconfirm "${AC_PACKAGES[@]}" </dev/null >>"$LOG" 2>&1 || \
         die 4 "the anti-cheat packages could not be installed"
+    # With its headers DKMS builds for the anti-cheat kernel, sets the kernel's own signed
+    # copy of a module aside and leaves one the kernel refuses. Taking them away has
+    # DKMS put the kernel's copies back.
+    if [[ $(pacman -Qq -- "$AC_KERNEL-headers" 2>/dev/null) == "$AC_KERNEL-headers" ]]; then
+        log "ac-setup: pacman -R --noconfirm $AC_KERNEL-headers"
+        pacman -R --noconfirm "$AC_KERNEL-headers" </dev/null >>"$LOG" 2>&1 || \
+            die 4 "the anti-cheat kernel's headers could not be removed"
+    fi
 
     local rel need avail
     rel=$(ac_kernel_release)
