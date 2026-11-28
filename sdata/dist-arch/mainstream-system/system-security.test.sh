@@ -1220,7 +1220,12 @@ check "ac-refresh where nothing is set up does nothing" run_helper ac-refresh
 check "not even a build" test ! -s "$T_STATE/calls.log"
 
 ac_kernel 'kernel 3, signed by Mainstream'
+echo mainstream-performance-eac >"$T_STATE/installed_pkgs"
 run_helper ac-setup
+assert_jq "$(env -i PATH="$S_BIN" SECURITY_STATE_FILE="$STATE_JSON" SECURITY_HELPER="$S_NONE/x" \
+                 EFIVARS_DIR="$S_NONE/efivars" MODULES_DIR="$S_NONE/modules" KERNEL_RELEASE="" "$STATUS_SCRIPT")" \
+    '.antiCheat.startReady == true and .antiCheat.certificateEnrolled == true' \
+    "the probe passes on what the helper recorded about the start"
 check "ac-remove succeeds" run_helper ac-remove
 check "and leaves nothing of the start behind" \
     test ! -e "$AC_ON_ESP" -a ! -e "$AC_ENTRY_FILE" -a ! -s "$T_STATE/efi_entries"

@@ -126,7 +126,9 @@ if [[ -r $SECURITY_STATE_FILE && -f $SECURITY_STATE_FILE ]]; then
         (.[0] | if type == "object" then . else {} end)
         | {
             sbctlKeysExist: (.sbctlKeysExist == true),
-            sbctlVerified: (.sbctlVerified == true)
+            sbctlVerified: (.sbctlVerified == true),
+            antiCheatReady: (.antiCheatReady == true),
+            antiCheatCaEnrolled: (.antiCheatCaEnrolled == true)
         }' "$SECURITY_STATE_FILE" 2>/dev/null) || state=$state_default
 fi
 
