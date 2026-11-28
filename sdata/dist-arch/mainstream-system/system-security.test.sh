@@ -756,12 +756,23 @@ check "the image the boot menu names is checked" test "$(calls '^sbctl verify .*
 check "an image the boot menu does not name is not judged" test "$(calls 'left-by-another-system')" = 0
 assert_jq "$(<"$STATE_JSON")" '
     .sbctlKeysExist == true and .sbctlVerified == true and
-    (keys == ["lastSynced", "sbctlKeysExist", "sbctlVerified"])
+    (keys == ["antiCheatCaEnrolled", "antiCheatReady", "lastSynced", "sbctlKeysExist", "sbctlVerified"])
 ' "sb-enable records that keys exist and the boot files are verified"
 check "the signing keys are made on their own subvolume" test -f "$T_STATE/btrfs_top/@sbctl/keys/db/db.key"
 check "the keys subvolume is mounted from /etc/fstab, and a missing one does not stop a start" \
     grep -q '^UUID=3a2c52e5-9d08-4bc4-9ff3-2c2f14815f5c /var/lib/sbctl btrfs subvol=/@sbctl,noatime,nofail 0 0$' "$T_ROOT/etc/fstab"
 check "a note that the keys are kept is left beside the log" test -s "$T_ROOT/var/log/mainstream/secure-boot-keys"
+
+# ASUS and Gigabyte boards get Microsoft's keys beside the owner's, never their own as well.
+echo 0 >"$T_STATE/fail_fw_builtin"
+mkdir -p "$T_ROOT/sys/class/dmi/id"
+printf 'Gigabyte Technology Co., Ltd.\n' >"$T_ROOT/sys/class/dmi/id/board_vendor"
+: >"$T_STATE/calls.log"
+check "sb-enable on a Gigabyte board succeeds" run_helper sb-enable
+check "and enrolls without the board's built-in keys" \
+    test "$(calls '^sbctl enroll-keys --microsoft$')" = 1 -a "$(calls 'firmware-builtin')" = 0
+rm -f "$T_ROOT/sys/class/dmi/id/board_vendor"
+echo 1 >"$T_STATE/fail_fw_builtin"
 
 # From here on the firmware enforces Secure Boot, as after turning it on in UEFI setup.
 write_efivar "$SETUP_VAR" 0

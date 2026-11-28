@@ -480,7 +480,15 @@ cmd_sb_enable() {
     # Last, once every file the firmware will check is signed: keys enrolled over
     # unsigned files would leave a system that the firmware refuses to start.
     log "sb-enable: enrolling Secure Boot keys"
-    if ! sbctl enroll-keys --microsoft --firmware-builtin >>"$LOG" 2>&1; then
+    local vendor
+    vendor=$(cat "$ROOT/sys/class/dmi/id/board_vendor" 2>/dev/null || true)
+    # ASUS and Gigabyte boards can end up with duplicate keys and a Secure Boot
+    # Violation when their built-in keys are enrolled too (CachyOS's eac-setup).
+    if [[ ${vendor,,} =~ asus|gigabyte ]]; then
+        log "sb-enable: ${vendor} board, so its built-in keys are left out"
+        sbctl enroll-keys --microsoft >>"$LOG" 2>&1 || \
+            die 1 "sbctl failed to enroll Secure Boot keys into firmware"
+    elif ! sbctl enroll-keys --microsoft --firmware-builtin >>"$LOG" 2>&1; then
         log "sb-enable: --firmware-builtin enrollment failed; falling back to --microsoft"
         sbctl enroll-keys --microsoft >>"$LOG" 2>&1 || \
             die 1 "sbctl failed to enroll Secure Boot keys into firmware"
