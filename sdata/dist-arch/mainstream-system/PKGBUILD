@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=41
+pkgrel=42
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -93,6 +93,7 @@ source=(
   mainstream-secure-boot-restore.service
   limine-remember-installed
   mainstream-limine-remember.service
+  mainstream-anticheat-kexec.service
   efi-old-partition-hook
   mglru.tmpfiles
   memory.sysctl
@@ -103,7 +104,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -208,6 +209,8 @@ package() {
   install -Dm755 "$srcdir/limine-remember-installed"     "$pkgdir/usr/lib/mainstream/limine-remember-installed"
   install -Dm644 "$srcdir/mainstream-limine-remember.service" \
       "$pkgdir/usr/lib/systemd/system/mainstream-limine-remember.service"
+  install -Dm644 "$srcdir/mainstream-anticheat-kexec.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-anticheat-kexec.service"
   install -Dm644 "$srcdir/org.mainstreamos.system-security.policy" \
       "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.system-security.policy"
   install -Dm755 "$srcdir/mainstream-kernels"            "$pkgdir/usr/lib/mainstream/mainstream-kernels"

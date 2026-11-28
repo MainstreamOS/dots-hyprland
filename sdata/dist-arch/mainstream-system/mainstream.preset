@@ -6,3 +6,4 @@ enable NetworkManager-dispatcher.service
 enable paccache.timer
 enable mainstream-secure-boot-restore.service
 enable mainstream-limine-remember.service
+enable mainstream-anticheat-kexec.service

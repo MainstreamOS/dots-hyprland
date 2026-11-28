@@ -207,6 +207,14 @@ _migrate() {  # $1 = the version upgraded from, or nothing on an install
     if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-28)" -lt 0 ]; then
         systemctl preset mainstream-limine-remember.service 2>/dev/null || true
     fi
+    # kexec off from the start of every boot of the anti-cheat kernel, and only that one.
+    # Enabled once, by the release that brings it, so a disable sticks.
+    if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-42)" -lt 0 ]; then
+        systemctl preset mainstream-anticheat-kexec.service 2>/dev/null || true
+    fi
+    if [ -d /run/systemd/system ] && systemctl -q is-enabled mainstream-anticheat-kexec.service 2>/dev/null; then
+        systemctl start --no-block mainstream-anticheat-kexec.service 2>/dev/null || true
+    fi
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true

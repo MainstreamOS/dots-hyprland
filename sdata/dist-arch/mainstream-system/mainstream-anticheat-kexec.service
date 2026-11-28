@@ -1,0 +1,15 @@
+[Unit]
+Description=Turn off kexec on the anti-cheat kernel
+# Easy Anti-Cheat wants kexec off from the start. A boot option for this one kernel
+# would replace the whole command line the boot tools write for it.
+DefaultDependencies=no
+ConditionKernelVersion=*-mainstream-performance-eac
+Before=sysinit.target systemd-sysctl.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/sysctl -q -w kernel.kexec_load_disabled=1
+
+[Install]
+WantedBy=sysinit.target
