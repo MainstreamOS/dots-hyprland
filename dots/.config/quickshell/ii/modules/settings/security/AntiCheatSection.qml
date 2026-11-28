@@ -173,6 +173,13 @@ ContentSection {
         description: Translation.tr("A separate start for protected games: the anti-cheat kernel, started by a boot manager Mainstream signed, with the settings Epic asks for. Your everyday start stays as it is, and the next restart after this one returns to it.")
         detailVisible: startCard.confirmingStart || startCard.confirmingRemove
 
+        NoticeBox {
+            Layout.fillWidth: true
+            visible: SystemSecurity.acStartSkipped
+            materialIcon: "info"
+            text: Translation.tr("The computer started your everyday start instead. Turn off Fast Boot in UEFI setup and restart into it again, or choose Mainstream OS (Anti-Cheat) in the firmware's boot menu as the computer starts: F12 on Gigabyte boards, F8 on ASUS, F11 on MSI and ASRock.")
+        }
+
         StyledText {
             Layout.fillWidth: true
             visible: !SystemSecurity.acStartReady && root.startBlocked.length > 0

@@ -69,6 +69,7 @@ kexec_disabled=false
 bpf_lsm=false
 ac_kernel=false
 ac_start=false
+ac_skipped=false
 
 # What the helper last recorded, and what stands in for it until it has.
 state_default='{"sbctlKeysExist":false,"sbctlVerified":false}'
@@ -196,6 +197,14 @@ if [[ $KERNEL_RELEASE == *-"$AC_KERNEL" && -r $loader_image ]] \
    && tail -c +5 -- "$loader_image" 2>/dev/null | tr -d '\0' | grep -qi 'mainstream-eac'; then
     ac_start=true
 fi
+# The restart was asked to go through it and this start did not: the firmware passed
+# over the one-time choice, as Fast Boot does on some boards.
+boot_next=$(od -An -t x2 -j4 -N2 -- "$EFIVARS_DIR/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c" 2>/dev/null | tr -d '[:space:]')
+if [[ $ac_start == false && $boot_next =~ ^[0-9a-f]{4}$ ]] \
+   && tail -c +5 -- "$EFIVARS_DIR/Boot${boot_next^^}-8be4df61-93ca-11d2-aa0d-00e098032b8c" 2>/dev/null \
+      | tr -d '\0' | grep -qF 'Mainstream OS (Anti-Cheat)'; then
+    ac_skipped=true
+fi
 
 exec jq -nc \
     --argjson helper "$helper" \
@@ -218,6 +227,7 @@ exec jq -nc \
     --argjson bpfLsm "$bpf_lsm" \
     --argjson acKernel "$ac_kernel" \
     --argjson acStart "$ac_start" \
+    --argjson acSkipped "$ac_skipped" \
     '{
         helper: $helper,
         unsupportedReason: $unsupportedReason,
@@ -241,6 +251,7 @@ exec jq -nc \
             kernelInstalled: $acKernel,
             startReady: ($state.antiCheatReady == true),
             certificateEnrolled: ($state.antiCheatCaEnrolled == true),
-            startedThroughIt: $acStart
+            startedThroughIt: $acStart,
+            startSkipped: $acSkipped
         }
     }'

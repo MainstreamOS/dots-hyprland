@@ -3664,5 +3664,6 @@
   "Could not restart into the anti-cheat start.": "Could not restart into the anti-cheat start.",
   "Could not remove the anti-cheat start.": "Could not remove the anti-cheat start.",
   "The anti-cheat start is set up. Restart into it before playing a protected game.": "The anti-cheat start is set up. Restart into it before playing a protected game.",
-  "The anti-cheat start was removed.": "The anti-cheat start was removed."
+  "The anti-cheat start was removed.": "The anti-cheat start was removed.",
+  "The computer started your everyday start instead. Turn off Fast Boot in UEFI setup and restart into it again, or choose Mainstream OS (Anti-Cheat) in the firmware's boot menu as the computer starts: F12 on Gigabyte boards, F8 on ASUS, F11 on MSI and ASRock.": "The computer started your everyday start instead. Turn off Fast Boot in UEFI setup and restart into it again, or choose Mainstream OS (Anti-Cheat) in the firmware's boot menu as the computer starts: F12 on Gigabyte boards, F8 on ASUS, F11 on MSI and ASRock."
 }

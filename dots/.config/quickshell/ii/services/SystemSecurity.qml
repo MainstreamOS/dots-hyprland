@@ -52,6 +52,8 @@ Singleton {
     property bool acStartReady: false
     property bool acCertificateEnrolled: false
     property bool acStartedThroughIt: false
+    // The last restart was meant to go through it and the firmware passed over that.
+    property bool acStartSkipped: false
     readonly property bool lockedDown: root.lockdown === "integrity" || root.lockdown === "confidentiality"
 
     readonly property string unsupportedText: {
@@ -242,6 +244,7 @@ Singleton {
         root.acStartReady = ac.startReady === true;
         root.acCertificateEnrolled = ac.certificateEnrolled === true;
         root.acStartedThroughIt = ac.startedThroughIt === true;
+        root.acStartSkipped = ac.startSkipped === true;
         root.probeFailed = false;
         root.loaded = true;
     }

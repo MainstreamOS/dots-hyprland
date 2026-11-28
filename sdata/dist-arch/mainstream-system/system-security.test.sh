@@ -119,9 +119,9 @@ PROBE_SHAPE='
     (.antiCheat | type == "object") and
     (.antiCheat | keys == (["tpm2", "measuredBoot", "iommu", "iommuPassthrough",
                             "lockdown", "kexecDisabled", "bpfLsm", "kernelInstalled",
-                            "startReady", "certificateEnrolled", "startedThroughIt"] | sort)) and
+                            "startReady", "certificateEnrolled", "startedThroughIt", "startSkipped"] | sort)) and
     (.antiCheat | [.tpm2, .measuredBoot, .iommu, .iommuPassthrough, .kexecDisabled, .bpfLsm,
-                   .kernelInstalled, .startReady, .certificateEnrolled, .startedThroughIt]
+                   .kernelInstalled, .startReady, .certificateEnrolled, .startedThroughIt, .startSkipped]
         | all(type == "boolean")) and
     (.antiCheat.lockdown | IN("none", "integrity", "confidentiality", "unknown"))
 '
@@ -325,7 +325,8 @@ json_3e=$(probe)
 assert_jq "$json_3e" '.antiCheat == {
     tpm2: false, measuredBoot: false, iommu: false, iommuPassthrough: false,
     lockdown: "unknown", kexecDisabled: false, bpfLsm: false,
-    kernelInstalled: false, startReady: false, certificateEnrolled: false, startedThroughIt: false
+    kernelInstalled: false, startReady: false, certificateEnrolled: false, startedThroughIt: false,
+    startSkipped: false
 }' "Scenario 3E: a machine with none of it reports nothing"
 assert_jq "$json_3e" "$PROBE_SHAPE" "Scenario 3E: exactly the agreed fields"
 
@@ -434,9 +435,24 @@ json_3e=$(probe TPM_VERSION_FILE="$AC/tpm_version_major" TPM_PCR_DIR="$AC/pcr-sh
 assert_jq "$json_3e" '.antiCheat == {
     tpm2: true, measuredBoot: true, iommu: false, iommuPassthrough: false,
     lockdown: "none", kexecDisabled: false, bpfLsm: true,
-    kernelInstalled: false, startReady: false, certificateEnrolled: false, startedThroughIt: false
+    kernelInstalled: false, startReady: false, certificateEnrolled: false, startedThroughIt: false,
+    startSkipped: false
 }' "Scenario 3E: every field together"
 assert_jq "$json_3e" "$PROBE_SHAPE" "Scenario 3E: exactly the agreed fields with everything set"
+
+# The firmware passed over the one-time choice of the anti-cheat start.
+SK="$S_ENV/skipped-efivars"
+mkdir -p "$SK"
+printf '\x07\x00\x00\x00\x01\x00' >"$SK/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+{ printf '\x07\x00\x00\x00\x01\x00\x00\x00\x74\x00'; printf 'Mainstream OS (Anti-Cheat)' | iconv -f UTF-8 -t UTF-16LE; printf '\x00\x00'; } \
+    >"$SK/Boot0001-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+{ printf '\x07\x00\x00\x00\x01\x00\x00\x00\x74\x00'; printf 'Limine' | iconv -f UTF-8 -t UTF-16LE; printf '\x00\x00'; } \
+    >"$SK/Boot0000-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+assert_eq "$(anticheat startSkipped EFIVARS_DIR="$SK")" "true" "startSkipped: the next start was to be the anti-cheat one and this is not it"
+printf '\x07\x00\x00\x00\x00\x00' >"$SK/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+assert_eq "$(anticheat startSkipped EFIVARS_DIR="$SK")" "false" "startSkipped: a one-time choice of another entry"
+rm -f "$SK/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+assert_eq "$(anticheat startSkipped EFIVARS_DIR="$SK")" "false" "startSkipped: no one-time choice"
 
 printf '\n=== 4. Privileged Helper system-security Tests ===\n'
 
